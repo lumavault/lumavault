@@ -4,7 +4,8 @@ import {
   universalServerRequestFromFetch,
   universalServerResponseToFetch,
 } from "@connectrpc/connect/protocol";
-import { Hono } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
+import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { AUTH_BASE_PATH } from "./auth/constants.js";
 import {
@@ -16,7 +17,7 @@ import {
   RPC_READ_MAX_BYTES,
 } from "./constants.js";
 import type { ApiModule, ModuleContext } from "./modules.js";
-import { requestKey } from "./request.js";
+import { clientIpKey, requestKey } from "./request.js";
 
 /** Builds the HTTP app: health check, module routes, Better Auth, and Connect RPCs. */
 export function createApp(ctx: ModuleContext, modules: ApiModule[]): Hono {
@@ -59,11 +60,20 @@ export function createApp(ctx: ModuleContext, modules: ApiModule[]): Hono {
       return c.json({ code: "unimplemented", message: "no such method" }, 404);
     }
     const req = universalServerRequestFromFetch(c.req.raw, {});
-    req.contextValues = createContextValues().set(requestKey, c.req.raw);
+    req.contextValues = createContextValues().set(requestKey, c.req.raw).set(clientIpKey, clientIp(c));
     return universalServerResponseToFetch(await handler(req));
   });
 
   return app;
+}
+
+// Only the Node server knows the socket address; in-memory test requests have none.
+function clientIp(c: Context): string {
+  try {
+    return getConnInfo(c).remote.address ?? "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 function rpcHandlers(ctx: ModuleContext, modules: ApiModule[]): Map<string, UniversalHandler> {

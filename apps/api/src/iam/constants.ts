@@ -28,3 +28,17 @@ export const PORTAL_MEMBER_INVITE_PATH = "/invite/member/";
 // List RPCs return at most this many rows per page.
 export const DEFAULT_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 200;
+
+// Apple TV pairing codes: 6 characters from 32 with no lookalikes (no 0, 1, I, or O).
+export const PAIRING_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+export const PAIRING_CODE_LENGTH = 6;
+export const PAIRING_TTL_MS = 10 * 60 * 1000;
+export const PAIRING_POLL_INTERVAL_SECONDS = 5;
+// Wrong device secrets on one pairing before it is burned.
+export const PAIRING_MAX_FAILED_ATTEMPTS = 5;
+
+// Per-IP and per-user limits, as a count per window.
+export const PAIRING_RATE_WINDOW_MS = 10 * 60 * 1000;
+export const PAIRING_STARTS_PER_WINDOW = 10;
+export const PAIRING_POLLS_PER_WINDOW = 300;
+export const PAIRING_APPROVALS_PER_WINDOW = 20;
