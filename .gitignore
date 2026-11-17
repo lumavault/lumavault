@@ -54,3 +54,7 @@ dist/
 *.heic
 *.bin
 *.bios
+
+# Playwright output
+test-results/
+playwright-report/

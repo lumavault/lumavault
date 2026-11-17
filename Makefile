@@ -15,7 +15,7 @@ JS_MANIFESTS := package.json pnpm-workspace.yaml pnpm-lock.yaml \
 SDK_BUILD := sdk/web/dist/index.js
 SDK_SRCS := $(shell find sdk/web/src -name '*.ts' -not -name '*.test.ts' 2>/dev/null)
 
-.PHONY: proto build test lint run dev clean \
+.PHONY: proto build test lint run dev clean e2e \
 	lint-go lint-js lint-swift test-go test-js test-swift
 
 proto:
@@ -64,6 +64,10 @@ test-js: $(SDK_BUILD)
 
 test-swift: $(PROTO_STAMP)
 	swift test
+
+# Portal end-to-end tests: real API, fresh lv_e2e database on TEST_DATABASE_URL's server, Chromium.
+e2e: $(SDK_BUILD)
+	$(PNPM) --filter @lumavault/portal exec playwright test
 
 run: $(PROTO_STAMP)
 	go run ./cmd/lumavault

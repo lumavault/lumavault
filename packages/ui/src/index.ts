@@ -13,7 +13,7 @@ export { Toast } from "@base-ui/react/toast";
 export { Tooltip } from "@base-ui/react/tooltip";
 
 // API access and the active household.
-export { createApiTransport, LumaVaultProvider, type LumaVaultProviderProps } from "./rpc/provider.js";
+export { createApiTransport, createQueryClient, LumaVaultProvider, type LumaVaultProviderProps, shouldRetry } from "./rpc/provider.js";
 export { useHousehold, useJoinHousehold, useLeaveHousehold, useViewer, type ViewerHousehold } from "./household/use-household.js";
 export { formatBytes, summarizeUsage, type UsageSummary } from "./format-bytes.js";
 

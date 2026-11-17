@@ -1,4 +1,4 @@
-import type { Transport } from "@connectrpc/connect";
+import { Code, ConnectError, type Transport } from "@connectrpc/connect";
 import { TransportProvider } from "@connectrpc/connect-query";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -19,6 +19,19 @@ export function createApiTransport(apiUrl: string): Transport {
   });
 }
 
+// Only failures that might pass on a second try are retried. Signed out, forbidden, and bad
+// input never change by waiting, and retrying them delays the login redirect by seconds.
+const RETRYABLE = new Set([Code.Unavailable, Code.DeadlineExceeded, Code.Aborted, Code.Unknown, Code.Internal]);
+const MAX_RETRIES = 2;
+
+export function shouldRetry(failureCount: number, error: unknown): boolean {
+  return failureCount < MAX_RETRIES && RETRYABLE.has(ConnectError.from(error).code);
+}
+
+export function createQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: shouldRetry } } });
+}
+
 export interface LumaVaultProviderProps {
   /** API origin, for example http://localhost:4000. */
   apiUrl: string;
@@ -30,7 +43,7 @@ export interface LumaVaultProviderProps {
 
 /** Sets up TanStack Query and Connect for an app. Apps call Connect-Query hooks directly. */
 export function LumaVaultProvider({ apiUrl, children, transport, queryClient }: LumaVaultProviderProps) {
-  const [client] = useState(() => queryClient ?? new QueryClient());
+  const [client] = useState(() => queryClient ?? createQueryClient());
   const [conn] = useState(() => transport ?? createApiTransport(apiUrl));
   return (
     <TransportProvider transport={conn}>

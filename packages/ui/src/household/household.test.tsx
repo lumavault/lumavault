@@ -5,7 +5,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { formatBytes, summarizeUsage } from "../format-bytes.js";
-import { LumaVaultProvider } from "../rpc/provider.js";
+import { LumaVaultProvider, shouldRetry } from "../rpc/provider.js";
 import { useHousehold, useJoinHousehold } from "./use-household.js";
 
 function mockApi() {
@@ -52,6 +52,16 @@ describe("household hooks", () => {
     expect(queryClient.getQueryData(["photos", "timeline"])).toBeUndefined();
     await waitFor(() => expect(result.current.h.household?.id).toBe("cabin"));
     expect(result.current.h.suspended).toBe(true);
+  });
+});
+
+describe("retries", () => {
+  it("retry only failures that can pass later", async () => {
+    const { Code, ConnectError } = await import("@connectrpc/connect");
+    expect(shouldRetry(0, new ConnectError("x", Code.Unauthenticated))).toBe(false);
+    expect(shouldRetry(0, new ConnectError("x", Code.PermissionDenied))).toBe(false);
+    expect(shouldRetry(0, new ConnectError("x", Code.Unavailable))).toBe(true);
+    expect(shouldRetry(2, new ConnectError("x", Code.Unavailable))).toBe(false);
   });
 });
 

@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -35,15 +36,19 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.12",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/smtp-server": "^3.5.13",
     "@vitejs/plugin-react": "^6.3.0",
     "jsdom": "^31.0.1",
+    "smtp-server": "^3.21.6",
     "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
