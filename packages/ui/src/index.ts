@@ -11,3 +11,8 @@ export { Switch } from "@base-ui/react/switch";
 export { Tabs } from "@base-ui/react/tabs";
 export { Toast } from "@base-ui/react/toast";
 export { Tooltip } from "@base-ui/react/tooltip";
+
+// API access and the active household.
+export { createApiTransport, LumaVaultProvider, type LumaVaultProviderProps } from "./rpc/provider.js";
+export { type ActiveHousehold, useActiveHousehold, useSwitchHousehold, useViewer } from "./household/use-household.js";
+export { formatBytes, summarizeUsage, type UsageSummary } from "./format-bytes.js";
