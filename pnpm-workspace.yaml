@@ -5,3 +5,7 @@ packages:
   - packages/*
   - apps/*
   - apps/*/web
+
+# Packages allowed to run install scripts. esbuild downloads its platform binary this way.
+allowBuilds:
+  esbuild: true
