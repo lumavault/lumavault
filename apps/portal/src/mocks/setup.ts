@@ -25,3 +25,8 @@ if (!("ResizeObserver" in window)) {
     disconnect() {}
   };
 }
+
+// input-otp looks up the element under its caret.
+if (!document.elementFromPoint) {
+  document.elementFromPoint = () => null;
+}
