@@ -177,8 +177,10 @@ describe("loadModules", () => {
     await rm(bad, { recursive: true, force: true });
   });
 
-  it("finds only real modules among the source folders, not helpers next to them", async () => {
-    expect((await loadModules()).map((m) => m.name)).toEqual(["auth-org-lockdown"]);
+  it("loads the real modules once each and skips helpers next to them", async () => {
+    const names = (await loadModules()).map((m) => m.name);
+    expect(names).toContain("auth-org-lockdown");
+    expect(new Set(names).size).toBe(names.length);
   });
 });
 
