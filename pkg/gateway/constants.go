@@ -30,21 +30,31 @@ const (
 	paramObjectID = "object_id"
 )
 
+// The stream route answers as a browser download only when the query has download=1.
+const (
+	queryDownload   = "download"
+	queryDownloadOn = "1"
+
+	dispositionAttachment = "attachment"
+	dispositionFilename   = "filename"
+)
+
 // HTTP header names used by the data plane and CORS middleware.
 const (
-	headerAcceptRanges      = "Accept-Ranges"
-	headerCacheControl      = "Cache-Control"
-	headerContentLength     = "Content-Length"
-	headerContentRange      = "Content-Range"
-	headerContentType       = "Content-Type"
-	headerETag              = "ETag"
-	headerIfNoneMatch       = "If-None-Match"
-	headerIfRange           = "If-Range"
-	headerRange             = "Range"
-	headerCORSAllowOrigin   = "Access-Control-Allow-Origin"
-	headerCORSAllowMethods  = "Access-Control-Allow-Methods"
-	headerCORSAllowHeaders  = "Access-Control-Allow-Headers"
-	headerCORSExposeHeaders = "Access-Control-Expose-Headers"
+	headerAcceptRanges       = "Accept-Ranges"
+	headerCacheControl       = "Cache-Control"
+	headerContentDisposition = "Content-Disposition"
+	headerContentLength      = "Content-Length"
+	headerContentRange       = "Content-Range"
+	headerContentType        = "Content-Type"
+	headerETag               = "ETag"
+	headerIfNoneMatch        = "If-None-Match"
+	headerIfRange            = "If-Range"
+	headerRange              = "Range"
+	headerCORSAllowOrigin    = "Access-Control-Allow-Origin"
+	headerCORSAllowMethods   = "Access-Control-Allow-Methods"
+	headerCORSAllowHeaders   = "Access-Control-Allow-Headers"
+	headerCORSExposeHeaders  = "Access-Control-Expose-Headers"
 )
 
 // Byte-range tokens from RFC 9110.

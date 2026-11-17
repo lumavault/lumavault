@@ -13,7 +13,8 @@ import (
 )
 
 // stream serves GET and HEAD /v1/stream/{object_id} as one byte sequence across the
-// object's chunks, with single-range 206 support for video players.
+// object's chunks, with single-range 206 support for video players. download=1 in the
+// query adds Content-Disposition attachment so browsers save the object instead of playing it.
 func (g *gateway) stream(w http.ResponseWriter, r *http.Request) {
 	cred, ok := g.httpCredential(w, r)
 	if !ok {
@@ -67,6 +68,9 @@ func (g *gateway) stream(w http.ResponseWriter, r *http.Request) {
 	// Content headers are set only once the response is known to succeed, so error
 	// bodies never carry a stale Content-Length or Content-Range.
 	setContentHeaders := func() {
+		if wantsDownload(r) {
+			h.Set(headerContentDisposition, attachmentDisposition(obj.GetFilename()))
+		}
 		h.Set(headerContentLength, strconv.FormatInt(max(br.length(), 0), 10))
 		if status == http.StatusPartialContent {
 			h.Set(headerContentRange, fmt.Sprintf(contentRangeFull, br.start, br.end, size))
