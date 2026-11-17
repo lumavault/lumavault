@@ -5,5 +5,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  test: { environment: "jsdom", setupFiles: ["./src/mocks/setup.ts"], include: ["src/**/*.test.tsx"] },
+  test: {
+    environment: "jsdom",
+    environmentOptions: { jsdom: { url: "http://localhost:3000/" } }, setupFiles: ["./src/mocks/setup.ts"], include: ["src/**/*.test.tsx"] },
 });
