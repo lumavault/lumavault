@@ -17,3 +17,14 @@ export const GRACE_PERIOD_DAYS = 30;
 // The server owner's own household from first-run setup gets every app and, in effect, no cap.
 // The Super-Admin can lower it later like any other household.
 export const SETUP_STORAGE_CAP_BYTES = 2n ** 62n;
+
+// Household creation invite links work once and expire after a week.
+export const HOUSEHOLD_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Portal pages that invite links open. The token or invite ID follows the last slash.
+export const PORTAL_HOUSEHOLD_INVITE_PATH = "/invite/household/";
+export const PORTAL_MEMBER_INVITE_PATH = "/invite/member/";
+
+// List RPCs return at most this many rows per page.
+export const DEFAULT_PAGE_SIZE = 50;
+export const MAX_PAGE_SIZE = 200;
