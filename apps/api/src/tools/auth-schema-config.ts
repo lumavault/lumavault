@@ -13,4 +13,5 @@ export const auth = createAuth({
   trustedOrigins: ["http://localhost"],
   passkeyRpID: "localhost",
   sendMagicLink: async () => {},
+  sendPasswordReset: async () => {},
 });

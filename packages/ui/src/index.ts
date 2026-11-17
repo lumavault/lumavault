@@ -16,3 +16,39 @@ export { Tooltip } from "@base-ui/react/tooltip";
 export { createApiTransport, LumaVaultProvider, type LumaVaultProviderProps } from "./rpc/provider.js";
 export { useHousehold, useJoinHousehold, useLeaveHousehold, useViewer, type ViewerHousehold } from "./household/use-household.js";
 export { formatBytes, summarizeUsage, type UsageSummary } from "./format-bytes.js";
+
+// Sign-in logic with no look attached. Each app builds its own forms on these hooks.
+export { createLumaVaultAuthClient, type LumaVaultAuthClient } from "./auth/client.js";
+export { AUTH_BASE_PATH, INVITE_TOKEN_HEADER, PORTAL_LOGIN_PATH, RETURN_TO_PARAM } from "./auth/constants.js";
+export { type AuthErrorLike, authErrorMessage } from "./auth/errors.js";
+export { type GuardInput, guardRedirect } from "./auth/guard.js";
+export {
+  type AuthAction,
+  AuthProvider,
+  useAddPasskey,
+  useAuthClient,
+  useChangePassword,
+  useCurrentUser,
+  useForgotPassword,
+  useMagicLink,
+  usePasskeySignIn,
+  useResetPassword,
+  useSignIn,
+  useSignOut,
+  useSignUp,
+} from "./auth/hooks.js";
+export { safeReturnUrl } from "./auth/return-url.js";
+export {
+  ChangePasswordSchema,
+  type ChangePasswordValues,
+  ForgotPasswordSchema,
+  type ForgotPasswordValues,
+  MagicLinkSchema,
+  type MagicLinkValues,
+  ResetPasswordSchema,
+  type ResetPasswordValues,
+  SignInSchema,
+  type SignInValues,
+  SignUpSchema,
+  type SignUpValues,
+} from "./auth/schemas.js";

@@ -40,6 +40,9 @@ export function recordingEmail(): EmailService & { sent: { kind: string; to: str
     async sendHouseholdInvite(to, props) {
       sent.push({ kind: "household-invite", to, url: props.url });
     },
+    async sendPasswordReset(to, props) {
+      sent.push({ kind: "password-reset", to, url: props.url });
+    },
   };
 }
 
@@ -58,6 +61,7 @@ export function createTestContext(
     trustedOrigins: config.webOrigins,
     passkeyRpID: "localhost",
     sendMagicLink: ({ email: to, url }) => email.sendMagicLink(to, { url }),
+    sendPasswordReset: ({ email: to, url }) => email.sendPasswordReset(to, { url }),
   });
   const gateway =
     options.gateway ?? createStorageGateway({ baseUrl: config.gatewayUrl, serviceKey: config.serviceKey });

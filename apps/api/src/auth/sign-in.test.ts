@@ -119,3 +119,20 @@ describe("session policy", () => {
     expect(isBanned({ banned: false })).toBe(false);
   });
 });
+
+describe("password reset", () => {
+  it("emails a reset link that sets a new password", async () => {
+    email.sent.length = 0;
+    await post("/api/auth/request-password-reset", { email: "ada@example.com", redirectTo: `${PORTAL}/reset-password` });
+    expect(email.sent).toEqual([expect.objectContaining({ kind: "password-reset", to: "ada@example.com" })]);
+    const link = new URL(email.sent[0]!.url);
+    const redirect = await app.request(link.pathname + link.search, { headers: { origin: PORTAL } });
+    const token = new URL(redirect.headers.get("location")!).searchParams.get("token");
+    expect(token).toBeTruthy();
+
+    const reset = await post("/api/auth/reset-password", { newPassword: "a brand new password", token });
+    expect(reset.status).toBe(200);
+    const signIn = await post("/api/auth/sign-in/email", { email: "ada@example.com", password: "a brand new password" });
+    expect(signIn.status).toBe(200);
+  });
+});

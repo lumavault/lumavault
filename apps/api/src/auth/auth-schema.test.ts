@@ -59,6 +59,7 @@ describe("createAuth", () => {
       trustedOrigins: ["http://localhost:3000"],
       passkeyRpID: "localhost",
       sendMagicLink: async () => {},
+      sendPasswordReset: async () => {},
     });
 
     const signUp = await allowSignUp(() =>

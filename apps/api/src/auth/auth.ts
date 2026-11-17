@@ -33,6 +33,8 @@ export interface AuthDeps {
   passkeyRpID: string;
   /** Sends a magic-link email through the mailer. */
   sendMagicLink: (message: MagicLinkMessage) => Promise<void>;
+  /** Sends a password reset email through the mailer. */
+  sendPasswordReset: (message: { email: string; url: string }) => Promise<void>;
   /**
    * Parent domain for session cookies, for example example.com, when the web apps and API
    * live on different subdomains. Unset keeps cookies on the API host, which already works
@@ -49,7 +51,11 @@ export function createAuth(deps: AuthDeps) {
     basePath: AUTH_BASE_PATH,
     trustedOrigins: deps.trustedOrigins,
     database: drizzleAdapter(deps.db, { provider: "pg", schema: deps.tables }),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      sendResetPassword: ({ user, url }) => deps.sendPasswordReset({ email: user.email, url }),
+      revokeSessionsOnPasswordReset: true,
+    },
     // No cookie cache: every request reads the session row, so bans and revocations apply at once.
     session: { cookieCache: { enabled: false } },
     advanced: deps.cookieDomain ? { crossSubDomainCookies: { enabled: true, domain: deps.cookieDomain } } : {},

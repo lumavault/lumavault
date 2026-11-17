@@ -42,6 +42,7 @@ function testContext(): ModuleContext {
     trustedOrigins: config.webOrigins,
     passkeyRpID: "localhost",
     sendMagicLink: async () => {},
+    sendPasswordReset: async () => {},
   });
   const email = createEmailService(createMailer({ from: config.mailFrom, log: () => {} }));
   const gateway = createStorageGateway({ baseUrl: config.gatewayUrl, serviceKey: config.serviceKey });

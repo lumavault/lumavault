@@ -26,6 +26,7 @@ const auth = createAuth({
   trustedOrigins: config.webOrigins,
   passkeyRpID: new URL(config.portalUrl).hostname,
   sendMagicLink: ({ email: to, url }) => email.sendMagicLink(to, { url }),
+  sendPasswordReset: ({ email: to, url }) => email.sendPasswordReset(to, { url }),
   cookieDomain: config.cookieDomain,
 });
 
