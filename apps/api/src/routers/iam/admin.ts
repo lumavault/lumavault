@@ -1,10 +1,11 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { and, asc, count, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, ilike, inArray, isNull, or, sql, sum } from "drizzle-orm";
 import { noRowsOnBadUuid } from "#/db/errors.js";
 import { invitation, member, organization, user } from "#/db/schemas/auth.js";
-import { iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
+import { iamGracePeriods, iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
+import { HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
 import { requireSuperAdmin } from "#/guards.js";
 import {
   DEFAULT_MEMBER_LIMIT,
@@ -15,6 +16,7 @@ import { hashSecret, newSecret } from "#/iam/secrets.js";
 import type { ApiModule } from "#/modules.js";
 import { requestKey } from "#/request.js";
 import { appsFromWire, appToWire, required } from "./convert.js";
+import { loadHousehold } from "./household-queries.js";
 import { householdMessage, usageMessage, userMessage } from "./messages.js";
 import { decodePageToken, encodePageToken, pageSize } from "./paging.js";
 
@@ -25,6 +27,7 @@ type InviteRow = typeof iamHouseholdInvites.$inferSelect;
 function inviteMessage(row: InviteRow) {
   return {
     id: row.id,
+    email: row.email,
     note: row.note,
     allowance: { storageCapBytes: row.storageCapBytes, enabledApps: row.enabledApps.map(appToWire), memberLimit: row.memberLimit },
     expiresAt: timestampFromDate(row.expiresAt),
@@ -36,18 +39,20 @@ function memberLimit(requested: number): number {
   return requested > 0 ? requested : DEFAULT_MEMBER_LIMIT;
 }
 
-// Every RPC here is Super-Admin only and stays reachable whatever household is active.
+// Every RPC here is Super-Admin only and stays reachable even if their own household is suspended.
 export const module: ApiModule = {
   name: "iam-admin",
   rpc(router, ctx) {
     router.rpc(IamService.method.createHouseholdInvite, async (req, call) => {
       const admin = await requireSuperAdmin(call, ctx);
       const allowance = req.allowance;
+      const email = required(req.email, "email").toLowerCase();
       const token = newSecret();
       const [row] = await ctx.db
         .insert(iamHouseholdInvites)
         .values({
           tokenHash: hashSecret(token),
+          email,
           storageCapBytes: allowance?.storageCapBytes ?? 0n,
           enabledApps: appsFromWire(allowance?.enabledApps ?? []),
           memberLimit: memberLimit(allowance?.memberLimit ?? 0),
@@ -56,8 +61,9 @@ export const module: ApiModule = {
           expiresAt: new Date(Date.now() + HOUSEHOLD_INVITE_TTL_MS),
         })
         .returning();
-      const url = new URL(PORTAL_HOUSEHOLD_INVITE_PATH + token, ctx.config.portalUrl);
-      return { invite: inviteMessage(row!), inviteUrl: url.toString() };
+      const url = new URL(PORTAL_HOUSEHOLD_INVITE_PATH + token, ctx.config.portalUrl).toString();
+      await ctx.email.sendHouseholdInvite(email, { url, inviterName: admin.name });
+      return { invite: inviteMessage(row!), inviteUrl: url };
     });
 
     router.rpc(IamService.method.listHouseholdInvites, async (_req, call) => {
@@ -114,11 +120,28 @@ export const module: ApiModule = {
             .groupBy(invitation.organizationId)
         : [];
       const members = new Map(memberCounts.map((c) => [c.id, c.n]));
+      const ownerRows = ids.length
+        ? await ctx.db
+            .select({ householdId: member.organizationId, user })
+            .from(member)
+            .innerJoin(user, eq(user.id, member.userId))
+            .where(and(inArray(member.organizationId, ids), eq(member.role, HOUSEHOLD_OWNER_ROLE)))
+        : [];
+      const owners = new Map(ownerRows.map((o) => [o.householdId, o.user]));
+      const heldRows = ids.length
+        ? await ctx.db
+            .select({ id: iamGracePeriods.householdId, total: sum(iamGracePeriods.heldBytes) })
+            .from(iamGracePeriods)
+            .where(inArray(iamGracePeriods.householdId, ids))
+            .groupBy(iamGracePeriods.householdId)
+        : [];
+      const held = new Map(heldRows.map((h) => [h.id, BigInt(h.total ?? 0)]));
       const invites = new Map(inviteCounts.map((c) => [c.id, c.n]));
       return {
         households: page.map((r) => ({
-          household: householdMessage(r.org, r.household ?? undefined),
-          usage: usageMessage(r.household ?? undefined),
+          household: householdMessage(r.org, r.household ?? undefined, owners.get(r.org.id)?.id ?? ""),
+          owner: owners.has(r.org.id) ? userMessage(owners.get(r.org.id)!) : undefined,
+          usage: usageMessage(r.household ?? undefined, held.get(r.org.id) ?? 0n),
           memberCount: members.get(r.org.id) ?? 0,
           pendingInviteCount: invites.get(r.org.id) ?? 0,
         })),
@@ -147,27 +170,23 @@ export const module: ApiModule = {
         }
       }
       // A cap or limit below current usage is allowed; it only blocks new uploads and invites.
-      const [h] = await ctx.db.update(iamHouseholds).set(set).where(eq(iamHouseholds.householdId, householdId)).returning();
-      const [org] = await ctx.db.select().from(organization).where(eq(organization.id, householdId));
-      if (!h || !org) {
+      await ctx.db.update(iamHouseholds).set(set).where(eq(iamHouseholds.householdId, householdId));
+      const household = await loadHousehold(ctx.db, householdId);
+      if (!household?.allowance) {
         throw new ConnectError("no such household", Code.NotFound);
       }
-      return { household: householdMessage(org, h) };
+      return { household: household.message };
     });
 
     router.rpc(IamService.method.setHouseholdSuspended, async (req, call) => {
       await requireSuperAdmin(call, ctx);
       const householdId = required(req.householdId, "household_id");
-      const [h] = await ctx.db
-        .update(iamHouseholds)
-        .set({ suspended: req.suspended })
-        .where(eq(iamHouseholds.householdId, householdId))
-        .returning();
-      const [org] = await ctx.db.select().from(organization).where(eq(organization.id, householdId));
-      if (!h || !org) {
+      await ctx.db.update(iamHouseholds).set({ suspended: req.suspended }).where(eq(iamHouseholds.householdId, householdId));
+      const household = await loadHousehold(ctx.db, householdId);
+      if (!household?.allowance) {
         throw new ConnectError("no such household", Code.NotFound);
       }
-      return { household: householdMessage(org, h) };
+      return { household: household.message };
     });
 
     router.rpc(IamService.method.listUsers, async (req, call) => {

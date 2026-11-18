@@ -11,7 +11,7 @@ import { iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
 import { hashSecret } from "#/iam/secrets.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
-import { createTestContext, signUp, TEST_WEB_ORIGIN, type TestUser } from "#/testing/context.js";
+import { createTestContext, recordingEmail, signUp, TEST_WEB_ORIGIN, type TestUser } from "#/testing/context.js";
 import { iamClient } from "#/testing/rpc.js";
 
 let database: TestDatabase;
@@ -20,6 +20,7 @@ let app: Hono;
 let owner: TestUser;
 let ada: TestUser;
 let householdId: string;
+const email = recordingEmail();
 
 async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
   try {
@@ -33,7 +34,7 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
 beforeAll(async () => {
   database = await createTestDatabase();
   await pushAllSchemas(database);
-  ctx = createTestContext(database);
+  ctx = createTestContext(database, { email });
   app = createApp(ctx, await loadModules());
   owner = await signUp(ctx, "owner@example.com");
   await database.db.update(user).set({ role: SUPER_ADMIN_ROLE }).where(eq(user.id, owner.id));
@@ -70,11 +71,16 @@ describe("Super-Admin only", () => {
 describe("household creation invites", () => {
   it("returns the link once, stores only its hash, and can be revoked", async () => {
     const asOwner = iamClient(app, owner.headers);
+    email.sent.length = 0;
     const res = await asOwner.createHouseholdInvite({
+      email: "Lovelace@Example.com",
       allowance: { storageCapBytes: 5n * 2n ** 40n, enabledApps: [App.PHOTOS, App.CINEMA, App.PHOTOS] },
       note: "for the Lovelaces",
     });
     expect(res.inviteUrl.startsWith(`${TEST_WEB_ORIGIN}/invite/household/`)).toBe(true);
+    expect(res.invite?.email).toBe("lovelace@example.com");
+    expect(email.sent).toEqual([{ kind: "household-invite", to: "lovelace@example.com", url: res.inviteUrl }]);
+    expect(await codeOf(asOwner.createHouseholdInvite({ allowance: { storageCapBytes: 1n } }))).toBe(Code.InvalidArgument);
     expect(res.invite?.allowance).toMatchObject({ memberLimit: 4, enabledApps: [App.PHOTOS, App.CINEMA] });
 
     const token = res.inviteUrl.split("/").at(-1)!;
@@ -102,7 +108,12 @@ describe("households", () => {
 
     const all = await asOwner.listHouseholds({});
     const ours = all.households.find((h) => h.household?.id === householdId);
-    expect(ours).toMatchObject({ memberCount: 1, usage: { usedBytes: 600n, remainingBytes: 400n } });
+    expect(ours).toMatchObject({
+      memberCount: 1,
+      owner: { email: "ada@example.com" },
+      household: { ownerUserId: ada.id },
+      usage: { usedBytes: 600n, remainingBytes: 400n, heldBytes: 0n },
+    });
     expect(await codeOf(asOwner.listHouseholds({ pageToken: "%%%" }))).toBe(Code.InvalidArgument);
   });
 
@@ -140,12 +151,11 @@ describe("users", () => {
   it("bans a user: their session stops working at once and their invites are cancelled", async () => {
     const mallory = await signUp(ctx, "mallory@example.com");
     const theirs = await createHouseholdFor(ctx, mallory.id, "Mallory's");
-    await ctx.auth.api.setActiveOrganization({ body: { organizationId: theirs.id }, headers: mallory.headers });
-    await ctx.auth.api.createInvitation({ body: { email: "friend@example.com", role: "member" }, headers: mallory.headers });
+    await ctx.auth.api.createInvitation({ body: { email: "friend@example.com", role: "member", organizationId: theirs.id }, headers: mallory.headers });
     expect((await iamClient(app, mallory.headers).getViewer({})).user?.email).toBe("mallory@example.com");
 
     const res = await iamClient(app, owner.headers).banUser({ userId: mallory.id, reason: "spam" });
-    expect(res.user?.banned).toBe(true);
+    expect(res.user).toMatchObject({ banned: true, banReason: "spam" });
     expect(await codeOf(iamClient(app, mallory.headers).getViewer({}))).toBe(Code.Unauthenticated);
     const pending = await database.db.select().from(invitation).where(eq(invitation.inviterId, mallory.id));
     expect(pending.map((i) => i.status)).toEqual(["canceled"]);
