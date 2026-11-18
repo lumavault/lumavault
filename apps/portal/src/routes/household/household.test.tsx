@@ -5,11 +5,12 @@ import { describe, expect, it } from "vitest";
 import { renderPortal } from "@/mocks/render";
 import { seedState } from "@/mocks/state";
 
-describe("household page for an Admin", () => {
-  it("shows storage and members", async () => {
+describe("household page for the Owner", () => {
+  it("shows storage, members, and who the Owner is", async () => {
     renderPortal("/household");
     expect(await screen.findByText("800 GB of 2 TB used")).toBeDefined();
-    expect(await screen.findByText("Charles Babbage")).toBeDefined();
+    const row = await screen.findByRole("row", { name: /Ada Lovelace/ });
+    expect(within(row).getByText("Owner")).toBeDefined();
     expect(screen.getByText("2 seats left. Pending invites hold a seat until they are used or cancelled.")).toBeDefined();
   });
 
@@ -36,18 +37,43 @@ describe("household page for an Admin", () => {
     expect(await screen.findByText(/no free seats/)).toBeDefined();
   });
 
-  it("removes a member and refuses to remove the last Admin", async () => {
+  it("removes a member into their grace period and shows the held storage", async () => {
     const state = seedState();
     renderPortal("/household", { state });
     const user = userEvent.setup();
-
+    expect(screen.queryByRole("button", { name: "Manage Ada Lovelace" })).toBeNull();
     await user.click(await screen.findByRole("button", { name: "Manage Charles Babbage" }));
     await user.click(await screen.findByRole("menuitem", { name: "Remove" }));
     await waitFor(() => expect(state.households[0]!.members.map((m) => m.userId)).toEqual(["u-owner"]));
+    expect(state.grace["u-member"]?.householdName).toBe("Lovelace Home");
+    expect(await screen.findByText(/50 GB of that is held for people who left/)).toBeDefined();
+  });
 
-    await user.click(await screen.findByRole("button", { name: "Manage Ada Lovelace" }));
-    await user.click(await screen.findByRole("menuitem", { name: "Leave household" }));
-    expect(await screen.findByText(/at least one Admin/)).toBeDefined();
+  it("hands the Owner role to another member", async () => {
+    const state = seedState();
+    renderPortal("/household", { state });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Manage Charles Babbage" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Make Owner" }));
+    await waitFor(() =>
+      expect(state.households[0]!.members).toEqual([
+        { userId: "u-owner", role: Role.ADMIN },
+        { userId: "u-member", role: Role.OWNER },
+      ]),
+    );
+  });
+
+  it("names the next Owner before leaving", async () => {
+    const state = seedState();
+    const { router } = renderPortal("/household", { state });
+    const user = userEvent.setup();
+    const leave = await screen.findByRole("button", { name: "Leave Lovelace Home" });
+    expect(leave.hasAttribute("disabled")).toBe(true);
+    await user.click(screen.getByRole("radio", { name: "Charles Babbage" }));
+    await user.click(leave);
+    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    expect(state.households[0]!.members).toEqual([{ userId: "u-member", role: Role.OWNER }]);
+    expect(state.grace["u-owner"]).toBeDefined();
   });
 
   it("cancels a pending invite", async () => {
@@ -61,10 +87,13 @@ describe("household page for an Admin", () => {
 });
 
 describe("household page for a Member", () => {
-  it("is read-only", async () => {
-    renderPortal("/household", { state: seedState({ viewerId: "u-member" }) });
+  it("is read-only apart from leaving", async () => {
+    const state = seedState({ viewerId: "u-member" });
+    renderPortal("/household", { state });
     expect(await screen.findByText("Ada Lovelace")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Send invite" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Manage / })).toBeNull();
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Leave Lovelace Home" }));
+    await waitFor(() => expect(state.grace["u-member"]).toBeDefined());
   });
 });
