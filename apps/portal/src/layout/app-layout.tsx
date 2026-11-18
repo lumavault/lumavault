@@ -1,7 +1,8 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { PORTAL_LOGIN_PATH, RETURN_TO_PARAM, useActiveHousehold, useViewer } from "@lumavault/ui";
+import { formatBytes, PORTAL_LOGIN_PATH, RETURN_TO_PARAM, useHousehold, useViewer } from "@lumavault/ui";
 import { Navigate, Outlet, useRouterState } from "@tanstack/react-router";
-import { TriangleAlertIcon } from "lucide-react";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { ClockIcon, TriangleAlertIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -12,7 +13,7 @@ import { SiteHeader } from "./site-header";
 /** The dashboard shell from shadcn's dashboard block, shown only to signed-in viewers. */
 export function AppLayout() {
   const viewer = useViewer();
-  const { suspended, membership } = useActiveHousehold();
+  const { suspended, household, gracePeriod } = useHousehold();
   const location = useRouterState({ select: (s) => s.location });
 
   if (viewer.error && ConnectError.from(viewer.error).code === Code.Unauthenticated) {
@@ -40,8 +41,19 @@ export function AppLayout() {
           {suspended && (
             <Alert variant="destructive">
               <TriangleAlertIcon />
-              <AlertTitle>{membership?.household?.name} is suspended</AlertTitle>
-              <AlertDescription>The server owner paused this household. Switch to another household to keep going.</AlertDescription>
+              <AlertTitle>{household?.name} is suspended</AlertTitle>
+              <AlertDescription>The server owner paused this household. Ask them to turn it back on.</AlertDescription>
+            </Alert>
+          )}
+          {gracePeriod && (
+            <Alert>
+              <ClockIcon />
+              <AlertTitle>You left {gracePeriod.formerHouseholdName}</AlertTitle>
+              <AlertDescription>
+                Your {formatBytes(gracePeriod.privateBytes)} of private data is kept, read-only, until{" "}
+                {timestampDate(gracePeriod.deleteAt!).toLocaleDateString()}. Download what you need, or join a household with an
+                invite link to bring it along.
+              </AlertDescription>
             </Alert>
           )}
           <Outlet />

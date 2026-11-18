@@ -1,5 +1,5 @@
 import { appInfo } from "@/lib/apps";
-import { useActiveHousehold } from "@lumavault/ui";
+import { useHousehold } from "@lumavault/ui";
 import { createRoute } from "@tanstack/react-router";
 import { ArrowUpRightIcon, HouseIcon } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -10,8 +10,8 @@ import { appRoute } from "@/layout/routes";
 
 /** Launcher cards for the active household's enabled apps. */
 export function HomePage() {
-  const { membership, suspended } = useActiveHousehold();
-  if (!membership?.household) {
+  const { household, suspended } = useHousehold();
+  if (!household) {
     return (
       <Empty>
         <EmptyHeader>
@@ -24,7 +24,7 @@ export function HomePage() {
       </Empty>
     );
   }
-  const apps = (membership.household.allowance?.enabledApps ?? []).map(appInfo).filter((a) => a !== undefined);
+  const apps = (household.allowance?.enabledApps ?? []).map(appInfo).filter((a) => a !== undefined);
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {apps.map((app) => (

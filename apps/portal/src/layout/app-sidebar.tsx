@@ -2,7 +2,7 @@ import type { GetViewerResponse } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_
 import { LayoutGridIcon, ShieldIcon, TvIcon, UsersIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
-import { HouseholdSwitcher } from "./household-switcher";
+import { HouseholdHeader } from "./household-header";
 import { NavMain, type NavItem } from "./nav-main";
 import { NavUser } from "./nav-user";
 
@@ -18,7 +18,7 @@ export function AppSidebar({ viewer, ...props }: ComponentProps<typeof Sidebar> 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
-        <HouseholdSwitcher viewer={viewer} />
+        <HouseholdHeader />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={items} />
