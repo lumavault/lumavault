@@ -45,7 +45,7 @@ function testContext(): ModuleContext {
   });
   const email = createEmailService(createMailer({ from: config.mailFrom, log: () => {} }));
   const gateway = createStorageGateway({ baseUrl: config.gatewayUrl, serviceKey: config.serviceKey });
-  return { config, db, auth, email, gateway };
+  return { config, db, auth, email, gateway, apps: [] };
 }
 
 // Registers two IamService methods the way a real router file would.

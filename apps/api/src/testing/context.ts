@@ -61,7 +61,7 @@ export function createTestContext(
   });
   const gateway =
     options.gateway ?? createStorageGateway({ baseUrl: config.gatewayUrl, serviceKey: config.serviceKey });
-  return { config, db: database.db, auth, email, gateway };
+  return { config, db: database.db, auth, email, gateway, apps: [] };
 }
 
 export interface TestUser {

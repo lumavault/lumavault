@@ -30,8 +30,9 @@ const auth = createAuth({
 });
 
 const gateway = createStorageGateway({ baseUrl: config.gatewayUrl, serviceKey: config.serviceKey });
-const ctx: ModuleContext = { config, db: database.db, auth, email, gateway };
 const modules = await loadModules();
+const apps = modules.flatMap((m) => (m.appData ? [m.appData] : []));
+const ctx: ModuleContext = { config, db: database.db, auth, email, gateway, apps };
 const app = createApp(ctx, modules);
 await startModules(modules, ctx);
 

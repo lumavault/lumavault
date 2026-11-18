@@ -2,27 +2,24 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, type ContextValues } from "@connectrpc/connect";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
-import { createHouseholdFor } from "#/auth/server-helpers.js";
-import type { HouseholdRole } from "#/auth/constants.js";
-import { invitation, member, organization, session, user } from "#/db/schemas/auth.js";
-import { iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
-import { requireHouseholdAdmin, requireHouseholdMember, requireSignedIn } from "#/guards.js";
+import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_OWNER_ROLE, type HouseholdRole } from "#/auth/constants.js";
+import { invitation, member, organization, user } from "#/db/schemas/auth.js";
+import { iamHouseholds } from "#/db/schemas/iam.js";
+import { requireHouseholdAdmin, requireHouseholdMember, requireHouseholdOwner } from "#/guards.js";
 import { PORTAL_MEMBER_INVITE_PATH } from "#/iam/constants.js";
-import { hashSecret } from "#/iam/secrets.js";
+import { startGracePeriod } from "#/iam/grace.js";
 import type { ApiModule, ModuleContext } from "#/modules.js";
 import { requestKey } from "#/request.js";
-import { roleFromWire, roleToWire, required } from "./convert.js";
-import { clearActiveHouseholdFor, memberInviteMessage, otherAdmins, seatsUsed } from "./household-data.js";
-import { householdMessage, userMessage } from "./messages.js";
+import { assignableRoleFromWire, required, roleToWire } from "./convert.js";
+import { memberInviteMessage, seatsUsed } from "./household-queries.js";
+import { userMessage } from "./messages.js";
 
-type Call = { values: ContextValues };
-
-function headersOf(call: Call): Headers {
+function headersOf(call: { values: ContextValues }): Headers {
   return call.values.get(requestKey)?.headers ?? new Headers();
 }
 
-/** Locks the household's iam row so seat counts and the last-Admin rule see one change at a time. */
-async function withHouseholdLock<T>(ctx: ModuleContext, householdId: string, fn: (limit: number) => Promise<T>): Promise<T> {
+/** Locks the household's iam row so seat counts and role changes see one change at a time. */
+export async function withHouseholdLock<T>(ctx: ModuleContext, householdId: string, fn: (limit: number) => Promise<T>): Promise<T> {
   return ctx.db.transaction(async (tx) => {
     const [h] = await tx.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, householdId)).for("update");
     if (!h) {
@@ -32,53 +29,35 @@ async function withHouseholdLock<T>(ctx: ModuleContext, householdId: string, fn:
   });
 }
 
-async function householdReply(ctx: ModuleContext, householdId: string) {
-  const [org] = await ctx.db.select().from(organization).where(eq(organization.id, householdId));
-  const [h] = await ctx.db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, householdId));
-  if (!org) {
-    throw new ConnectError("no such household", Code.NotFound);
+async function memberRow(ctx: ModuleContext, householdId: string, userId: string) {
+  const [row] = await ctx.db.select().from(member).where(and(eq(member.organizationId, householdId), eq(member.userId, userId)));
+  if (!row) {
+    throw new ConnectError("no such member", Code.NotFound);
   }
-  return { household: householdMessage(org, h) };
+  return row;
 }
 
+/**
+ * Hands the Owner role to another member in one transaction; the old Owner becomes an Admin.
+ * Exported for moves and leaving, where an Owner names the next Owner on the way out.
+ */
+export async function transferOwnership(ctx: ModuleContext, householdId: string, fromUserId: string, toUserId: string): Promise<void> {
+  if (fromUserId === toUserId) {
+    throw new ConnectError("you are already the Owner", Code.InvalidArgument);
+  }
+  await withHouseholdLock(ctx, householdId, async () => {
+    await memberRow(ctx, householdId, toUserId);
+    await ctx.db.transaction(async (tx) => {
+      await tx.update(member).set({ role: HOUSEHOLD_ADMIN_ROLE }).where(and(eq(member.organizationId, householdId), eq(member.userId, fromUserId)));
+      await tx.update(member).set({ role: HOUSEHOLD_OWNER_ROLE }).where(and(eq(member.organizationId, householdId), eq(member.userId, toUserId)));
+    });
+  });
+}
+
+// Household members. Every call acts on the caller's own household.
 export const module: ApiModule = {
   name: "iam-households",
   rpc(router, ctx) {
-    router.rpc(IamService.method.redeemHouseholdInvite, async (req, call) => {
-      const viewer = await requireSignedIn(call, ctx);
-      const name = required(req.householdName, "household_name");
-      const tokenHash = hashSecret(required(req.token, "token"));
-      const householdId = await ctx.db.transaction(async (tx) => {
-        const [invite] = await tx.select().from(iamHouseholdInvites).where(eq(iamHouseholdInvites.tokenHash, tokenHash)).for("update");
-        if (!invite || invite.revokedAt || invite.expiresAt <= new Date()) {
-          throw new ConnectError("this invite link is not valid", Code.NotFound);
-        }
-        if (invite.redeemedAt) {
-          throw new ConnectError("this invite link was already used", Code.FailedPrecondition);
-        }
-        // Better Auth creates the household on its own connection; undo it if a later step fails.
-        const household = await createHouseholdFor(ctx, viewer.userId, name);
-        try {
-          await tx.insert(iamHouseholds).values({
-            householdId: household.id,
-            storageCapBytes: invite.storageCapBytes,
-            enabledApps: invite.enabledApps,
-            memberLimit: invite.memberLimit,
-          });
-          await tx
-            .update(iamHouseholdInvites)
-            .set({ redeemedAt: new Date(), redeemedBy: viewer.userId, householdId: household.id })
-            .where(eq(iamHouseholdInvites.id, invite.id));
-        } catch (err) {
-          await ctx.db.delete(organization).where(eq(organization.id, household.id));
-          throw err;
-        }
-        return household.id;
-      });
-      await ctx.db.update(session).set({ activeOrganizationId: householdId }).where(eq(session.id, viewer.sessionId));
-      return householdReply(ctx, householdId);
-    });
-
     router.rpc(IamService.method.listMembers, async (_req, call) => {
       const { household } = await requireHouseholdMember(call, ctx);
       const rows = await ctx.db
@@ -86,13 +65,11 @@ export const module: ApiModule = {
         .from(member)
         .innerJoin(user, eq(user.id, member.userId))
         .where(eq(member.organizationId, household.householdId))
-        .orderBy(asc(user.name));
+        .orderBy(sql`${member.role} = ${HOUSEHOLD_OWNER_ROLE} desc`, asc(user.name));
       const pending = await ctx.db
         .select()
         .from(invitation)
-        .where(
-          and(eq(invitation.organizationId, household.householdId), eq(invitation.status, "pending"), gt(invitation.expiresAt, new Date())),
-        );
+        .where(and(eq(invitation.organizationId, household.householdId), eq(invitation.status, "pending"), gt(invitation.expiresAt, new Date())));
       const [h] = await ctx.db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, household.householdId));
       const left = (h?.memberLimit ?? 0) - rows.length - pending.length;
       return {
@@ -109,7 +86,7 @@ export const module: ApiModule = {
     router.rpc(IamService.method.inviteMember, async (req, call) => {
       const { viewer, household } = await requireHouseholdAdmin(call, ctx);
       const email = required(req.email, "email").toLowerCase();
-      const role = roleFromWire(req.role);
+      const role = assignableRoleFromWire(req.role);
       const invite = await withHouseholdLock(ctx, household.householdId, async (limit) => {
         const [already] = await ctx.db
           .select({ id: member.id })
@@ -147,68 +124,48 @@ export const module: ApiModule = {
       return {};
     });
 
-    router.rpc(IamService.method.acceptMemberInvite, async (req, call) => {
-      const viewer = await requireSignedIn(call, ctx);
-      const inviteId = required(req.inviteId, "invite_id");
-      const [row] = await ctx.db.select().from(invitation).where(and(eq(invitation.id, inviteId), eq(invitation.status, "pending")));
-      if (!row || row.expiresAt <= new Date()) {
-        throw new ConnectError("this invite is not valid", Code.NotFound);
-      }
-      if (row.email.toLowerCase() !== viewer.email.toLowerCase()) {
-        throw new ConnectError("this invite is for another email address", Code.PermissionDenied);
-      }
-      await ctx.auth.api.acceptInvitation({ body: { invitationId: inviteId }, headers: headersOf(call) });
-      await ctx.db.update(session).set({ activeOrganizationId: row.organizationId }).where(eq(session.id, viewer.sessionId));
-      return householdReply(ctx, row.organizationId);
-    });
-
+    // The removed person keeps read-only access to their private data for the grace period.
     router.rpc(IamService.method.removeMember, async (req, call) => {
       const { household } = await requireHouseholdAdmin(call, ctx);
       const userId = required(req.userId, "user_id");
       await withHouseholdLock(ctx, household.householdId, async () => {
-        const [target] = await ctx.db
-          .select()
-          .from(member)
-          .where(and(eq(member.organizationId, household.householdId), eq(member.userId, userId)));
-        if (!target) {
-          throw new ConnectError("no such member", Code.NotFound);
-        }
-        if ((await otherAdmins(ctx.db, household.householdId, userId)) === 0) {
-          throw new ConnectError("a household needs at least one Admin", Code.FailedPrecondition);
+        const target = await memberRow(ctx, household.householdId, userId);
+        if (target.role === HOUSEHOLD_OWNER_ROLE) {
+          throw new ConnectError("the Owner cannot be removed; transfer ownership first", Code.FailedPrecondition);
         }
         await ctx.auth.api.removeMember({
           body: { memberIdOrEmail: target.id, organizationId: household.householdId },
           headers: headersOf(call),
         });
       });
-      await clearActiveHouseholdFor(ctx.db, userId, household.householdId);
+      const [org] = await ctx.db.select().from(organization).where(eq(organization.id, household.householdId));
+      await startGracePeriod(ctx, userId, { id: household.householdId, name: org?.name ?? "" });
       return {};
     });
 
     router.rpc(IamService.method.updateMemberRole, async (req, call) => {
       const { household } = await requireHouseholdAdmin(call, ctx);
       const userId = required(req.userId, "user_id");
-      const role = roleFromWire(req.role);
-      const updated = await withHouseholdLock(ctx, household.householdId, async () => {
-        const [target] = await ctx.db
-          .select()
-          .from(member)
-          .where(and(eq(member.organizationId, household.householdId), eq(member.userId, userId)));
-        if (!target) {
-          throw new ConnectError("no such member", Code.NotFound);
-        }
-        if (role !== "admin" && (await otherAdmins(ctx.db, household.householdId, userId)) === 0) {
-          throw new ConnectError("a household needs at least one Admin", Code.FailedPrecondition);
+      const role = assignableRoleFromWire(req.role);
+      const target = await withHouseholdLock(ctx, household.householdId, async () => {
+        const row = await memberRow(ctx, household.householdId, userId);
+        if (row.role === HOUSEHOLD_OWNER_ROLE) {
+          throw new ConnectError("the Owner's role changes only by transferring ownership", Code.FailedPrecondition);
         }
         await ctx.auth.api.updateMemberRole({
-          body: { memberId: target.id, role, organizationId: household.householdId },
+          body: { memberId: row.id, role, organizationId: household.householdId },
           headers: headersOf(call),
         });
-        return target;
+        return row;
       });
       const [u] = await ctx.db.select().from(user).where(eq(user.id, userId));
-      return { member: { user: userMessage(u!), role: roleToWire(role), joinedAt: timestampFromDate(updated.createdAt) } };
+      return { member: { user: userMessage(u!), role: roleToWire(role), joinedAt: timestampFromDate(target.createdAt) } };
+    });
+
+    router.rpc(IamService.method.transferOwnership, async (req, call) => {
+      const { viewer, household } = await requireHouseholdOwner(call, ctx);
+      await transferOwnership(ctx, household.householdId, viewer.userId, required(req.userId, "user_id"));
+      return {};
     });
   },
 };
-

@@ -6,6 +6,7 @@ import type { Auth } from "./auth/auth.js";
 import type { Config } from "./config.js";
 import { MODULE_DIRS } from "./constants.js";
 import type { Db } from "./db/index.js";
+import type { AppDataHooks } from "./iam/app-data.js";
 import type { EmailService } from "./email/emails.js";
 import type { StorageGateway } from "./services/storage-gateway.js";
 import { listSourceFiles } from "./source-files.js";
@@ -17,6 +18,8 @@ export interface ModuleContext {
   auth: Auth;
   email: EmailService;
   gateway: StorageGateway;
+  /** Data hooks from every loaded app module. Filled in once modules load. */
+  apps: AppDataHooks[];
 }
 
 /**
@@ -33,6 +36,8 @@ export interface ApiModule {
   start?(ctx: ModuleContext): Promise<void> | void;
   /** Stops background work. Called on shutdown, in reverse start order. */
   stop?(): Promise<void> | void;
+  /** How IAM moves this app's data when people change household. Media app routers set it. */
+  appData?: AppDataHooks;
 }
 
 export const SRC_DIR = fileURLToPath(new URL("./", import.meta.url));
