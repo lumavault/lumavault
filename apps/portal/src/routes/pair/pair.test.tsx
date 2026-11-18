@@ -33,6 +33,14 @@ describe("Apple TV pairing page", () => {
     expect(await screen.findByText(/start pairing again on the TV/)).toBeDefined();
   });
 
+  it("asks someone without a household to join one first", async () => {
+    const state = seedState({ viewerId: "u-member" });
+    state.households[0]!.members = state.households[0]!.members.filter((m) => m.userId !== "u-member");
+    renderPortal("/pair", { state });
+    await enter("ABC234");
+    expect(await screen.findByText(/Join a household first/)).toBeDefined();
+  });
+
   it("ignores characters the TV never shows and waits for six", async () => {
     renderPortal("/pair");
     const user = userEvent.setup();

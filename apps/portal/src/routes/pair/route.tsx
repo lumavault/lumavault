@@ -1,7 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useMutation } from "@connectrpc/connect-query";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { useViewer } from "@lumavault/ui";
 import { createRoute } from "@tanstack/react-router";
 import { CircleCheckIcon, TvIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -9,9 +8,8 @@ import { FormError } from "@/components/auth/form-alert";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { appRoute } from "@/layout/routes";
 
 const CODE_LENGTH = 6;
@@ -24,8 +22,10 @@ function pairingError(err: unknown): string {
   switch (e.code) {
     case Code.NotFound:
       return "That code did not work. Check the code on the TV. If it has been more than 10 minutes, start pairing again on the TV for a new code.";
+    case Code.FailedPrecondition:
+      return "Join a household first. The Apple TV opens in your household.";
     case Code.PermissionDenied:
-      return "You are not a member of that household. Pick one of yours.";
+      return "Your household is suspended. Ask the server owner about it.";
     case Code.ResourceExhausted:
       return "Too many tries. Wait a few minutes, then try again.";
     default:
@@ -33,20 +33,16 @@ function pairingError(err: unknown): string {
   }
 }
 
-/** Approve an Apple TV from a phone: type the code it shows and pick the household it opens in. */
+/** Approve an Apple TV from a phone: type the code it shows. It opens in the approver's household. */
 export function PairPage() {
-  const viewer = useViewer();
   const approve = useMutation(IamService.method.approvePairing);
   const [code, setCode] = useState("");
-  const [picked, setPicked] = useState<string | null>(null);
   const [paired, setPaired] = useState<string | null>(null);
-  const memberships = viewer.data?.memberships ?? [];
-  const householdId = picked ?? viewer.data?.activeHouseholdId ?? memberships[0]?.household?.id ?? "";
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const res = await approve.mutateAsync({ code, householdId });
+      const res = await approve.mutateAsync({ code });
       setPaired(res.deviceName);
       setCode("");
     } catch {
@@ -97,28 +93,8 @@ export function PairPage() {
                   </InputOTPGroup>
                 </InputOTP>
               </Field>
-              {memberships.length > 1 && (
-                <Field>
-                  <FieldLabel>Household</FieldLabel>
-                  <Select value={householdId} onValueChange={(v) => setPicked(v as string)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue>{memberships.find((m) => m.household?.id === householdId)?.household?.name}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {memberships.map((m) => (
-                          <SelectItem key={m.household?.id} value={m.household?.id ?? ""}>
-                            {m.household?.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <FieldDescription>The Apple TV opens in this household.</FieldDescription>
-                </Field>
-              )}
               <FormError message={approve.error && pairingError(approve.error)} />
-              <Button type="submit" size="lg" disabled={code.length !== CODE_LENGTH || !householdId || approve.isPending}>
+              <Button type="submit" size="lg" disabled={code.length !== CODE_LENGTH || approve.isPending}>
                 Approve
               </Button>
             </FieldGroup>
