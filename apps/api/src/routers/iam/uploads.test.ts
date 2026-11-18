@@ -8,7 +8,7 @@ import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { verifyTicket } from "#/auth/tickets.js";
 import { user } from "#/db/schemas/auth.js";
-import { iamContributorGrants, iamHouseholds, iamUploadReservations } from "#/db/schemas/iam.js";
+import { iamHouseholds, iamUploadReservations } from "#/db/schemas/iam.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
 import { createTestContext, signUp, type TestUser } from "#/testing/context.js";
@@ -23,7 +23,6 @@ let member: TestUser;
 let outsider: TestUser;
 let owner: TestUser;
 let householdId: string;
-let grantId: string;
 
 async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
   try {
@@ -54,14 +53,6 @@ beforeAll(async () => {
   householdId = (await createHouseholdFor(ctx, admin.id, "Home")).id;
   await database.db.insert(iamHouseholds).values({ householdId, storageCapBytes: 1000n, enabledApps: ["photos"] });
   await ctx.auth.api.addMember({ body: { userId: member.id, organizationId: householdId, role: "member" } });
-  for (const u of [admin, member]) {
-    await ctx.auth.api.setActiveOrganization({ body: { organizationId: householdId }, headers: u.headers });
-  }
-  const [grant] = await database.db
-    .insert(iamContributorGrants)
-    .values({ householdId, app: "photos", resourceKind: "album", resourceId: "a1", granteeEmail: outsider.email, createdBy: admin.id })
-    .returning();
-  grantId = grant!.id;
 });
 
 afterAll(async () => {
@@ -77,24 +68,19 @@ describe("PrepareUpload", () => {
     expect(res.reservationId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("works for Members and for outside contributors with a grant, billed to the household", async () => {
-    await iamClient(app, member.headers).prepareUpload({ app: App.PHOTOS, sizeBytes: 10n });
+  it("works for Members, billed to the household", async () => {
     const before = await reserved();
-    await iamClient(app, outsider.headers).prepareUpload({ app: App.PHOTOS, sizeBytes: 10n, billing: { case: "grantId", value: grantId } });
+    await iamClient(app, member.headers).prepareUpload({ app: App.PHOTOS, sizeBytes: 10n });
     expect(await reserved()).toBe(before + 10n);
   });
 
-  it("does not let a Member upload elsewhere without a grant of their own", async () => {
-    const asMember = iamClient(app, member.headers);
-    expect(await codeOf(asMember.prepareUpload({ app: App.PHOTOS, sizeBytes: 1n, billing: { case: "grantId", value: grantId } }))).toBe(
-      Code.PermissionDenied,
-    );
-    expect(await codeOf(asMember.prepareUpload({ app: App.CINEMA, sizeBytes: 1n, billing: { case: "sharedLibrary", value: true } }))).toBe(
+  it("does not let a Member upload to the shared library", async () => {
+    expect(await codeOf(iamClient(app, member.headers).prepareUpload({ app: App.CINEMA, sizeBytes: 1n, sharedLibrary: true }))).toBe(
       Code.PermissionDenied,
     );
   });
 
-  it("needs a household when there is no grant", async () => {
+  it("needs a household", async () => {
     expect(await codeOf(iamClient(app, outsider.headers).prepareUpload({ app: App.PHOTOS, sizeBytes: 1n }))).toBe(Code.FailedPrecondition);
     expect(await codeOf(iamClient(app).prepareUpload({ app: App.PHOTOS, sizeBytes: 1n }))).toBe(Code.Unauthenticated);
   });
@@ -104,21 +90,16 @@ describe("PrepareUpload", () => {
     const res = await iamClient(app, owner.headers).prepareUpload({
       app: App.CINEMA,
       sizeBytes: 10n ** 12n,
-      billing: { case: "sharedLibrary", value: true },
+      sharedLibrary: true,
     });
     expect(verifyTicket(ctx.config.ticketSecret, res.uploadTicket)).toMatchObject({ namespace: 2 });
     expect(await reserved()).toBe(before);
   });
 
-  it("rejects a missing app or size, and a grant for another app", async () => {
+  it("rejects a missing app or size", async () => {
     const asAdmin = iamClient(app, admin.headers);
     expect(await codeOf(asAdmin.prepareUpload({ sizeBytes: 1n }))).toBe(Code.InvalidArgument);
     expect(await codeOf(asAdmin.prepareUpload({ app: App.PHOTOS, sizeBytes: 0n }))).toBe(Code.InvalidArgument);
-    expect(
-      await codeOf(
-        iamClient(app, outsider.headers).prepareUpload({ app: App.ARCADE, sizeBytes: 1n, billing: { case: "grantId", value: grantId } }),
-      ),
-    ).toBe(Code.PermissionDenied);
   });
 });
 
