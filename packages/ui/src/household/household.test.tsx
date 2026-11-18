@@ -6,24 +6,16 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { formatBytes, summarizeUsage } from "../format-bytes.js";
 import { LumaVaultProvider } from "../rpc/provider.js";
-import { useActiveHousehold, useSwitchHousehold } from "./use-household.js";
+import { useHousehold, useJoinHousehold } from "./use-household.js";
 
 function mockApi() {
-  let active = "home";
-  const households = [
-    { id: "home", name: "Home", suspended: false, allowance: { enabledApps: [App.PHOTOS] } },
-    { id: "cabin", name: "Cabin", suspended: true, allowance: { enabledApps: [App.CINEMA] } },
-  ];
-  const viewer = () => ({
-    user: { id: "u1", email: "ada@example.com" },
-    memberships: households.map((household) => ({ household, role: Role.ADMIN })),
-    activeHouseholdId: active,
-  });
+  let current = { id: "home", name: "Home", suspended: false, allowance: { enabledApps: [App.PHOTOS] } };
+  const viewer = () => ({ user: { id: "u1", email: "ada@example.com" }, household: current, role: Role.OWNER });
   return createRouterTransport(({ rpc }) => {
     rpc(IamService.method.getViewer, viewer);
-    rpc(IamService.method.setActiveHousehold, (req) => {
-      active = req.householdId;
-      return { viewer: viewer() };
+    rpc(IamService.method.joinHousehold, () => {
+      current = { id: "cabin", name: "Cabin", suspended: true, allowance: { enabledApps: [App.CINEMA] } };
+      return { household: current };
     });
   });
 }
@@ -40,25 +32,26 @@ function setup() {
 }
 
 describe("household hooks", () => {
-  it("reads the active household from the server session", async () => {
+  it("reads the viewer's one household and role from the server", async () => {
     const { wrapper } = setup();
-    const { result } = renderHook(() => useActiveHousehold(), { wrapper });
-    await waitFor(() => expect(result.current.membership?.household?.name).toBe("Home"));
+    const { result } = renderHook(() => useHousehold(), { wrapper });
+    await waitFor(() => expect(result.current.household?.name).toBe("Home"));
+    expect(result.current.role).toBe(Role.OWNER);
     expect(result.current.suspended).toBe(false);
   });
 
-  it("switching clears cached data and reports a suspended household", async () => {
+  it("joining another household clears cached data and reports the new one", async () => {
     const { wrapper, queryClient } = setup();
     queryClient.setQueryData(["photos", "timeline"], ["a photo from Home"]);
-    const { result } = renderHook(() => ({ active: useActiveHousehold(), sw: useSwitchHousehold() }), { wrapper });
-    await waitFor(() => expect(result.current.active.membership?.household?.id).toBe("home"));
+    const { result } = renderHook(() => ({ h: useHousehold(), join: useJoinHousehold() }), { wrapper });
+    await waitFor(() => expect(result.current.h.household?.id).toBe("home"));
 
     await act(async () => {
-      await result.current.sw.mutateAsync({ householdId: "cabin" });
+      await result.current.join.mutateAsync({ invite: { invite: { case: "memberInviteId", value: "i1" } } });
     });
     expect(queryClient.getQueryData(["photos", "timeline"])).toBeUndefined();
-    await waitFor(() => expect(result.current.active.membership?.household?.id).toBe("cabin"));
-    expect(result.current.active.suspended).toBe(true);
+    await waitFor(() => expect(result.current.h.household?.id).toBe("cabin"));
+    expect(result.current.h.suspended).toBe(true);
   });
 });
 
