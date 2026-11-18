@@ -58,7 +58,7 @@ test.describe.serial("Portal against the real API", () => {
     await expect(owner.getByRole("link", { name: "Server admin" })).toBeVisible();
   });
 
-  test("an Admin invites a member who signs up and joins", async ({ browser }) => {
+  test("the Owner invites a member, who joins as they sign up", async ({ browser }) => {
     await owner.goto("/household");
     const before = await mailCount();
     await owner.getByLabel("Email").fill(BOB.email);
@@ -68,8 +68,8 @@ test.describe.serial("Portal against the real API", () => {
     const link = await linkFromEmail(BOB.email, /\/invite\/member\//, before);
     const { page: bob, context } = await fresh(browser);
     await bob.goto(link);
+    await expect(bob.getByLabel("Email", { exact: true })).toHaveValue(BOB.email);
     await signUp(bob, BOB);
-    await bob.getByRole("button", { name: "Accept invite" }).click();
     await expect(bob.getByRole("heading", { name: "Apps" })).toBeVisible();
     await expect(bob.getByText("Owner Home")).toBeVisible();
     await context.close();
@@ -78,12 +78,15 @@ test.describe.serial("Portal against the real API", () => {
     await expect(owner.getByRole("row", { name: /Bob Member/ })).toBeVisible();
   });
 
-  test("the Super-Admin invites a new household, which its owner redeems", async ({ browser }) => {
+  test("the Super-Admin invites a new household by email, and its Owner creates it", async ({ browser }) => {
     await owner.goto("/admin");
     await owner.getByRole("tab", { name: "Invites" }).click();
-    await owner.getByLabel("Who is it for?").fill("Carol");
+    const before = await mailCount();
+    await owner.getByLabel("Email", { exact: true }).fill(CAROL.email);
+    await owner.getByLabel("Note").fill("Carol");
     await owner.getByRole("button", { name: "Create invite link" }).click();
-    const link = await owner.getByRole("textbox", { name: "Invite link", exact: true }).inputValue();
+    await expect(owner.getByRole("textbox", { name: "Invite link", exact: true })).toHaveValue(/\/invite\/household\//);
+    const link = await linkFromEmail(CAROL.email, /\/invite\/household\//, before);
 
     const { page: carol, context } = await fresh(browser);
     await carol.goto(link);
@@ -95,7 +98,31 @@ test.describe.serial("Portal against the real API", () => {
     await context.close();
 
     await owner.getByRole("tab", { name: "Households" }).click();
-    await expect(owner.getByRole("row", { name: /Carol's Place/ })).toBeVisible();
+    await expect(owner.getByRole("row", { name: /Carol's Place/ })).toContainText(CAROL.email);
+  });
+
+  test("a member moves to another household when invited there", async ({ browser }) => {
+    const carol = await fresh(browser);
+    await signInWithPassword(carol.page, CAROL);
+    await carol.page.goto("/household");
+    const before = await mailCount();
+    await carol.page.getByLabel("Email").fill(BOB.email);
+    await carol.page.getByRole("button", { name: "Send invite" }).click();
+    const link = await linkFromEmail(BOB.email, /\/invite\/member\//, before);
+    await carol.context.close();
+
+    const bob = await fresh(browser);
+    await signInWithPassword(bob.page, BOB);
+    await bob.page.goto(link);
+    await expect(bob.page.getByText("Move to Carol's Place")).toBeVisible();
+    await expect(bob.page.getByText(/You will leave Owner Home/)).toBeVisible();
+    await bob.page.getByRole("button", { name: "Move" }).click();
+    await expect(bob.page.getByRole("heading", { name: "Apps" })).toBeVisible();
+    await expect(bob.page.getByText("Carol's Place")).toBeVisible();
+    await bob.context.close();
+
+    await owner.goto("/household");
+    await expect(owner.getByRole("row", { name: /Bob Member/ })).toHaveCount(0);
   });
 
   test("password and magic-link sign-in", async ({ browser }) => {
