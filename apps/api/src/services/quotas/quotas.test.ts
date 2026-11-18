@@ -12,8 +12,10 @@ import type { StorageGateway, StoredObject } from "#/services/storage-gateway.js
 import {
   APP_NAMESPACE,
   cancelReservation,
+  copyObjectToHousehold,
   expireReservations,
   finishUpload,
+  moveObjects,
   releaseObject,
   reserveUpload,
   signObjectReadTicket,
@@ -40,6 +42,14 @@ class FakeGateway implements StorageGateway {
   }
 
   async setThumbnail() {}
+
+  async copy(objectId: string) {
+    const source = this.objects.get(objectId);
+    if (!source) throw new ConnectError("not found", Code.NotFound);
+    const id = randomUUID();
+    this.objects.set(id, { ...source, id });
+    return this.objects.get(id)!;
+  }
 }
 
 let database: TestDatabase;
@@ -241,6 +251,66 @@ describe("under concurrent load", () => {
       .from(iamUploadReservations)
       .where(sql`${iamUploadReservations.householdId} = ${householdId} and ${iamUploadReservations.status} = 'pending'`);
     expect(await usage()).toEqual({ used: BigInt(claims!.total), reserved: BigInt(pending!.total) });
+  });
+});
+
+describe("moving and copying between households", () => {
+  async function otherHousehold(cap: bigint): Promise<string> {
+    const id = randomUUID();
+    await database.db.insert(organization).values({ id, name: "Other", slug: id, createdAt: new Date() });
+    await database.db.insert(iamHouseholds).values({ householdId: id, storageCapBytes: cap, enabledApps: ["photos"] });
+    return id;
+  }
+
+  async function usageOf(id: string) {
+    const [h] = await database.db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, id));
+    return { used: h!.usedBytes, reserved: h!.reservedBytes };
+  }
+
+  async function stored(bytes: bigint): Promise<string> {
+    const r = await reserve(bytes);
+    const objectId = gateway.commit("photos", bytes);
+    await finishUpload(ctx, { userId, reservationId: r.reservationId, objectId });
+    return objectId;
+  }
+
+  it("records who uploaded each object", async () => {
+    const objectId = await stored(5n);
+    const [claim] = await database.db.select().from(iamObjectClaims).where(eq(iamObjectClaims.objectId, objectId));
+    expect(claim?.uploadedBy).toBe(userId);
+  });
+
+  it("moves private data to the new household, all or nothing", async () => {
+    const a = await stored(100n);
+    const b = await stored(200n);
+    const target = await otherHousehold(1000n);
+    expect(await moveObjects(ctx, [a, b], target)).toEqual({ bytes: 300n, count: 2 });
+    expect(await usage()).toEqual({ used: 0n, reserved: 0n });
+    expect(await usageOf(target)).toEqual({ used: 300n, reserved: 0n });
+    // Moving again changes nothing.
+    expect(await moveObjects(ctx, [a, b], target)).toEqual({ bytes: 0n, count: 0 });
+  });
+
+  it("refuses a move that does not fit, leaving both households as they were", async () => {
+    const a = await stored(400n);
+    const tight = await otherHousehold(100n);
+    expect(await codeOf(moveObjects(ctx, [a], tight))).toBe(Code.ResourceExhausted);
+    expect(await usage()).toEqual({ used: 400n, reserved: 0n });
+    expect(await usageOf(tight)).toEqual({ used: 0n, reserved: 0n });
+  });
+
+  it("copies a shared item so both households keep one, and removes a copy that does not fit", async () => {
+    const a = await stored(50n);
+    const target = await otherHousehold(1000n);
+    const copy = await copyObjectToHousehold(ctx, a, target, userId);
+    expect(copy.objectId).not.toBe(a);
+    expect(await usage()).toEqual({ used: 50n, reserved: 0n });
+    expect(await usageOf(target)).toEqual({ used: 50n, reserved: 0n });
+
+    const tiny = await otherHousehold(10n);
+    const before = gateway.objects.size;
+    expect(await codeOf(copyObjectToHousehold(ctx, a, tiny, userId))).toBe(Code.ResourceExhausted);
+    expect(gateway.objects.size).toBe(before);
   });
 });
 

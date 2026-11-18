@@ -3,8 +3,6 @@ import type { IamApp } from "#/iam/constants.js";
 /** Who pays for an upload. */
 export type Billing =
   | { kind: "household"; householdId: string }
-  /** An outside contributor, billed to the household that issued the grant. */
-  | { kind: "grant"; grantId: string; householdId: string }
   /** The instance-wide Cinema or Arcade library. Super-Admin only; billed to no one. */
   | { kind: "shared" };
 
@@ -31,4 +29,10 @@ export interface FinishedUpload {
   objectId: string;
   householdId: string | null;
   bytes: bigint;
+}
+
+export interface MovedObjects {
+  /** Bytes now billed to the new household. */
+  bytes: bigint;
+  count: number;
 }

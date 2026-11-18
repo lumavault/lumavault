@@ -16,7 +16,6 @@ export async function reserveUpload(ctx: Pick<ModuleContext, "db">, input: Reser
     throw new ConnectError("size must be positive", Code.InvalidArgument);
   }
   const expiresAt = new Date(Date.now() + RESERVATION_TTL_MS);
-  const grantId = input.billing.kind === "grant" ? input.billing.grantId : null;
 
   if (input.billing.kind === "shared") {
     if (!SHARED_LIBRARY_APPS.includes(input.app)) {
@@ -55,7 +54,7 @@ export async function reserveUpload(ctx: Pick<ModuleContext, "db">, input: Reser
       .where(eq(iamHouseholds.householdId, householdId));
     const [row] = await tx
       .insert(iamUploadReservations)
-      .values({ householdId, grantId, userId: input.userId, app: input.app, bytes: input.sizeBytes, expiresAt })
+      .values({ householdId, userId: input.userId, app: input.app, bytes: input.sizeBytes, expiresAt })
       .returning({ id: iamUploadReservations.id });
     return { reservationId: row!.id, householdId, expiresAt };
   });

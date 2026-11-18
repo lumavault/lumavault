@@ -116,7 +116,14 @@ async function settle(tx: Tx, input: FinishInput, actual: bigint): Promise<Outco
 
   await tx
     .insert(iamObjectClaims)
-    .values({ objectId: input.objectId, householdId: res.householdId, reservationId: res.id, app: res.app, bytes: actual })
+    .values({
+      objectId: input.objectId,
+      householdId: res.householdId,
+      uploadedBy: res.userId,
+      reservationId: res.id,
+      app: res.app,
+      bytes: actual,
+    })
     .catch((err: unknown) => {
       // Two finishes raced for one object; the first claim wins and this transaction rolls back.
       if ((err as { cause?: { code?: string } }).cause?.code === "23505") {
