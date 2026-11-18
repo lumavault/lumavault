@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "#/app.js";
 import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { user } from "#/db/schemas/auth.js";
-import { iamHouseholds } from "#/db/schemas/iam.js";
+import { iamGracePeriods, iamHouseholds } from "#/db/schemas/iam.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
 import { createTestContext, signUp } from "#/testing/context.js";
@@ -82,10 +82,9 @@ describe("setup result", () => {
 
       const viewer = await iamClient(app, new Headers({ cookie: cookies.join("; ") })).getViewer({});
       expect(viewer.user).toMatchObject({ email: "root@example.com", isSuperAdmin: true });
-      expect(viewer.memberships).toHaveLength(1);
-      expect(viewer.memberships[0]?.role).toBe(Role.ADMIN);
-      expect(viewer.memberships[0]?.household?.allowance?.enabledApps).toEqual([App.PHOTOS, App.CINEMA, App.ARCADE]);
-      expect(viewer.activeHouseholdId).toBe(viewer.memberships[0]?.household?.id);
+      expect(viewer.role).toBe(Role.OWNER);
+      expect(viewer.household?.allowance?.enabledApps).toEqual([App.PHOTOS, App.CINEMA, App.ARCADE]);
+      expect(viewer.household?.ownerUserId).toBe(viewer.user?.id);
     } finally {
       await database.drop();
     }
@@ -125,41 +124,38 @@ describe("viewer", () => {
     await database?.drop();
   });
 
-  it("lists households and switches the active one", async () => {
+  it("returns the viewer's one household, role, and usage, with bytes held for removed members", async () => {
     const ada = await signUp(ctx, "ada@example.com");
     const home = await createHouseholdFor(ctx, ada.id, "Home");
-    const cabin = await createHouseholdFor(ctx, ada.id, "Cabin");
-    await database.db.insert(iamHouseholds).values([
-      { householdId: home.id, storageCapBytes: 100n, usedBytes: 30n, reservedBytes: 20n, enabledApps: ["photos"] },
-      { householdId: cabin.id, storageCapBytes: 10n, usedBytes: 50n, enabledApps: ["cinema"] },
-    ]);
-    const client = iamClient(app, ada.headers);
+    await database.db.insert(iamHouseholds).values({ householdId: home.id, storageCapBytes: 100n, usedBytes: 30n, reservedBytes: 20n, enabledApps: ["photos"] });
+    const gone = await signUp(ctx, "gone@example.com");
+    await database.db.insert(iamGracePeriods).values({ userId: gone.id, householdId: home.id, householdName: "Home", heldBytes: 7n, deleteAt: new Date(Date.now() + 86_400_000) });
 
-    const first = await client.setActiveHousehold({ householdId: home.id });
-    expect(first.viewer?.memberships.map((m) => m.household?.name)).toEqual(["Cabin", "Home"]);
-    expect(first.viewer?.activeHouseholdId).toBe(home.id);
-    expect(first.viewer?.activeUsage).toMatchObject({ usedBytes: 30n, reservedBytes: 20n, remainingBytes: 50n });
+    const viewer = await iamClient(app, ada.headers).getViewer({});
+    expect(viewer.household).toMatchObject({ id: home.id, name: "Home", ownerUserId: ada.id });
+    expect(viewer.role).toBe(Role.OWNER);
+    expect(viewer.usage).toMatchObject({ usedBytes: 30n, reservedBytes: 20n, remainingBytes: 50n, heldBytes: 7n });
+    expect(viewer.gracePeriod).toBeUndefined();
 
-    await client.setActiveHousehold({ householdId: cabin.id });
-    const viewer = await client.getViewer({});
-    expect(viewer.activeHouseholdId).toBe(cabin.id);
-    // Usage over a lowered cap reports zero remaining, never a negative number.
-    expect(viewer.activeUsage).toMatchObject({ usedBytes: 50n, remainingBytes: 0n });
+    // A removed member sees their grace period and no household.
+    const theirs = await iamClient(app, gone.headers).getViewer({});
+    expect(theirs.household).toBeUndefined();
+    expect(theirs.gracePeriod).toMatchObject({ formerHouseholdName: "Home", privateBytes: 7n });
   });
 
-  it("refuses to switch into someone else's household", async () => {
-    const bob = await signUp(ctx, "bob@example.com");
-    const eve = await signUp(ctx, "eve@example.com");
-    const bobs = await createHouseholdFor(ctx, bob.id, "Bob's");
-    expect(await codeOf(iamClient(app, eve.headers).setActiveHousehold({ householdId: bobs.id }))).toBe(Code.PermissionDenied);
+  it("reports zero remaining, never a negative number, over a lowered cap", async () => {
+    const bea = await signUp(ctx, "bea@example.com");
+    const cabin = await createHouseholdFor(ctx, bea.id, "Cabin");
+    await database.db.insert(iamHouseholds).values({ householdId: cabin.id, storageCapBytes: 10n, usedBytes: 50n, enabledApps: ["cinema"] });
+    expect((await iamClient(app, bea.headers).getViewer({})).usage).toMatchObject({ usedBytes: 50n, remainingBytes: 0n });
   });
 
-  it("works for an outside contributor with no household", async () => {
+  it("works for someone with no household", async () => {
     const guest = await signUp(ctx, "guest@example.com");
     const viewer = await iamClient(app, guest.headers).getViewer({});
-    expect(viewer.memberships).toEqual([]);
-    expect(viewer.activeHouseholdId).toBe("");
-    expect(viewer.activeUsage).toBeUndefined();
+    expect(viewer.household).toBeUndefined();
+    expect(viewer.role).toBe(Role.UNSPECIFIED);
+    expect(viewer.usage).toBeUndefined();
   });
 
   it("is a GET-able call and needs a session", async () => {

@@ -19,19 +19,27 @@ export function userMessage(u: UserRow): MessageInitShape<typeof UserSchema> {
     imageUrl: u.image ?? "",
     isSuperAdmin: (u.role ?? "").split(",").some((r) => r.trim() === SUPER_ADMIN_ROLE),
     banned: u.banned ?? false,
+    banReason: u.banned ? (u.banReason ?? "") : "",
     createdAt: timestampFromDate(u.createdAt),
   };
 }
 
-/** Usage with remaining bytes clamped at zero, since a cap may be lowered below usage. */
-export function usageMessage(h: HouseholdRow | undefined): MessageInitShape<typeof UsageSchema> {
+/**
+ * Usage with remaining bytes clamped at zero, since a cap may be lowered below usage. Held
+ * bytes belong to removed members in their grace period; they are already part of used bytes.
+ */
+export function usageMessage(h: HouseholdRow | undefined, heldBytes = 0n): MessageInitShape<typeof UsageSchema> {
   const used = h?.usedBytes ?? 0n;
   const reserved = h?.reservedBytes ?? 0n;
   const left = (h?.storageCapBytes ?? 0n) - used - reserved;
-  return { usedBytes: used, reservedBytes: reserved, remainingBytes: left > 0n ? left : 0n };
+  return { usedBytes: used, reservedBytes: reserved, remainingBytes: left > 0n ? left : 0n, heldBytes };
 }
 
-export function householdMessage(org: OrgRow, h: HouseholdRow | undefined): MessageInitShape<typeof HouseholdSchema> {
+export function householdMessage(
+  org: OrgRow,
+  h: HouseholdRow | undefined,
+  ownerUserId: string,
+): MessageInitShape<typeof HouseholdSchema> {
   return {
     id: org.id,
     name: org.name,
@@ -41,6 +49,7 @@ export function householdMessage(org: OrgRow, h: HouseholdRow | undefined): Mess
       enabledApps: (h?.enabledApps ?? []).map(appToWire),
       memberLimit: h?.memberLimit ?? 0,
     },
+    ownerUserId,
     createdAt: timestampFromDate(org.createdAt),
   };
 }

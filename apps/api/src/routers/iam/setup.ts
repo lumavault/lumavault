@@ -4,12 +4,13 @@ import { eq, sql } from "drizzle-orm";
 import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { type CreatedAdmin, createFirstAdmin, createHouseholdFor } from "#/auth/server-helpers.js";
 import type { Db } from "#/db/index.js";
-import { organization, session, user } from "#/db/schemas/auth.js";
+import { user } from "#/db/schemas/auth.js";
 import { iamHouseholds, iamInstanceSettings } from "#/db/schemas/iam.js";
 import { IAM_APPS, INSTANCE_SETTINGS_ID, SETUP_STORAGE_CAP_BYTES } from "#/iam/constants.js";
 import type { ApiModule } from "#/modules.js";
 import { required } from "./convert.js";
-import { householdMessage, userMessage } from "./messages.js";
+import { loadHousehold } from "./household-queries.js";
+import { userMessage } from "./messages.js";
 
 async function setupDone(db: Pick<Db, "select">): Promise<boolean> {
   const [settings] = await db.select().from(iamInstanceSettings).where(eq(iamInstanceSettings.id, INSTANCE_SETTINGS_ID));
@@ -71,15 +72,13 @@ export const module: ApiModule = {
         }
       });
 
-      // Open the new session in the new household, then sign the browser in.
-      await ctx.db.update(session).set({ activeOrganizationId: done.householdId }).where(eq(session.token, done.admin.token));
+      // Sign the browser in as the new owner.
       for (const cookie of done.admin.setCookie) {
         call.responseHeader.append("set-cookie", cookie);
       }
       const [u] = await ctx.db.select().from(user).where(eq(user.id, done.admin.userId));
-      const [org] = await ctx.db.select().from(organization).where(eq(organization.id, done.householdId));
-      const [h] = await ctx.db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, done.householdId));
-      return { user: userMessage(u!), household: householdMessage(org!, h) };
+      const household = await loadHousehold(ctx.db, done.householdId);
+      return { user: userMessage(u!), household: household?.message };
     });
   },
 };
