@@ -19,7 +19,7 @@ export { formatBytes, summarizeUsage, type UsageSummary } from "./format-bytes.j
 
 // Sign-in logic with no look attached. Each app builds its own forms on these hooks.
 export { createLumaVaultAuthClient, type LumaVaultAuthClient } from "./auth/client.js";
-export { AUTH_BASE_PATH, INVITE_TOKEN_HEADER, PORTAL_LOGIN_PATH, RETURN_TO_PARAM } from "./auth/constants.js";
+export { AUTH_BASE_PATH, PORTAL_LOGIN_PATH, RETURN_TO_PARAM } from "./auth/constants.js";
 export { type AuthErrorLike, authErrorMessage } from "./auth/errors.js";
 export { type GuardInput, guardRedirect } from "./auth/guard.js";
 export {

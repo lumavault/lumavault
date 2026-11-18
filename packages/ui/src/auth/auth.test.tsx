@@ -2,7 +2,6 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { LumaVaultAuthClient } from "./client.js";
-import { INVITE_TOKEN_HEADER } from "./constants.js";
 import { authErrorMessage } from "./errors.js";
 import { guardRedirect } from "./guard.js";
 import { AuthProvider, useSignIn, useSignUp } from "./hooks.js";
@@ -93,13 +92,13 @@ describe("hooks", () => {
     expect(result.current.error).toBe("Wrong email or password.");
   });
 
-  it("send the household invite token with sign-up", async () => {
+  it("sign up with name, email, and password only", async () => {
     const email = vi.fn(async () => ({ data: {}, error: null }));
-    const { result } = renderHook(() => useSignUp("tok123"), { wrapper: withClient({ signUp: { email } }) });
+    const { result } = renderHook(() => useSignUp(), { wrapper: withClient({ signUp: { email } }) });
     await act(async () => {
       expect(await result.current.run({ name: "A", email: "a@b.co", password: "longenough", confirmPassword: "longenough" })).toBe(true);
     });
-    expect(email).toHaveBeenCalledWith({ name: "A", email: "a@b.co", password: "longenough" }, { headers: { [INVITE_TOKEN_HEADER]: "tok123" } });
+    expect(email).toHaveBeenCalledWith({ name: "A", email: "a@b.co", password: "longenough" });
     expect(result.current.error).toBeNull();
   });
 

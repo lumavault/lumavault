@@ -1,6 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useState } from "react";
 import type { LumaVaultAuthClient } from "./client.js";
-import { INVITE_TOKEN_HEADER } from "./constants.js";
 import { type AuthErrorLike, authErrorMessage } from "./errors.js";
 import type {
   ChangePasswordValues,
@@ -67,14 +66,9 @@ function useAuthAction<Args extends unknown[]>(
 
 export const useSignIn = () => useAuthAction((c, v: SignInValues) => c.signIn.email(v));
 
-/** Sign-up, with the household invite token when it comes from an invite link. */
-export const useSignUp = (inviteToken?: string) =>
-  useAuthAction((c, v: SignUpValues) =>
-    c.signUp.email(
-      { name: v.name, email: v.email, password: v.password },
-      inviteToken ? { headers: { [INVITE_TOKEN_HEADER]: inviteToken } } : undefined,
-    ),
-  );
+/** Sign-up. The server only allows emails that an invite was sent to. */
+export const useSignUp = () =>
+  useAuthAction((c, v: SignUpValues) => c.signUp.email({ name: v.name, email: v.email, password: v.password }));
 
 export const useMagicLink = () =>
   useAuthAction((c, v: MagicLinkValues, callbackURL: string) => c.signIn.magicLink({ email: v.email, callbackURL }));
