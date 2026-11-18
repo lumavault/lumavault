@@ -8,11 +8,11 @@ import { FormError } from "./form-alert";
 import { FormField } from "./form-field";
 
 /**
- * Creates an account. Sign-up is invite-only on the server: a household creation invite
- * passes its token, and member invites and contributor grants are matched by email.
+ * Creates an account. Sign-up is invite-only on the server and matched by email, so the
+ * email field starts with the address the invite was sent to.
  */
-export function SignUpForm({ inviteToken, email, onDone }: { inviteToken?: string; email?: string; onDone: () => void | Promise<void> }) {
-  const signUp = useSignUp(inviteToken);
+export function SignUpForm({ email, onDone }: { email?: string; onDone: () => void | Promise<void> }) {
+  const signUp = useSignUp();
   const form = useForm<SignUpValues>({
     resolver: zodResolver(SignUpSchema),
     defaultValues: { name: "", email: email ?? "", password: "", confirmPassword: "" },

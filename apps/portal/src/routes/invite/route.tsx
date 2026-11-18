@@ -1,112 +1,114 @@
-import { useMutation } from "@connectrpc/connect-query";
-import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { RETURN_TO_PARAM } from "@lumavault/ui";
+import { useQuery } from "@connectrpc/connect-query";
+import { IamService, type InviteRef, InviteKind } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
+import { RETURN_TO_PARAM, useJoinHousehold, useViewer } from "@lumavault/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link, useNavigate, useParams, useRouterState } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import { AuthCard } from "@/components/auth/auth-card";
 import { FormError } from "@/components/auth/form-alert";
 import { SignUpForm } from "@/components/auth/sign-up-form";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { publicRoute } from "@/layout/routes";
 import { errorMessage, useSignedIn } from "@/lib/session";
+import { type MoveChoices, MoveForm } from "./move-form";
 
-/** Signed out: create an account here, or sign in and come straight back. */
-function SignedOutInvite({ inviteToken, title }: { inviteToken?: string; title: string }) {
-  const queryClient = useQueryClient();
-  const href = useRouterState({ select: (s) => s.location.href });
-  return (
-    <AuthCard
-      title={title}
-      description="Create your LumaVault account to continue."
-      footer={
-        <span>
-          Already have an account?{" "}
-          <Link to="/login" search={{ [RETURN_TO_PARAM]: href }} className="underline underline-offset-2">
-            Sign in
-          </Link>
-        </span>
-      }
-    >
-      <SignUpForm inviteToken={inviteToken} onDone={() => queryClient.invalidateQueries()} />
-    </AuthCard>
-  );
-}
-
-/** Redeems a household creation invite from the server owner. */
-export function HouseholdInvitePage() {
-  const { token } = useParams({ strict: false }) as { token: string };
+/** One page for both invite links: preview, sign up if needed, then join or move. */
+function InvitePage({ invite: ref }: { invite: InviteRef }) {
   const { signedIn } = useSignedIn();
-  const redeem = useMutation(IamService.method.redeemHouseholdInvite);
+  const viewer = useViewer();
+  const preview = useQuery(IamService.method.getInvite, { invite: ref }, { enabled: signedIn !== undefined });
+  const join = useJoinHousehold();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [name, setName] = useState("");
+  const href = useRouterState({ select: (s) => s.location.href });
+  const [choices, setChoices] = useState<MoveChoices>({ householdName: "", copyItems: [], nextOwnerUserId: "" });
 
-  if (signedIn === undefined) return <Skeleton className="h-64 w-full" />;
-  if (!signedIn) return <SignedOutInvite inviteToken={token} title="You are invited to LumaVault" />;
+  if (preview.error) {
+    return (
+      <AuthCard title="This invite cannot be used" footer={<Link to="/login">Go to sign in</Link>}>
+        <p className="text-sm text-muted-foreground">{errorMessage(preview.error)}</p>
+      </AuthCard>
+    );
+  }
+  const invite = preview.data;
+  if (signedIn === undefined || !invite) return <Skeleton className="h-64 w-full" />;
+  const isNew = invite.kind === InviteKind.NEW_HOUSEHOLD;
+  const title = isNew ? `${invite.inviterName} invited you to LumaVault` : `Join ${invite.householdName}`;
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    try {
-      await redeem.mutateAsync({ token, householdName: name.trim() });
-    } catch {
-      return;
-    }
-    queryClient.removeQueries();
-    await navigate({ to: "/" });
-  };
+  if (!signedIn) {
+    return (
+      <AuthCard
+        title={title}
+        description={`Create your account with ${invite.email} to continue.`}
+        footer={
+          <span>
+            Already have an account?{" "}
+            <Link to="/login" search={{ [RETURN_TO_PARAM]: href }} className="underline underline-offset-2">
+              Sign in
+            </Link>
+          </span>
+        }
+      >
+        <SignUpForm
+          email={invite.email}
+          onDone={async () => {
+            await queryClient.resetQueries();
+            // A member invite joins the household as the account is made; there is nothing left to do.
+            if (!isNew) await navigate({ to: "/" });
+          }}
+        />
+      </AuthCard>
+    );
+  }
+
+  const me = viewer.data?.user?.email.toLowerCase();
+  if (me && me !== invite.email) {
+    return (
+      <AuthCard title="This invite is for someone else">
+        <p className="text-sm text-muted-foreground">
+          It was sent to {invite.email}, but you are signed in as {me}. Sign out and open the link again.
+        </p>
+      </AuthCard>
+    );
+  }
+
+  const blocked = (isNew && !choices.householdName.trim()) || (invite.move?.mustChooseNextOwner && !choices.nextOwnerUserId);
   return (
-    <AuthCard title="Create your household" description="You will be its Admin and can invite the people you live with.">
-      <form onSubmit={submit}>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="householdName">Household name</FieldLabel>
-            <Input id="householdName" value={name} onChange={(e) => setName(e.target.value)} required />
-          </Field>
-          <FormError message={redeem.error && errorMessage(redeem.error)} />
-          <Button type="submit" disabled={!name.trim() || redeem.isPending}>
-            Create household
-          </Button>
-        </FieldGroup>
+    <AuthCard
+      title={invite.move ? (isNew ? "Move to a new household" : `Move to ${invite.householdName}`) : isNew ? "Create your household" : title}
+      description={isNew ? "You will be its Owner and can invite the people you live with." : `${invite.inviterName} invited you.`}
+    >
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            await join.mutateAsync({ invite: ref, ...choices });
+          } catch {
+            return;
+          }
+          await navigate({ to: "/" });
+        }}
+      >
+        <MoveForm invite={invite} onChange={setChoices} />
+        <FormError message={join.error && errorMessage(join.error)} />
+        <Button type="submit" disabled={Boolean(blocked) || join.isPending}>
+          {invite.move ? "Move" : isNew ? "Create household" : "Join household"}
+        </Button>
       </form>
     </AuthCard>
   );
 }
 
-/** Joins a household from a member invite. The invite must be for the signed-in email. */
-export function MemberInvitePage() {
-  const { inviteId } = useParams({ strict: false }) as { inviteId: string };
-  const { signedIn, viewer } = useSignedIn();
-  const accept = useMutation(IamService.method.acceptMemberInvite);
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
+function HouseholdInvitePage() {
+  const { token } = useParams({ strict: false }) as { token: string };
+  return <InvitePage invite={{ invite: { case: "householdInviteToken", value: token } } as InviteRef} />;
+}
 
-  if (signedIn === undefined) return <Skeleton className="h-64 w-full" />;
-  if (!signedIn) return <SignedOutInvite title="You are invited to a household" />;
-  return (
-    <AuthCard title="Join the household" description={`You are signed in as ${viewer.data?.user?.email}.`}>
-      <div className="flex flex-col gap-4">
-        <FormError message={accept.error && errorMessage(accept.error)} />
-        <Button
-          disabled={accept.isPending}
-          onClick={async () => {
-            try {
-              await accept.mutateAsync({ inviteId });
-            } catch {
-              return;
-            }
-            queryClient.removeQueries();
-            await navigate({ to: "/" });
-          }}
-        >
-          Accept invite
-        </Button>
-      </div>
-    </AuthCard>
-  );
+function MemberInvitePage() {
+  const { inviteId } = useParams({ strict: false }) as { inviteId: string };
+  return <InvitePage invite={{ invite: { case: "memberInviteId", value: inviteId } } as InviteRef} />;
 }
 
 export const routes = [
