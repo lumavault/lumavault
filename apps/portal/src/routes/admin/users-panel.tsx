@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@connectrpc/connect-query";
-import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
+import { IamService, type User } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
 import { useViewer } from "@lumavault/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -10,15 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { errorMessage } from "@/lib/session";
+import { BanDialog } from "./ban-dialog";
 
-/** Find accounts and ban or unban them. A ban signs the person out everywhere at once. */
+/** Find accounts and ban or unban them. Bans are permanent until lifted and carry a reason. */
 export function UsersPanel() {
   const me = useViewer().data?.user?.id;
   const [query, setQuery] = useState("");
   const queryClient = useQueryClient();
   const refresh = () => void queryClient.invalidateQueries();
   const users = useQuery(IamService.method.listUsers, { query });
-  const ban = useMutation(IamService.method.banUser, { onSuccess: refresh });
+  const [banning, setBanning] = useState<User | null>(null);
   const unban = useMutation(IamService.method.unbanUser, { onSuccess: refresh });
 
   return (
@@ -28,7 +29,7 @@ export function UsersPanel() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <Input aria-label="Search users" placeholder="Search by name or email" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <FormError message={(ban.error ?? unban.error) && errorMessage(ban.error ?? unban.error)} />
+        <FormError message={unban.error && errorMessage(unban.error)} />
         <Table>
           <TableHeader>
             <TableRow>
@@ -45,7 +46,14 @@ export function UsersPanel() {
                   <div className="text-xs text-muted-foreground">{u.email}</div>
                 </TableCell>
                 <TableCell>
-                  {u.banned ? <Badge variant="destructive">Banned</Badge> : u.isSuperAdmin ? <Badge>Server owner</Badge> : null}
+                  {u.banned ? (
+                    <div className="flex flex-col items-start gap-1">
+                      <Badge variant="destructive">Banned</Badge>
+                      {u.banReason && <span className="text-xs text-muted-foreground">{u.banReason}</span>}
+                    </div>
+                  ) : u.isSuperAdmin ? (
+                    <Badge>Server owner</Badge>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   {u.id !== me &&
@@ -54,7 +62,7 @@ export function UsersPanel() {
                         Unban
                       </Button>
                     ) : (
-                      <Button variant="destructive" size="sm" onClick={() => ban.mutate({ userId: u.id })} aria-label={`Ban ${u.name}`}>
+                      <Button variant="destructive" size="sm" onClick={() => setBanning(u)} aria-label={`Ban ${u.name}`}>
                         Ban
                       </Button>
                     ))}
@@ -64,6 +72,7 @@ export function UsersPanel() {
           </TableBody>
         </Table>
       </CardContent>
+      {banning && <BanDialog user={banning} onClose={() => setBanning(null)} />}
     </Card>
   );
 }

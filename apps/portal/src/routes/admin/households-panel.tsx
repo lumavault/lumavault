@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@connectrpc/connect-query";
 import { type HouseholdSummary, IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { summarizeUsage } from "@lumavault/ui";
+import { formatBytes, summarizeUsage } from "@lumavault/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { FormError } from "@/components/auth/form-alert";
@@ -89,6 +89,7 @@ export function HouseholdsPanel() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Owner</TableHead>
               <TableHead>Storage</TableHead>
               <TableHead>Apps</TableHead>
               <TableHead>Members</TableHead>
@@ -104,8 +105,15 @@ export function HouseholdsPanel() {
                 <TableRow key={h.id}>
                   <TableCell className="font-medium">{h.name}</TableCell>
                   <TableCell>
+                    <div>{s.owner?.name}</div>
+                    <div className="text-xs text-muted-foreground">{s.owner?.email}</div>
+                  </TableCell>
+                  <TableCell>
                     {usage.label}
                     {usage.overCap && <Badge variant="destructive">Over cap</Badge>}
+                    {(s.usage?.heldBytes ?? 0n) > 0n && (
+                      <div className="text-xs text-muted-foreground">{formatBytes(s.usage!.heldBytes)} held for people who left</div>
+                    )}
                   </TableCell>
                   <TableCell className="flex flex-wrap gap-1">
                     {(h.allowance?.enabledApps ?? []).map((a) => (
