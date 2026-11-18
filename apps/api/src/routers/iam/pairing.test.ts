@@ -61,20 +61,19 @@ describe("pairing an Apple TV", () => {
     const poll = () => tv.pollPairing({ pairingId: start.pairingId, deviceSecret: start.deviceSecret });
 
     expect((await poll()).status).toBe(PairingStatus.PENDING);
-    const approved = await iamClient(app, ada.headers).approvePairing({ code: start.code.toLowerCase(), householdId });
+    const approved = await iamClient(app, ada.headers).approvePairing({ code: start.code.toLowerCase() });
     expect(approved.deviceName).toBe("Living Room");
 
     const [first, second] = await Promise.all([poll(), poll()]);
     const winners = [first, second].filter((p) => p.status === PairingStatus.APPROVED);
     expect(winners).toHaveLength(1);
-    expect(winners[0]?.householdId).toBe(householdId);
 
     const viewer = await iamClient(app, new Headers({ authorization: `Bearer ${winners[0]!.sessionToken}` })).getViewer({});
     expect(viewer.user?.email).toBe("ada@example.com");
-    expect(viewer.activeHouseholdId).toBe(householdId);
+    expect(viewer.household?.id).toBe(householdId);
 
     expect((await poll()).status).toBe(PairingStatus.EXPIRED);
-    expect(await codeOf(iamClient(app, ada.headers).approvePairing({ code: start.code, householdId }))).toBe(Code.NotFound);
+    expect(await codeOf(iamClient(app, ada.headers).approvePairing({ code: start.code }))).toBe(Code.NotFound);
   });
 
   it("burns a pairing after 5 wrong device secrets", async () => {
@@ -83,15 +82,15 @@ describe("pairing an Apple TV", () => {
     for (let i = 0; i < 5; i++) {
       expect(await codeOf(tv.pollPairing({ pairingId: start.pairingId, deviceSecret: "guess" }))).toBe(Code.PermissionDenied);
     }
-    expect(await codeOf(iamClient(app, ada.headers).approvePairing({ code: start.code, householdId }))).toBe(Code.NotFound);
+    expect(await codeOf(iamClient(app, ada.headers).approvePairing({ code: start.code }))).toBe(Code.NotFound);
     expect((await tv.pollPairing({ pairingId: start.pairingId, deviceSecret: start.deviceSecret })).status).toBe(PairingStatus.EXPIRED);
   });
 
-  it("requires the approver to belong to the household they pick", async () => {
+  it("requires the approver to be signed in and in a household", async () => {
     const start = await iamClient(app).startPairing({ deviceName: "Bedroom" });
     const eve = await signUp(ctx, "eve@example.com");
-    expect(await codeOf(iamClient(app, eve.headers).approvePairing({ code: start.code, householdId }))).toBe(Code.PermissionDenied);
-    expect(await codeOf(iamClient(app).approvePairing({ code: start.code, householdId }))).toBe(Code.Unauthenticated);
+    expect(await codeOf(iamClient(app, eve.headers).approvePairing({ code: start.code }))).toBe(Code.FailedPrecondition);
+    expect(await codeOf(iamClient(app).approvePairing({ code: start.code }))).toBe(Code.Unauthenticated);
   });
 
   it("refuses expired codes", async () => {
@@ -101,7 +100,7 @@ describe("pairing an Apple TV", () => {
       .update(iamPairingRequests)
       .set({ expiresAt: new Date(Date.now() - 1000) })
       .where(eq(iamPairingRequests.id, start.pairingId));
-    expect(await codeOf(iamClient(app, ada.headers).approvePairing({ code: start.code, householdId }))).toBe(Code.NotFound);
+    expect(await codeOf(iamClient(app, ada.headers).approvePairing({ code: start.code }))).toBe(Code.NotFound);
     expect((await tv.pollPairing({ pairingId: start.pairingId, deviceSecret: start.deviceSecret })).status).toBe(PairingStatus.EXPIRED);
   });
 

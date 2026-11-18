@@ -5,9 +5,8 @@ import { IamService, PairingStatus } from "@lumavault/sdk/gen/lumavault/iam/v1/i
 import { and, eq, gt, sql } from "drizzle-orm";
 import { mintBearerSession } from "#/auth/server-helpers.js";
 import { noRowsOnBadUuid, isUniqueViolation } from "#/db/errors.js";
-import { member } from "#/db/schemas/auth.js";
 import { iamPairingRequests } from "#/db/schemas/iam.js";
-import { requireSignedIn } from "#/guards.js";
+import { requireHouseholdMember } from "#/guards.js";
 import {
   PAIRING_APPROVALS_PER_WINDOW,
   PAIRING_CODE_ALPHABET,
@@ -75,19 +74,12 @@ export const module: ApiModule = {
       throw new ConnectError("could not pick a free pairing code", Code.Unavailable);
     });
 
-    // Called by a signed-in user on their phone.
+    // Called by a signed-in household member on their phone. The Apple TV opens in their household.
     router.rpc(IamService.method.approvePairing, async (req, call) => {
-      const viewer = await requireSignedIn(call, ctx);
+      const { viewer, household } = await requireHouseholdMember(call, ctx);
       if (!approvals.allow(viewer.userId)) throw tooMany();
       const code = required(req.code, "code").toUpperCase().replace(/[\s-]/g, "");
-      const householdId = required(req.householdId, "household_id");
-      const [membership] = await ctx.db
-        .select({ id: member.id })
-        .from(member)
-        .where(and(eq(member.organizationId, householdId), eq(member.userId, viewer.userId)));
-      if (!membership) {
-        throw new ConnectError("you are not a member of that household", Code.PermissionDenied);
-      }
+      const householdId = household.householdId;
       const [approved] = await ctx.db
         .update(iamPairingRequests)
         .set({ status: "approved", approvedBy: viewer.userId, householdId, approvedAt: new Date() })
@@ -136,8 +128,8 @@ export const module: ApiModule = {
       if (!claimed?.approvedBy || !claimed.householdId) {
         return { status: PairingStatus.EXPIRED };
       }
-      const sessionToken = await mintBearerSession(ctx, claimed.approvedBy, claimed.householdId);
-      return { status: PairingStatus.APPROVED, sessionToken, householdId: claimed.householdId };
+      const sessionToken = await mintBearerSession(ctx, claimed.approvedBy);
+      return { status: PairingStatus.APPROVED, sessionToken };
     });
   },
 };
