@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { MIGRATIONS_TABLE } from "#/db/constants.js";
 import * as authTables from "#/db/schemas/auth.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import { createAuth } from "./auth.js";
 import { HOUSEHOLD_OWNER_ROLE } from "./constants.js";
 import { allowSignUp } from "./sign-up-gate.js";
@@ -15,8 +16,7 @@ const API_DIR = fileURLToPath(new URL("../../", import.meta.url));
 let database: TestDatabase;
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
 });
 
 afterAll(async () => {
@@ -32,9 +32,9 @@ describe("generated auth schema", () => {
     expect(() => toAuthSchema("export const user = {};")).toThrow(/no pgTable calls/);
   });
 
-  it("pushes every table into the auth schema", async () => {
+  it("migrates every table into the auth schema", async () => {
     const res = await database.db.execute<{ table_name: string }>(
-      sql`select table_name from information_schema.tables where table_schema = 'auth' order by table_name`,
+      sql`select table_name from information_schema.tables where table_schema = 'auth' and table_name <> ${MIGRATIONS_TABLE} order by table_name`,
     );
     expect(res.rows.map((r) => r.table_name)).toEqual([
       "account",

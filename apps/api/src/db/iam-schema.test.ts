@@ -1,13 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { pushSchema } from "drizzle-kit/api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_MEMBER_LIMIT } from "#/iam/constants.js";
-import { DB_SCHEMAS } from "./constants.js";
-import { loadSchemaModules } from "./index.js";
 import { organization, user } from "./schemas/auth.js";
 import { iamGracePeriods, iamHouseholdInvites, iamHouseholds, iamInstanceSettings, iamObjectClaims, iamPairingRequests } from "./schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "./testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "./testing.js";
 
 let database: TestDatabase;
 let userId: string;
@@ -33,8 +30,7 @@ async function expectConstraint(promise: Promise<unknown>, constraint: string): 
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   userId = randomUUID();
   await database.db.insert(user).values({ id: userId, name: "Ada", email: "ada@example.com" });
 });
@@ -141,12 +137,5 @@ describe("instance settings", () => {
   it("allows only one row", async () => {
     await database.db.insert(iamInstanceSettings).values({});
     await expectConstraint(database.db.insert(iamInstanceSettings).values({ id: 2 }), "instance_settings_single_row");
-  });
-});
-
-describe("db push", () => {
-  it("finds nothing to change on a second push", async () => {
-    const plan = await pushSchema(await loadSchemaModules(), database.db, [...DB_SCHEMAS]);
-    expect(plan.statementsToExecute).toEqual([]);
   });
 });

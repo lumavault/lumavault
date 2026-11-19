@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "#/app.js";
 import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { iamHouseholds, iamPairingRequests } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import { PAIRING_CODE_ALPHABET, PAIRING_STARTS_PER_WINDOW } from "#/iam/constants.js";
 import { RateLimiter } from "#/iam/rate-limit.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
@@ -30,8 +30,7 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   ctx = createTestContext(database);
   app = createApp(ctx, await loadModules());
   ada = await signUp(ctx, "ada@example.com");

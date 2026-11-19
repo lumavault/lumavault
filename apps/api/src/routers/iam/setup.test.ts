@@ -7,7 +7,7 @@ import { createApp } from "#/app.js";
 import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { user } from "#/db/schemas/auth.js";
 import { iamGracePeriods, iamHouseholds } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
 import { createTestContext, signUp } from "#/testing/context.js";
 import { iamClient } from "#/testing/rpc.js";
@@ -22,8 +22,7 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
 }
 
 async function freshApp(env: Record<string, string> = {}) {
-  const database = await createTestDatabase();
-  await pushAllSchemas(database);
+  const database = await createMigratedTestDatabase();
   const ctx = createTestContext(database, { env });
   return { database, ctx, app: createApp(ctx, await loadModules()) };
 }

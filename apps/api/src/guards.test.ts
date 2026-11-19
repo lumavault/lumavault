@@ -5,7 +5,7 @@ import { SUPER_ADMIN_ROLE } from "./auth/constants.js";
 import { requestContext } from "./context.js";
 import { member, user } from "./db/schemas/auth.js";
 import { iamHouseholds } from "./db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "./db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "./db/testing.js";
 import {
   type GuardInput,
   requireHouseholdAdmin,
@@ -42,8 +42,7 @@ async function setSuspended(id: string, suspended: boolean): Promise<void> {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   ctx = createTestContext(database);
 
   owner = await signUp(ctx, "owner@example.com");

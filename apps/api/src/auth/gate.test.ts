@@ -5,7 +5,7 @@ import { createApp } from "#/app.js";
 import { requestContext } from "#/context.js";
 import { invitation, member, user } from "#/db/schemas/auth.js";
 import { iamHouseholdInvites } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import { hashSecret, newSecret } from "#/iam/secrets.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
 import { createTestContext, rpcValues, signUp, TEST_WEB_ORIGIN, type TestUser } from "#/testing/context.js";
@@ -43,8 +43,7 @@ async function userId(address: string): Promise<string | undefined> {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   ctx = createTestContext(database);
   app = createApp(ctx, await loadModules());
   owner = await signUp(ctx, "owner@example.com");

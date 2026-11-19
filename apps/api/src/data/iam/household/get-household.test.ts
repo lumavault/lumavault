@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { member, organization } from "#/db/schemas/auth.js";
 import { iamHouseholds } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import { createTestContext, signUp } from "#/testing/context.js";
 import { getHouseholdByUserId } from "./get-household.js";
 
@@ -11,8 +11,7 @@ let userId: string;
 let strangerId: string;
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   const ctx = createTestContext(database);
   userId = (await signUp(ctx, "alice@example.com")).id;
   strangerId = (await signUp(ctx, "stranger@example.com")).id;

@@ -16,8 +16,13 @@ export const MIGRATION_LOCK_KEY = 0x4c554d41;
 export const MIGRATIONS_DIR_NAME = "migrations";
 export const MIGRATIONS_TABLE = "__drizzle_migrations";
 
-// Prefix for databases created by tests, so leftovers are easy to spot and drop.
+// Prefixes for databases created by tests, so leftovers are easy to spot and drop. Each test
+// run migrates one template and every test file copies it.
 export const TEST_DATABASE_PREFIX = "lv_test_";
+export const TEST_TEMPLATE_PREFIX = "lv_tmpl_";
+
+// How many times a test file retries copying the template while other files are copying it.
+export const TEMPLATE_BUSY_RETRIES = 100;
 
 // Drizzle table files live under this folder. A schema's tables are in <schema>.ts, in the
 // <schema>/ subfolder, or both.

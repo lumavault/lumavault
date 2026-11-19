@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "#/app.js";
 import { requestContext } from "#/context.js";
 import { user } from "#/db/schemas/auth.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import type { ModuleContext } from "#/modules.js";
 import { createTestContext, recordingEmail, rpcValues, signUp, TEST_APP_ORIGINS } from "#/testing/context.js";
 import { isBanned } from "./session-policy.js";
@@ -40,8 +40,7 @@ async function sessionEmail(headers: Record<string, string>): Promise<string | u
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   ctx = createTestContext(database, { email });
   app = createApp(ctx, []);
   await signUp(ctx, "ada@example.com");

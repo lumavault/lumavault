@@ -8,7 +8,7 @@ import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { invitation, user } from "#/db/schemas/auth.js";
 import { iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import { hashSecret } from "#/iam/secrets.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
 import { createTestContext, recordingEmail, signUp, TEST_WEB_ORIGIN, type TestUser } from "#/testing/context.js";
@@ -32,8 +32,7 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   ctx = createTestContext(database, { email });
   app = createApp(ctx, await loadModules());
   owner = await signUp(ctx, "owner@example.com");

@@ -3,31 +3,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DB_SCHEMAS } from "./constants.js";
 import { loadSchemaModules } from "./index.js";
 import * as namespaces from "./schemas/namespaces.js";
-import { createTestDatabase, pushAllSchemas } from "./testing.js";
+import { createMigratedTestDatabase } from "./testing.js";
 
 describe("test databases", () => {
-  it("can be filled with every declared schema", async () => {
-    const fresh = await createTestDatabase();
+  it("start as a copy of the migrated template, with every schema", async () => {
+    const fresh = await createMigratedTestDatabase();
     try {
-      await pushAllSchemas(fresh);
       const res = await fresh.db.execute<{ nspname: string }>(sql`select nspname from pg_namespace`);
-      expect(res.rows.map((r) => r.nspname)).toEqual(expect.arrayContaining([...DB_SCHEMAS]));
+      expect(res.rows.map((r) => r.nspname)).toEqual(expect.arrayContaining(["auth", "iam"]));
+      const users = await fresh.db.execute(sql`select count(*)::int as n from auth.user`);
+      expect(users.rows[0]).toEqual({ n: 0 });
     } finally {
       await fresh.drop();
     }
   });
 
   it("do not share data", async () => {
-    const a = await createTestDatabase();
-    const b = await createTestDatabase();
+    const [a, b] = await Promise.all([createMigratedTestDatabase(), createMigratedTestDatabase()]);
     try {
-      await a.db.execute(sql`create table shared_name (id int)`);
-      await a.db.execute(sql`insert into shared_name values (1)`);
-      const res = await b.db.execute(sql`select to_regclass('public.shared_name') as t`);
-      expect(res.rows[0]).toEqual({ t: null });
+      await a.db.execute(sql`insert into iam.instance_settings default values`);
+      const res = await b.db.execute(sql`select count(*)::int as n from iam.instance_settings`);
+      expect(res.rows[0]).toEqual({ n: 0 });
     } finally {
       await Promise.all([a.drop(), b.drop()]);
     }

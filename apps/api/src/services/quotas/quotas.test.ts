@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { verifyTicket } from "#/auth/tickets.js";
 import { organization, user } from "#/db/schemas/auth.js";
 import { iamHouseholds, iamObjectClaims, iamUploadReservations } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import type { ModuleContext } from "#/modules.js";
 import { createTestContext } from "#/testing/context.js";
 import type { StorageGateway, StoredObject } from "#/services/storage-gateway.js";
@@ -80,8 +80,7 @@ const reserve = (sizeBytes: bigint, app: "photos" | "cinema" = "photos") =>
   reserveUpload(ctx, { userId, app, sizeBytes, billing: { kind: "household", householdId } });
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   gateway = new FakeGateway();
   ctx = createTestContext(database, { gateway });
   userId = randomUUID();

@@ -8,7 +8,7 @@ import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { member, organization, user } from "#/db/schemas/auth.js";
 import { iamGracePeriods, iamHouseholds, iamObjectClaims } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import type { AppDataHooks } from "#/iam/app-data.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
 import { createTestContext, signUp, type TestUser } from "#/testing/context.js";
@@ -109,8 +109,7 @@ async function addMember(householdId: string, u: TestUser, role = "member"): Pro
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   ctx = createTestContext(database, { gateway });
   ctx.apps.push(photos);
   app = createApp(ctx, await loadModules());

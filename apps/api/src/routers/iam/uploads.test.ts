@@ -9,7 +9,7 @@ import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { verifyTicket } from "#/auth/tickets.js";
 import { user } from "#/db/schemas/auth.js";
 import { iamHouseholds, iamUploadReservations } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createMigratedTestDatabase, type TestDatabase } from "#/db/testing.js";
 import { loadModules, type ModuleContext } from "#/modules.js";
 import { createTestContext, signUp, type TestUser } from "#/testing/context.js";
 import { iamClient } from "#/testing/rpc.js";
@@ -39,8 +39,7 @@ async function reserved(): Promise<bigint> {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase();
-  await pushAllSchemas(database);
+  database = await createMigratedTestDatabase();
   ctx = createTestContext(database);
   app = createApp(ctx, await loadModules());
 
