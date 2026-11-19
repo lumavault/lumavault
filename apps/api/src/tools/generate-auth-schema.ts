@@ -1,6 +1,7 @@
 // Regenerates src/db/schemas/auth.ts with the Better Auth CLI, then moves every table into
-// the auth Postgres schema. Run after changing plugins in auth.ts. With --check, exits 1
-// instead of writing when the committed file is out of date.
+// the auth Postgres schema. Run after changing plugins in auth.ts, then generate an auth
+// migration with DB_SCHEMA=auth pnpm db:generate. With --check, exits 1 instead of writing
+// when the committed file is out of date.
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -42,6 +43,9 @@ async function main(check: boolean): Promise<void> {
       return;
     }
     await writeFile(TARGET, next);
+    if (next !== current) {
+      console.info("auth tables changed; now run DB_SCHEMA=auth pnpm db:generate");
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

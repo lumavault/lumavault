@@ -1,9 +1,8 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { listSourceFiles } from "#/source-files.js";
-import { DB_SCHEMAS, type DbSchema, SCHEMA_SETUP_LOCK_KEY, SCHEMAS_DIR_NAME } from "./constants.js";
+import { DB_SCHEMAS, type DbSchema, SCHEMAS_DIR_NAME } from "./constants.js";
 
 export { DB_SCHEMAS, type DbSchema } from "./constants.js";
 
@@ -24,28 +23,13 @@ export function createDatabase(url: string): Database {
   return { db: drizzle(pool), pool, close: () => pool.end() };
 }
 
-/** Creates every LumaVault schema that does not exist yet. Safe to run again and in parallel. */
-export async function ensureSchemas(db: Db): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(${SCHEMA_SETUP_LOCK_KEY})`);
-    for (const schema of DB_SCHEMAS) {
-      await tx.execute(sql`create schema if not exists ${sql.identifier(schema)}`);
-    }
-  });
-}
-
-/** Parses a comma-separated schema list, such as the DB_SCHEMA variable. Empty means all. */
-export function parseSchemaFilter(value: string | undefined): DbSchema[] {
-  const names = (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (names.length === 0) {
-    return [...DB_SCHEMAS];
+/** Parses one schema name, such as the DB_SCHEMA variable for drizzle-kit generate. */
+export function parseSchemaName(value: string | undefined): DbSchema {
+  const name = (value ?? "").trim();
+  if (!(DB_SCHEMAS as readonly string[]).includes(name)) {
+    throw new Error(`set DB_SCHEMA to one of ${DB_SCHEMAS.join(", ")}${name ? `, not ${name}` : ""}`);
   }
-  for (const name of names) {
-    if (!(DB_SCHEMAS as readonly string[]).includes(name)) {
-      throw new Error(`unknown schema ${name}; expected one of ${DB_SCHEMAS.join(", ")}`);
-    }
-  }
-  return names as DbSchema[];
+  return name as DbSchema;
 }
 
 export const SCHEMAS_DIR = fileURLToPath(new URL(`./${SCHEMAS_DIR_NAME}/`, import.meta.url));

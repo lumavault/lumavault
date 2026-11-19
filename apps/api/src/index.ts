@@ -4,7 +4,8 @@ import { createApp } from "./app.js";
 import { createAuth } from "./auth/auth.js";
 import { loadConfig } from "./config.js";
 import { SHUTDOWN_TIMEOUT_MS } from "./constants.js";
-import { createDatabase, ensureSchemas } from "./db/index.js";
+import { createDatabase } from "./db/index.js";
+import { migrateAll } from "./db/migrate.js";
 import * as authTables from "./db/schemas/auth.js";
 import { createEmailService } from "./email/emails.js";
 import { createMailer } from "./email/mailer.js";
@@ -13,7 +14,7 @@ import { loadModules, type ModuleContext, startModules, stopModules } from "./mo
 
 const config = loadConfig(process.env);
 const database = createDatabase(config.databaseUrl);
-await ensureSchemas(database.db);
+await migrateAll(database.pool);
 
 const mailer = createMailer({ smtpUrl: config.smtpUrl, from: config.mailFrom });
 const email = createEmailService(mailer);

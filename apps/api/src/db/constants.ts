@@ -1,16 +1,24 @@
-// Postgres schemas, one per owner. auth belongs to Better Auth, iam to IamService, and the
-// rest to one media app each, so parallel worktrees never push into each other's tables.
+// Postgres schemas, one per owner, in the order their migrations run. auth belongs to Better
+// Auth, iam to IamService, and the rest to one media app each. iam refers to auth tables, and
+// the apps may refer to both, so auth always migrates first.
 export const DB_SCHEMAS = ["auth", "iam", "photos", "cinema", "arcade"] as const;
 export type DbSchema = (typeof DB_SCHEMAS)[number];
 
 // Matches the defaults in docker-compose.yml. Tests create throwaway databases on this server.
 export const DEFAULT_TEST_DATABASE_URL = "postgres://lumavault:lumavault@localhost:5432/lumavault";
 
-// Serializes concurrent schema creation, since CREATE SCHEMA IF NOT EXISTS can still race.
-export const SCHEMA_SETUP_LOCK_KEY = 0x4c554d41;
+// Postgres advisory lock held while migrating, so API processes starting together apply each
+// migration once.
+export const MIGRATION_LOCK_KEY = 0x4c554d41;
+
+// Each schema's migrations live in migrations/<schema>/ under the API package, and its record
+// of applied migrations is this table inside the same schema.
+export const MIGRATIONS_DIR_NAME = "migrations";
+export const MIGRATIONS_TABLE = "__drizzle_migrations";
 
 // Prefix for databases created by tests, so leftovers are easy to spot and drop.
 export const TEST_DATABASE_PREFIX = "lv_test_";
 
-// Drizzle table files live under this folder, in any subfolder.
+// Drizzle table files live under this folder. A schema's tables are in <schema>.ts, in the
+// <schema>/ subfolder, or both.
 export const SCHEMAS_DIR_NAME = "schemas";

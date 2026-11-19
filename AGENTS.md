@@ -31,10 +31,10 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
 | :--- | :--- | :--- |
 | **`1. Core Backend, Contracts & Basic Data Layer`** | `P-LUM-1` | `proto/lumavault/v1/storage.proto`, `buf.*`, `Makefile`, `docker-compose.yml`, `.gitignore`, `go.*`, `Package.swift`, `sdk/web/package.json`, `sdk/web/tsconfig.json`, `pkg/constants/`, `pkg/validate/`, `pkg/metadata/`, `pkg/chunkstore/`, `pkg/gateway/`, `cmd/lumavault/` |
 | **`2. Client SDKs (Web/TypeScript & Swift)`** | `P-LUM-2` | `sdk/web/`, `sdk/swift/`, `sdk/testdata/`, `Package.swift`, `Makefile` (SDK test targets) |
-| **`3. App Platform, Auth & Multi-Tenant RBAC`** | `P-LUM-7` | `pnpm-workspace.yaml`, `proto/lumavault/iam/v1/iam.proto`, `packages/ui/`, `apps/portal/`, `apps/api/` *(excluding per-app `schemas/{photos,cinema,arcade}.ts`, `routers/{photos,cinema,arcade}.ts`, and `workers/photos*.ts`)* |
-| **`4. LumaVault Photos`** | `P-LUM-3` | `proto/lumavault/photos/v1/photos.proto`, `apps/api/src/db/schemas/photos.ts`, `apps/api/src/routers/photos.ts`, `apps/api/src/workers/photos*.ts`, `apps/photos/` |
-| **`5. LumaVault Cinema`** | `P-LUM-4` | `proto/lumavault/cinema/v1/cinema.proto`, `apps/api/src/db/schemas/cinema.ts`, `apps/api/src/routers/cinema.ts`, `apps/cinema/` |
-| **`6. LumaVault Arcade`** | `P-LUM-5` | `proto/lumavault/arcade/v1/arcade.proto`, `apps/api/src/db/schemas/arcade.ts`, `apps/api/src/routers/arcade.ts`, `apps/arcade/` |
+| **`3. App Platform, Auth & Multi-Tenant RBAC`** | `P-LUM-7` | `pnpm-workspace.yaml`, `proto/lumavault/iam/v1/iam.proto`, `packages/ui/`, `apps/portal/`, `apps/api/` *(excluding per-app `schemas/{photos,cinema,arcade}.ts`, `migrations/{photos,cinema,arcade}/`, `routers/{photos,cinema,arcade}.ts`, and `workers/photos*.ts`)* |
+| **`4. LumaVault Photos`** | `P-LUM-3` | `proto/lumavault/photos/v1/photos.proto`, `apps/api/src/db/schemas/photos.ts`, `apps/api/migrations/photos/`, `apps/api/src/routers/photos.ts`, `apps/api/src/workers/photos*.ts`, `apps/photos/` |
+| **`5. LumaVault Cinema`** | `P-LUM-4` | `proto/lumavault/cinema/v1/cinema.proto`, `apps/api/src/db/schemas/cinema.ts`, `apps/api/migrations/cinema/`, `apps/api/src/routers/cinema.ts`, `apps/cinema/` |
+| **`6. LumaVault Arcade`** | `P-LUM-5` | `proto/lumavault/arcade/v1/arcade.proto`, `apps/api/src/db/schemas/arcade.ts`, `apps/api/migrations/arcade/`, `apps/api/src/routers/arcade.ts`, `apps/arcade/` |
 | **`7. Distributed Systems Upgrades (Paxos & Chunkservers)`** | `P-LUM-6` | `proto/lumavault/v1/paxos.proto`, `proto/lumavault/v1/chunk.proto`, `pkg/consensus/`, `pkg/chunkserver/` |
 
 ## 2. Core Architectural Invariants
@@ -115,6 +115,7 @@ Better:
 - `make test` — Run Go unit/integration tests (`go test -race ./...`) and SDK/app tests.
 - `make build` — Compile `cmd/lumavault` and workspace packages.
 - `make dev` — Run the Gateway, API, and Portal with development settings, against Postgres and Mailpit from `docker compose up -d`. Ctrl-C stops it.
+- `DB_SCHEMA=<schema> pnpm --filter @lumavault/api db:generate` — Write a migration for one Postgres schema after changing its table files. Commit the generated SQL with the table change. The API applies pending migrations when it starts.
 
 ## 6. Ticket Workflow (Branch, PR, Linear)
 

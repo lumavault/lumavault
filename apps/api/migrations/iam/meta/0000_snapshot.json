@@ -1,0 +1,919 @@
+{
+  "id": "9633f8e0-672e-4693-846a-53ab937c0ecf",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "iam.object_claims": {
+      "name": "object_claims",
+      "schema": "iam",
+      "columns": {
+        "object_id": {
+          "name": "object_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reservation_id": {
+          "name": "reservation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "app": {
+          "name": "app",
+          "type": "app",
+          "typeSchema": "iam",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bytes": {
+          "name": "bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "object_claims_household_uploader_idx": {
+          "name": "object_claims_household_uploader_idx",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "uploaded_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "object_claims_household_id_organization_id_fk": {
+          "name": "object_claims_household_id_organization_id_fk",
+          "tableFrom": "object_claims",
+          "tableTo": "organization",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "object_claims_uploaded_by_user_id_fk": {
+          "name": "object_claims_uploaded_by_user_id_fk",
+          "tableFrom": "object_claims",
+          "tableTo": "user",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "uploaded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "object_claims_reservation_id_upload_reservations_id_fk": {
+          "name": "object_claims_reservation_id_upload_reservations_id_fk",
+          "tableFrom": "object_claims",
+          "tableTo": "upload_reservations",
+          "schemaTo": "iam",
+          "columnsFrom": [
+            "reservation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "object_claims_reservation_id_unique": {
+          "name": "object_claims_reservation_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reservation_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "object_claims_bytes_nonnegative": {
+          "name": "object_claims_bytes_nonnegative",
+          "value": "\"iam\".\"object_claims\".\"bytes\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "iam.grace_periods": {
+      "name": "grace_periods",
+      "schema": "iam",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "household_name": {
+          "name": "household_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "held_bytes": {
+          "name": "held_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "delete_at": {
+          "name": "delete_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "grace_periods_delete_at_idx": {
+          "name": "grace_periods_delete_at_idx",
+          "columns": [
+            {
+              "expression": "delete_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "grace_periods_user_id_user_id_fk": {
+          "name": "grace_periods_user_id_user_id_fk",
+          "tableFrom": "grace_periods",
+          "tableTo": "user",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "grace_periods_household_id_organization_id_fk": {
+          "name": "grace_periods_household_id_organization_id_fk",
+          "tableFrom": "grace_periods",
+          "tableTo": "organization",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "grace_periods_held_bytes_nonnegative": {
+          "name": "grace_periods_held_bytes_nonnegative",
+          "value": "\"iam\".\"grace_periods\".\"held_bytes\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "iam.households": {
+      "name": "households",
+      "schema": "iam",
+      "columns": {
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "storage_cap_bytes": {
+          "name": "storage_cap_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "enabled_apps": {
+          "name": "enabled_apps",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_limit": {
+          "name": "member_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 4
+        },
+        "used_bytes": {
+          "name": "used_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "reserved_bytes": {
+          "name": "reserved_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "suspended": {
+          "name": "suspended",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "households_household_id_organization_id_fk": {
+          "name": "households_household_id_organization_id_fk",
+          "tableFrom": "households",
+          "tableTo": "organization",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "households_enabled_apps_known": {
+          "name": "households_enabled_apps_known",
+          "value": "\"iam\".\"households\".\"enabled_apps\" <@ array['photos', 'cinema', 'arcade']::text[]"
+        },
+        "households_storage_cap_bytes_nonnegative": {
+          "name": "households_storage_cap_bytes_nonnegative",
+          "value": "\"iam\".\"households\".\"storage_cap_bytes\" >= 0"
+        },
+        "households_used_bytes_nonnegative": {
+          "name": "households_used_bytes_nonnegative",
+          "value": "\"iam\".\"households\".\"used_bytes\" >= 0"
+        },
+        "households_reserved_bytes_nonnegative": {
+          "name": "households_reserved_bytes_nonnegative",
+          "value": "\"iam\".\"households\".\"reserved_bytes\" >= 0"
+        },
+        "households_member_limit_positive": {
+          "name": "households_member_limit_positive",
+          "value": "\"iam\".\"households\".\"member_limit\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "iam.instance_settings": {
+      "name": "instance_settings",
+      "schema": "iam",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "smallint",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "setup_completed_at": {
+          "name": "setup_completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "instance_settings_single_row": {
+          "name": "instance_settings_single_row",
+          "value": "\"iam\".\"instance_settings\".\"id\" = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "iam.household_invites": {
+      "name": "household_invites",
+      "schema": "iam",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_cap_bytes": {
+          "name": "storage_cap_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled_apps": {
+          "name": "enabled_apps",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_limit": {
+          "name": "member_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 4
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "redeemed_at": {
+          "name": "redeemed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "redeemed_by": {
+          "name": "redeemed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "household_invites_email_idx": {
+          "name": "household_invites_email_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "household_invites_created_by_user_id_fk": {
+          "name": "household_invites_created_by_user_id_fk",
+          "tableFrom": "household_invites",
+          "tableTo": "user",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "household_invites_redeemed_by_user_id_fk": {
+          "name": "household_invites_redeemed_by_user_id_fk",
+          "tableFrom": "household_invites",
+          "tableTo": "user",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "redeemed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "household_invites_household_id_organization_id_fk": {
+          "name": "household_invites_household_id_organization_id_fk",
+          "tableFrom": "household_invites",
+          "tableTo": "organization",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "household_invites_token_hash_unique": {
+          "name": "household_invites_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "household_invites_enabled_apps_known": {
+          "name": "household_invites_enabled_apps_known",
+          "value": "\"iam\".\"household_invites\".\"enabled_apps\" <@ array['photos', 'cinema', 'arcade']::text[]"
+        },
+        "household_invites_token_hash_is_sha256": {
+          "name": "household_invites_token_hash_is_sha256",
+          "value": "\"iam\".\"household_invites\".\"token_hash\" ~ '^[0-9a-f]{64}$'"
+        },
+        "household_invites_storage_cap_bytes_nonnegative": {
+          "name": "household_invites_storage_cap_bytes_nonnegative",
+          "value": "\"iam\".\"household_invites\".\"storage_cap_bytes\" >= 0"
+        },
+        "household_invites_member_limit_positive": {
+          "name": "household_invites_member_limit_positive",
+          "value": "\"iam\".\"household_invites\".\"member_limit\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "iam.pairing_requests": {
+      "name": "pairing_requests",
+      "schema": "iam",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_secret_hash": {
+          "name": "device_secret_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_name": {
+          "name": "device_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "pairing_status",
+          "typeSchema": "iam",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "failed_attempts": {
+          "name": "failed_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "requester_ip": {
+          "name": "requester_ip",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "pairing_requests_pending_code_unique": {
+          "name": "pairing_requests_pending_code_unique",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"iam\".\"pairing_requests\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "pairing_requests_requester_ip_idx": {
+          "name": "pairing_requests_requester_ip_idx",
+          "columns": [
+            {
+              "expression": "requester_ip",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "pairing_requests_approved_by_user_id_fk": {
+          "name": "pairing_requests_approved_by_user_id_fk",
+          "tableFrom": "pairing_requests",
+          "tableTo": "user",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "approved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "pairing_requests_household_id_organization_id_fk": {
+          "name": "pairing_requests_household_id_organization_id_fk",
+          "tableFrom": "pairing_requests",
+          "tableTo": "organization",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "pairing_requests_device_secret_hash_is_sha256": {
+          "name": "pairing_requests_device_secret_hash_is_sha256",
+          "value": "\"iam\".\"pairing_requests\".\"device_secret_hash\" ~ '^[0-9a-f]{64}$'"
+        },
+        "pairing_requests_failed_attempts_nonnegative": {
+          "name": "pairing_requests_failed_attempts_nonnegative",
+          "value": "\"iam\".\"pairing_requests\".\"failed_attempts\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "iam.upload_reservations": {
+      "name": "upload_reservations",
+      "schema": "iam",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "app": {
+          "name": "app",
+          "type": "app",
+          "typeSchema": "iam",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bytes": {
+          "name": "bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "upload_reservation_status",
+          "typeSchema": "iam",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "upload_reservations_pending_expiry_idx": {
+          "name": "upload_reservations_pending_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"iam\".\"upload_reservations\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "upload_reservations_household_id_organization_id_fk": {
+          "name": "upload_reservations_household_id_organization_id_fk",
+          "tableFrom": "upload_reservations",
+          "tableTo": "organization",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "upload_reservations_user_id_user_id_fk": {
+          "name": "upload_reservations_user_id_user_id_fk",
+          "tableFrom": "upload_reservations",
+          "tableTo": "user",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "upload_reservations_bytes_positive": {
+          "name": "upload_reservations_bytes_positive",
+          "value": "\"iam\".\"upload_reservations\".\"bytes\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "iam.app": {
+      "name": "app",
+      "schema": "iam",
+      "values": [
+        "photos",
+        "cinema",
+        "arcade"
+      ]
+    },
+    "iam.pairing_status": {
+      "name": "pairing_status",
+      "schema": "iam",
+      "values": [
+        "pending",
+        "approved",
+        "claimed",
+        "expired"
+      ]
+    },
+    "iam.upload_reservation_status": {
+      "name": "upload_reservation_status",
+      "schema": "iam",
+      "values": [
+        "pending",
+        "finished",
+        "cancelled",
+        "expired"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

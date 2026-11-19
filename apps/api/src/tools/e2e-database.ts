@@ -1,8 +1,6 @@
-// Recreates the database named in DATABASE_URL and pushes every schema into it, for the
-// Portal end-to-end tests. Refuses any database whose name does not start with lv_e2e.
+// Recreates the database named in DATABASE_URL, empty, for the Portal end-to-end tests. The
+// API migrates it when it starts. Refuses any database whose name does not start with lv_e2e.
 import pg from "pg";
-import { createDatabase } from "#/db/index.js";
-import { pushAllSchemas } from "#/db/testing.js";
 
 const url = new URL(process.env.DATABASE_URL ?? "");
 const name = url.pathname.slice(1);
@@ -18,7 +16,4 @@ await admin.query(`drop database if exists "${name}" with (force)`);
 await admin.query(`create database "${name}"`);
 await admin.end();
 
-const database = createDatabase(url.toString());
-await pushAllSchemas(database);
-await database.close();
 console.info(`e2e database ${name} is ready`);
