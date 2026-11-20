@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
 import type { DbOrTx } from "#/db/index.js";
 import { member, user } from "#/db/schemas/auth.js";
@@ -61,4 +61,13 @@ export async function listMembersWithUsers(db: DbOrTx, organizationId: string) {
 export async function countMembers(db: DbOrTx, organizationId: string): Promise<number> {
   const [row] = await db.select({ n: count() }).from(member).where(eq(member.organizationId, organizationId));
   return row?.n ?? 0;
+}
+
+/** Everyone in the organization except one user, with their user rows. */
+export async function listOtherMembersWithUsers(db: DbOrTx, organizationId: string, exceptUserId: string) {
+  return db
+    .select({ member, user })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(and(eq(member.organizationId, organizationId), ne(member.userId, exceptUserId)));
 }

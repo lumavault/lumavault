@@ -13,3 +13,15 @@ export async function revokeOpenHouseholdInvite(db: DbOrTx, inviteId: string): P
     .catch(noRowsOnBadUuid);
   return updated.length > 0;
 }
+
+/** Marks an invite used by this person, for the household they created. */
+export async function markHouseholdInviteRedeemed(
+  db: DbOrTx,
+  inviteId: string,
+  input: { userId: string; householdId: string },
+): Promise<void> {
+  await db
+    .update(iamHouseholdInvites)
+    .set({ redeemedAt: new Date(), redeemedBy: input.userId, householdId: input.householdId })
+    .where(eq(iamHouseholdInvites.id, inviteId));
+}

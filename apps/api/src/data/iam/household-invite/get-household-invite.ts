@@ -32,3 +32,9 @@ export async function listOpenHouseholdInvites(db: DbOrTx, now: Date): Promise<H
     .where(and(isNull(iamHouseholdInvites.redeemedAt), isNull(iamHouseholdInvites.revokedAt), gt(iamHouseholdInvites.expiresAt, now)))
     .orderBy(asc(iamHouseholdInvites.createdAt));
 }
+
+/** The invite whose link secret hashes to this value, in any state. */
+export async function getHouseholdInviteByTokenHash(db: DbOrTx, tokenHash: string): Promise<HouseholdInvite | null> {
+  const [row] = await db.select().from(iamHouseholdInvites).where(eq(iamHouseholdInvites.tokenHash, tokenHash));
+  return row ?? null;
+}

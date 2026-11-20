@@ -47,3 +47,9 @@ export async function getInvitationInOrganization(db: DbOrTx, invitationId: stri
     .where(and(eq(invitation.id, invitationId), eq(invitation.organizationId, organizationId)));
   return row ?? null;
 }
+
+/** A member invitation by ID. */
+export async function getInvitation(db: DbOrTx, invitationId: string) {
+  const [row] = await db.select().from(invitation).where(eq(invitation.id, invitationId));
+  return row ?? null;
+}

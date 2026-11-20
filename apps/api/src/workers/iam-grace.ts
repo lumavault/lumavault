@@ -1,6 +1,5 @@
-import { count, eq, lte } from "drizzle-orm";
-import { member } from "#/db/schemas/auth.js";
-import { iamGracePeriods } from "#/db/schemas/iam.js";
+import { countMembers } from "#/data/auth/member/get-member.js";
+import { countGracePeriodsByHousehold, listGracePeriodsDueBy } from "#/data/iam/grace-period/get-grace-period.js";
 import { closeHousehold, deletePrivateData } from "#/iam/moves.js";
 import type { ApiModule, ModuleContext } from "#/modules.js";
 
@@ -13,12 +12,12 @@ export const GRACE_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
  * Returns how many grace periods ended.
  */
 export async function expireGracePeriods(ctx: ModuleContext, now: Date = new Date()): Promise<number> {
-  const due = await ctx.db.select().from(iamGracePeriods).where(lte(iamGracePeriods.deleteAt, now));
+  const due = await listGracePeriodsDueBy(ctx.db, now);
   for (const grace of due) {
     await deletePrivateData(ctx, grace.userId, grace.householdId);
-    const [left] = await ctx.db.select({ n: count() }).from(member).where(eq(member.organizationId, grace.householdId));
-    const [waiting] = await ctx.db.select({ n: count() }).from(iamGracePeriods).where(eq(iamGracePeriods.householdId, grace.householdId));
-    if ((left?.n ?? 0) === 0 && (waiting?.n ?? 0) === 0) {
+    const left = await countMembers(ctx.db, grace.householdId);
+    const waiting = await countGracePeriodsByHousehold(ctx.db, grace.householdId);
+    if (left === 0 && waiting === 0) {
       await closeHousehold(ctx, grace.householdId);
     }
   }

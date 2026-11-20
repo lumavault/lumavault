@@ -1,14 +1,20 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { IamService, InviteKind, Role } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { and, eq, ne } from "drizzle-orm";
 import { HOUSEHOLD_OWNER_ROLE, type HouseholdRole } from "#/auth/constants.js";
 import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { requestContext, type Viewer } from "#/context.js";
+import { markInvitationAccepted } from "#/data/auth/invitation/update-invitation.js";
+import { deleteMember } from "#/data/auth/member/delete-member.js";
+import { createMember } from "#/data/auth/member/create-member.js";
+import { listOtherMembersWithUsers } from "#/data/auth/member/get-member.js";
+import { getOrganization } from "#/data/auth/organization/get-organization.js";
+import { getUserById } from "#/data/auth/user/get-user.js";
+import { getGracePeriodByUserId } from "#/data/iam/grace-period/get-grace-period.js";
+import { createHousehold } from "#/data/iam/household/create-household.js";
+import { getHousehold, getHouseholdByUserId } from "#/data/iam/household/get-household.js";
 import type { HouseholdMembership } from "#/data/iam/household/types.js";
-import { getHouseholdByUserId } from "#/data/iam/household/get-household.js";
-import { invitation, member, organization, user } from "#/db/schemas/auth.js";
-import { iamGracePeriods, iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
+import { markHouseholdInviteRedeemed } from "#/data/iam/household-invite/update-household-invite.js";
 import { requireHouseholdMember, requireSignedIn } from "#/guards.js";
 import { billedBytes, privateObjectsOf, startGracePeriod } from "#/iam/grace.js";
 import { type ResolvedInvite, resolveInvite } from "#/iam/invites.js";
@@ -21,11 +27,7 @@ import { userMessage } from "./messages.js";
 import { decodePageToken, encodePageToken, pageSize } from "./paging.js";
 
 async function otherMembers(ctx: ModuleContext, householdId: string, userId: string) {
-  return ctx.db
-    .select({ member, user })
-    .from(member)
-    .innerJoin(user, eq(user.id, member.userId))
-    .where(and(eq(member.organizationId, householdId), ne(member.userId, userId)));
+  return listOtherMembersWithUsers(ctx.db, householdId, userId);
 }
 
 /** Checks an Owner leaving others behind named a next Owner who is one of them. */
@@ -55,29 +57,25 @@ async function joinTarget(ctx: ModuleContext, invite: ResolvedInvite, viewer: Vi
     const name = required(householdName, "household_name");
     const created = await createHouseholdFor(ctx, viewer.userId, name);
     await ctx.db.transaction(async (tx) => {
-      await tx.insert(iamHouseholds).values({
+      await createHousehold(tx, {
         householdId: created.id,
         storageCapBytes: invite.allowance.storageCapBytes,
         enabledApps: invite.allowance.enabledApps,
         memberLimit: invite.allowance.memberLimit,
       });
-      await tx
-        .update(iamHouseholdInvites)
-        .set({ redeemedAt: new Date(), redeemedBy: viewer.userId, householdId: created.id })
-        .where(eq(iamHouseholdInvites.id, invite.id));
+      await markHouseholdInviteRedeemed(tx, invite.id, { userId: viewer.userId, householdId: created.id });
     });
     return created.id;
   }
   // The invite already holds the seat, so joining needs no new seat check.
   await ctx.db.transaction(async (tx) => {
-    await tx.insert(member).values({
-      id: crypto.randomUUID(),
+    await createMember(tx, {
       organizationId: invite.householdId,
       userId: viewer.userId,
       role: invite.role,
       createdAt: new Date(),
     });
-    await tx.update(invitation).set({ status: "accepted" }).where(eq(invitation.id, invite.id));
+    await markInvitationAccepted(tx, invite.id);
   });
   return invite.householdId;
 }
@@ -88,7 +86,7 @@ async function leave(ctx: ModuleContext, current: HouseholdMembership, viewer: V
     await transferOwnership(ctx, current.householdId, viewer.userId, nextOwner);
   }
   await withHouseholdLock(ctx, current.householdId, async () => {
-    await ctx.db.delete(member).where(and(eq(member.organizationId, current.householdId), eq(member.userId, viewer.userId)));
+    await deleteMember(ctx.db, current.householdId, viewer.userId);
   });
 }
 
@@ -98,8 +96,8 @@ export const module: ApiModule = {
   rpc(router, ctx) {
     router.rpc(IamService.method.getInvite, async (req, call) => {
       const invite = await resolveInvite(ctx.db, req.invite);
-      const [inviter] = await ctx.db.select({ name: user.name }).from(user).where(eq(user.id, invite.inviterId));
-      const [org] = invite.kind === "member" ? await ctx.db.select().from(organization).where(eq(organization.id, invite.householdId)) : [];
+      const inviter = await getUserById(ctx.db, invite.inviterId);
+      const org = invite.kind === "member" ? await getOrganization(ctx.db, invite.householdId) : null;
       const base = {
         kind: invite.kind === "member" ? InviteKind.MEMBER : InviteKind.NEW_HOUSEHOLD,
         email: invite.email,
@@ -158,7 +156,7 @@ export const module: ApiModule = {
       if (current && invite.kind === "member" && current.householdId === invite.householdId) {
         throw new ConnectError("you are already in this household", Code.AlreadyExists);
       }
-      const [grace] = await ctx.db.select().from(iamGracePeriods).where(eq(iamGracePeriods.userId, viewer.userId));
+      const grace = await getGracePeriodByUserId(ctx.db, viewer.userId);
       const fromHouseholdId = current?.householdId ?? grace?.householdId ?? null;
 
       // Check everything that can fail before changing anything.
@@ -178,7 +176,7 @@ export const module: ApiModule = {
       if (invite.kind === "new-household") {
         checkFits(invite.allowance.storageCapBytes, 0n, 0n, incoming);
       } else {
-        const [target] = await ctx.db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, invite.householdId));
+        const target = await getHousehold(ctx.db, invite.householdId);
         if (!target) throw new ConnectError("that household no longer exists", Code.NotFound);
         checkFits(target.storageCapBytes, target.usedBytes, target.reservedBytes, incoming);
       }
@@ -204,7 +202,7 @@ export const module: ApiModule = {
         throw new ConnectError("you are not in a household", Code.FailedPrecondition);
       }
       const handoff = await nextOwnerFor(ctx, current, viewer, req.nextOwnerUserId);
-      const [org] = await ctx.db.select().from(organization).where(eq(organization.id, current.householdId));
+      const org = await getOrganization(ctx.db, current.householdId);
       await leave(ctx, current, viewer, handoff.nextOwner);
       // A household left empty stays until this grace period ends, then the worker closes it.
       await startGracePeriod(ctx, viewer.userId, { id: current.householdId, name: org?.name ?? "" });

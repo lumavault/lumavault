@@ -1,4 +1,4 @@
-import { eq, inArray, sum } from "drizzle-orm";
+import { count, eq, inArray, lte, sum } from "drizzle-orm";
 import type { DbOrTx } from "#/db/index.js";
 import { iamGracePeriods } from "#/db/schemas/iam.js";
 
@@ -21,4 +21,15 @@ export async function getHeldBytesByHouseholds(db: DbOrTx, householdIds: string[
     .from(iamGracePeriods)
     .where(inArray(iamGracePeriods.householdId, householdIds))
     .groupBy(iamGracePeriods.householdId);
+}
+
+/** Grace periods whose deadline has passed. */
+export async function listGracePeriodsDueBy(db: DbOrTx, now: Date) {
+  return db.select().from(iamGracePeriods).where(lte(iamGracePeriods.deleteAt, now));
+}
+
+/** How many people are in a grace period from one household. */
+export async function countGracePeriodsByHousehold(db: DbOrTx, householdId: string): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(iamGracePeriods).where(eq(iamGracePeriods.householdId, householdId));
+  return row?.n ?? 0;
 }

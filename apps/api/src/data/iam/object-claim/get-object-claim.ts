@@ -46,3 +46,12 @@ export async function getBilledBytes(db: DbOrTx, objectIds: string[]): Promise<b
     .where(and(inArray(iamObjectClaims.objectId, objectIds), isNull(iamObjectClaims.releasedAt)));
   return BigInt(row?.total ?? 0);
 }
+
+/** IDs of the objects a household is billed for and has not released. */
+export async function listActiveObjectIdsByHousehold(db: DbOrTx, householdId: string): Promise<string[]> {
+  const rows = await db
+    .select({ objectId: iamObjectClaims.objectId })
+    .from(iamObjectClaims)
+    .where(and(eq(iamObjectClaims.householdId, householdId), isNull(iamObjectClaims.releasedAt)));
+  return rows.map((r) => r.objectId);
+}

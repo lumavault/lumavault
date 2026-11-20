@@ -1,7 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { and, eq, isNull } from "drizzle-orm";
-import { organization } from "#/db/schemas/auth.js";
-import { iamObjectClaims } from "#/db/schemas/iam.js";
+import { deleteOrganization } from "#/data/auth/organization/delete-organization.js";
+import { listActiveObjectIdsByHousehold } from "#/data/iam/object-claim/get-object-claim.js";
 import type { ModuleContext } from "#/modules.js";
 import { copyObjectToHousehold, moveObjects, releaseObject } from "#/services/quotas/index.js";
 import type { AppSharedItem } from "./app-data.js";
@@ -59,18 +58,14 @@ export async function deletePrivateData(ctx: ModuleContext, userId: string, hous
 
 /** Closes a household with no members left: deletes everything it stored, then the household. */
 export async function closeHousehold(ctx: ModuleContext, householdId: string): Promise<void> {
-  const claims = await ctx.db
-    .select({ objectId: iamObjectClaims.objectId })
-    .from(iamObjectClaims)
-    .where(and(eq(iamObjectClaims.householdId, householdId), isNull(iamObjectClaims.releasedAt)));
-  for (const { objectId } of claims) {
+  for (const objectId of await listActiveObjectIdsByHousehold(ctx.db, householdId)) {
     await releaseObject(ctx, objectId);
   }
   for (const a of ctx.apps) {
     await a.deleteHousehold(ctx, householdId);
   }
   // Deleting the organization removes its members, invites, and allowance row with it.
-  await ctx.db.delete(organization).where(eq(organization.id, householdId));
+  await deleteOrganization(ctx.db, householdId);
 }
 
 /** Finds the chosen items among the household's shared items, rejecting any that are not there. */
