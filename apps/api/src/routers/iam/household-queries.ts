@@ -1,12 +1,12 @@
 // Household lookups shared by the IAM router files. Registers no RPCs.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { and, count, eq, gt } from "drizzle-orm";
 import type { HouseholdRole } from "#/auth/constants.js";
-import { getOwnerUserId } from "#/data/auth/member/get-member.js";
+import { countPendingInvitations } from "#/data/auth/invitation/get-invitation.js";
+import { countMembers, getOwnerUserId } from "#/data/auth/member/get-member.js";
 import { getOrganization } from "#/data/auth/organization/get-organization.js";
 import { getHousehold } from "#/data/iam/household/get-household.js";
-import type { Db, DbOrTx } from "#/db/index.js";
-import { invitation, member } from "#/db/schemas/auth.js";
+import type { DbOrTx } from "#/db/index.js";
+import type { invitation } from "#/db/schemas/auth.js";
 import { roleToWire } from "./convert.js";
 import { householdMessage } from "./messages.js";
 
@@ -33,11 +33,6 @@ export function memberInviteMessage(row: InvitationRow) {
 }
 
 /** Members plus unexpired pending invites: the seats a household is using. */
-export async function seatsUsed(db: Pick<Db, "select">, householdId: string): Promise<number> {
-  const [members] = await db.select({ n: count() }).from(member).where(eq(member.organizationId, householdId));
-  const [pending] = await db
-    .select({ n: count() })
-    .from(invitation)
-    .where(and(eq(invitation.organizationId, householdId), eq(invitation.status, "pending"), gt(invitation.expiresAt, new Date())));
-  return (members?.n ?? 0) + (pending?.n ?? 0);
+export async function seatsUsed(db: DbOrTx, householdId: string): Promise<number> {
+  return (await countMembers(db, householdId)) + (await countPendingInvitations(db, householdId, new Date()));
 }

@@ -1,10 +1,14 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, type ContextValues } from "@connectrpc/connect";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_OWNER_ROLE, type HouseholdRole } from "#/auth/constants.js";
-import { invitation, member, organization, user } from "#/db/schemas/auth.js";
-import { iamHouseholds } from "#/db/schemas/iam.js";
+import { getInvitationInOrganization, listPendingInvitations } from "#/data/auth/invitation/get-invitation.js";
+import { getMember, getMemberByEmail, listMembersWithUsers } from "#/data/auth/member/get-member.js";
+import { setMemberRole } from "#/data/auth/member/update-member.js";
+import { getOrganization } from "#/data/auth/organization/get-organization.js";
+import { getUserById } from "#/data/auth/user/get-user.js";
+import { getHousehold, getHouseholdForUpdate } from "#/data/iam/household/get-household.js";
+import type { invitation } from "#/db/schemas/auth.js";
 import { requireHouseholdAdmin, requireHouseholdMember, requireHouseholdOwner } from "#/guards.js";
 import { PORTAL_MEMBER_INVITE_PATH } from "#/iam/constants.js";
 import { startGracePeriod } from "#/iam/grace.js";
@@ -21,7 +25,7 @@ function headersOf(call: { values: ContextValues }): Headers {
 /** Locks the household's iam row so seat counts and role changes see one change at a time. */
 export async function withHouseholdLock<T>(ctx: ModuleContext, householdId: string, fn: (limit: number) => Promise<T>): Promise<T> {
   return ctx.db.transaction(async (tx) => {
-    const [h] = await tx.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, householdId)).for("update");
+    const h = await getHouseholdForUpdate(tx, householdId);
     if (!h) {
       throw new ConnectError("household has no allowance", Code.FailedPrecondition);
     }
@@ -30,7 +34,7 @@ export async function withHouseholdLock<T>(ctx: ModuleContext, householdId: stri
 }
 
 async function memberRow(ctx: ModuleContext, householdId: string, userId: string) {
-  const [row] = await ctx.db.select().from(member).where(and(eq(member.organizationId, householdId), eq(member.userId, userId)));
+  const row = await getMember(ctx.db, householdId, userId);
   if (!row) {
     throw new ConnectError("no such member", Code.NotFound);
   }
@@ -48,8 +52,8 @@ export async function transferOwnership(ctx: ModuleContext, householdId: string,
   await withHouseholdLock(ctx, householdId, async () => {
     await memberRow(ctx, householdId, toUserId);
     await ctx.db.transaction(async (tx) => {
-      await tx.update(member).set({ role: HOUSEHOLD_ADMIN_ROLE }).where(and(eq(member.organizationId, householdId), eq(member.userId, fromUserId)));
-      await tx.update(member).set({ role: HOUSEHOLD_OWNER_ROLE }).where(and(eq(member.organizationId, householdId), eq(member.userId, toUserId)));
+      await setMemberRole(tx, householdId, fromUserId, HOUSEHOLD_ADMIN_ROLE);
+      await setMemberRole(tx, householdId, toUserId, HOUSEHOLD_OWNER_ROLE);
     });
   });
 }
@@ -60,17 +64,9 @@ export const module: ApiModule = {
   rpc(router, ctx) {
     router.rpc(IamService.method.listMembers, async (_req, call) => {
       const { household } = await requireHouseholdMember(call, ctx);
-      const rows = await ctx.db
-        .select({ member, user })
-        .from(member)
-        .innerJoin(user, eq(user.id, member.userId))
-        .where(eq(member.organizationId, household.householdId))
-        .orderBy(sql`${member.role} = ${HOUSEHOLD_OWNER_ROLE} desc`, asc(user.name));
-      const pending = await ctx.db
-        .select()
-        .from(invitation)
-        .where(and(eq(invitation.organizationId, household.householdId), eq(invitation.status, "pending"), gt(invitation.expiresAt, new Date())));
-      const [h] = await ctx.db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, household.householdId));
+      const rows = await listMembersWithUsers(ctx.db, household.householdId);
+      const pending = await listPendingInvitations(ctx.db, household.householdId, new Date());
+      const h = await getHousehold(ctx.db, household.householdId);
       const left = (h?.memberLimit ?? 0) - rows.length - pending.length;
       return {
         members: rows.map((r) => ({
@@ -88,12 +84,7 @@ export const module: ApiModule = {
       const email = required(req.email, "email").toLowerCase();
       const role = assignableRoleFromWire(req.role);
       const invite = await withHouseholdLock(ctx, household.householdId, async (limit) => {
-        const [already] = await ctx.db
-          .select({ id: member.id })
-          .from(member)
-          .innerJoin(user, eq(user.id, member.userId))
-          .where(and(eq(member.organizationId, household.householdId), sql`lower(${user.email}) = ${email}`));
-        if (already) {
+        if (await getMemberByEmail(ctx.db, household.householdId, email)) {
           throw new ConnectError("that person is already a member", Code.AlreadyExists);
         }
         if ((await seatsUsed(ctx.db, household.householdId)) >= limit) {
@@ -105,7 +96,7 @@ export const module: ApiModule = {
         });
       });
       const url = new URL(PORTAL_MEMBER_INVITE_PATH + invite.id, ctx.config.portalUrl).toString();
-      const [org] = await ctx.db.select().from(organization).where(eq(organization.id, household.householdId));
+      const org = await getOrganization(ctx.db, household.householdId);
       await ctx.email.sendMemberInvite(email, { url, householdName: org?.name ?? "a household", inviterName: viewer.name });
       return { invite: memberInviteMessage(invite as typeof invitation.$inferSelect), inviteUrl: url };
     });
@@ -113,11 +104,7 @@ export const module: ApiModule = {
     router.rpc(IamService.method.cancelMemberInvite, async (req, call) => {
       const { household } = await requireHouseholdAdmin(call, ctx);
       const inviteId = required(req.inviteId, "invite_id");
-      const [row] = await ctx.db
-        .select()
-        .from(invitation)
-        .where(and(eq(invitation.id, inviteId), eq(invitation.organizationId, household.householdId)));
-      if (!row) {
+      if (!(await getInvitationInOrganization(ctx.db, inviteId, household.householdId))) {
         throw new ConnectError("no such invite", Code.NotFound);
       }
       await ctx.auth.api.cancelInvitation({ body: { invitationId: inviteId }, headers: headersOf(call) });
@@ -138,7 +125,7 @@ export const module: ApiModule = {
           headers: headersOf(call),
         });
       });
-      const [org] = await ctx.db.select().from(organization).where(eq(organization.id, household.householdId));
+      const org = await getOrganization(ctx.db, household.householdId);
       await startGracePeriod(ctx, userId, { id: household.householdId, name: org?.name ?? "" });
       return {};
     });
@@ -158,7 +145,7 @@ export const module: ApiModule = {
         });
         return row;
       });
-      const [u] = await ctx.db.select().from(user).where(eq(user.id, userId));
+      const u = await getUserById(ctx.db, userId);
       return { member: { user: userMessage(u!), role: roleToWire(role), joinedAt: timestampFromDate(target.createdAt) } };
     });
 

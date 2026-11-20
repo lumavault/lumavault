@@ -1,5 +1,6 @@
-import { and, eq, inArray, isNull, sum } from "drizzle-orm";
-import { iamGracePeriods, iamObjectClaims } from "#/db/schemas/iam.js";
+import { deleteGracePeriod } from "#/data/iam/grace-period/delete-grace-period.js";
+import { upsertGracePeriod } from "#/data/iam/grace-period/upsert-grace-period.js";
+import { getBilledBytes } from "#/data/iam/object-claim/get-object-claim.js";
 import type { ModuleContext } from "#/modules.js";
 import { GRACE_PERIOD_DAYS } from "./constants.js";
 
@@ -16,11 +17,7 @@ export async function billedBytes(ctx: Pick<ModuleContext, "db">, objectIds: str
   if (objectIds.length === 0) {
     return 0n;
   }
-  const [row] = await ctx.db
-    .select({ total: sum(iamObjectClaims.bytes) })
-    .from(iamObjectClaims)
-    .where(and(inArray(iamObjectClaims.objectId, objectIds), isNull(iamObjectClaims.releasedAt)));
-  return BigInt(row?.total ?? 0);
+  return getBilledBytes(ctx.db, objectIds);
 }
 
 /**
@@ -43,10 +40,10 @@ export async function startGracePeriod(
     startedAt: now,
     deleteAt: new Date(now.getTime() + GRACE_PERIOD_DAYS * DAY_MS),
   };
-  await ctx.db.insert(iamGracePeriods).values(row).onConflictDoUpdate({ target: iamGracePeriods.userId, set: row });
+  await upsertGracePeriod(ctx.db, row);
 }
 
 /** Ends a grace period, after its data moved or was deleted. */
 export async function endGracePeriod(ctx: Pick<ModuleContext, "db">, userId: string): Promise<void> {
-  await ctx.db.delete(iamGracePeriods).where(eq(iamGracePeriods.userId, userId));
+  await deleteGracePeriod(ctx.db, userId);
 }

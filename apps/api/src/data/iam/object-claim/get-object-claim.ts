@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sum } from "drizzle-orm";
 import type { DbOrTx } from "#/db/index.js";
 import { iamObjectClaims } from "#/db/schemas/iam.js";
 import type { ObjectClaim } from "./types.js";
@@ -36,4 +36,13 @@ export async function getActiveObjectClaimsForUpdate(db: DbOrTx, objectIds: stri
     .where(and(inArray(iamObjectClaims.objectId, objectIds), isNull(iamObjectClaims.releasedAt)))
     .orderBy(iamObjectClaims.objectId)
     .for("update");
+}
+
+/** Total bytes billed for these objects, leaving out released ones. */
+export async function getBilledBytes(db: DbOrTx, objectIds: string[]): Promise<bigint> {
+  const [row] = await db
+    .select({ total: sum(iamObjectClaims.bytes) })
+    .from(iamObjectClaims)
+    .where(and(inArray(iamObjectClaims.objectId, objectIds), isNull(iamObjectClaims.releasedAt)));
+  return BigInt(row?.total ?? 0);
 }

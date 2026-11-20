@@ -21,3 +21,29 @@ export async function countPendingInvitationsByOrganization(db: DbOrTx, organiza
     .where(and(inArray(invitation.organizationId, organizationIds), eq(invitation.status, "pending"), gt(invitation.expiresAt, now)))
     .groupBy(invitation.organizationId);
 }
+
+/** Pending, unexpired invitations to one organization. */
+export async function listPendingInvitations(db: DbOrTx, organizationId: string, now: Date) {
+  return db
+    .select()
+    .from(invitation)
+    .where(and(eq(invitation.organizationId, organizationId), eq(invitation.status, "pending"), gt(invitation.expiresAt, now)));
+}
+
+/** How many pending, unexpired invitations one organization has. */
+export async function countPendingInvitations(db: DbOrTx, organizationId: string, now: Date): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(invitation)
+    .where(and(eq(invitation.organizationId, organizationId), eq(invitation.status, "pending"), gt(invitation.expiresAt, now)));
+  return row?.n ?? 0;
+}
+
+/** An invitation by ID, only if it belongs to this organization. */
+export async function getInvitationInOrganization(db: DbOrTx, invitationId: string, organizationId: string) {
+  const [row] = await db
+    .select()
+    .from(invitation)
+    .where(and(eq(invitation.id, invitationId), eq(invitation.organizationId, organizationId)));
+  return row ?? null;
+}
