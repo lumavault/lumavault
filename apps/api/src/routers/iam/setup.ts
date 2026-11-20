@@ -1,28 +1,25 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { eq, sql } from "drizzle-orm";
-import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { type CreatedAdmin, createFirstAdmin, createHouseholdFor } from "#/auth/server-helpers.js";
-import type { Db } from "#/db/index.js";
-import { user } from "#/db/schemas/auth.js";
-import { iamHouseholds, iamInstanceSettings } from "#/db/schemas/iam.js";
-import { IAM_APPS, INSTANCE_SETTINGS_ID, SETUP_STORAGE_CAP_BYTES } from "#/iam/constants.js";
+import { deleteUser } from "#/data/auth/user/delete-user.js";
+import { getSuperAdmin, getUserById } from "#/data/auth/user/get-user.js";
+import { createHousehold } from "#/data/iam/household/create-household.js";
+import { createInstanceSettingsIfMissing } from "#/data/iam/instance-settings/create-instance-settings.js";
+import { getInstanceSettings, getInstanceSettingsForUpdate } from "#/data/iam/instance-settings/get-instance-settings.js";
+import { markSetupCompleted } from "#/data/iam/instance-settings/update-instance-settings.js";
+import type { DbOrTx } from "#/db/index.js";
+import { IAM_APPS, SETUP_STORAGE_CAP_BYTES } from "#/iam/constants.js";
 import type { ApiModule } from "#/modules.js";
 import { required } from "./convert.js";
 import { loadHousehold } from "./household-queries.js";
 import { userMessage } from "./messages.js";
 
-async function setupDone(db: Pick<Db, "select">): Promise<boolean> {
-  const [settings] = await db.select().from(iamInstanceSettings).where(eq(iamInstanceSettings.id, INSTANCE_SETTINGS_ID));
+async function setupDone(db: DbOrTx): Promise<boolean> {
+  const settings = await getInstanceSettings(db);
   if (settings?.setupCompletedAt) {
     return true;
   }
-  const [admin] = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(sql`string_to_array(coalesce(${user.role}, ''), ',') @> array[${SUPER_ADMIN_ROLE}]`)
-    .limit(1);
-  return Boolean(admin);
+  return Boolean(await getSuperAdmin(db));
 }
 
 export const module: ApiModule = {
@@ -48,8 +45,8 @@ export const module: ApiModule = {
       // the first sees setup done and stops. Better Auth writes on its own connections, so a
       // failure partway removes the new account by hand.
       const done = await ctx.db.transaction(async (tx) => {
-        await tx.insert(iamInstanceSettings).values({ id: INSTANCE_SETTINGS_ID }).onConflictDoNothing();
-        await tx.select().from(iamInstanceSettings).where(eq(iamInstanceSettings.id, INSTANCE_SETTINGS_ID)).for("update");
+        await createInstanceSettingsIfMissing(tx);
+        await getInstanceSettingsForUpdate(tx);
         if (await setupDone(tx)) {
           throw new ConnectError("this server is already set up", Code.FailedPrecondition);
         }
@@ -57,16 +54,16 @@ export const module: ApiModule = {
         try {
           admin = await createFirstAdmin(ctx, account);
           const household = await createHouseholdFor(ctx, admin.userId, householdName);
-          await tx.insert(iamHouseholds).values({
+          await createHousehold(tx, {
             householdId: household.id,
             storageCapBytes: SETUP_STORAGE_CAP_BYTES,
             enabledApps: [...IAM_APPS],
           });
-          await tx.update(iamInstanceSettings).set({ setupCompletedAt: new Date() }).where(eq(iamInstanceSettings.id, INSTANCE_SETTINGS_ID));
+          await markSetupCompleted(tx);
           return { admin, householdId: household.id };
         } catch (err) {
           if (admin) {
-            await ctx.db.delete(user).where(eq(user.id, admin.userId));
+            await deleteUser(ctx.db, admin.userId);
           }
           throw err;
         }
@@ -76,7 +73,7 @@ export const module: ApiModule = {
       for (const cookie of done.admin.setCookie) {
         call.responseHeader.append("set-cookie", cookie);
       }
-      const [u] = await ctx.db.select().from(user).where(eq(user.id, done.admin.userId));
+      const u = await getUserById(ctx.db, done.admin.userId);
       const household = await loadHousehold(ctx.db, done.householdId);
       return { user: userMessage(u!), household: household?.message };
     });

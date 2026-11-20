@@ -19,6 +19,12 @@ export async function getHouseholdByUserId(db: DbOrTx, userId: string): Promise<
   return { householdId: row.householdId, role: row.role, suspended: row.suspended ?? false };
 }
 
+/** A household's allowance row, or null when it has none. */
+export async function getHousehold(db: DbOrTx, householdId: string): Promise<Household | null> {
+  const [household] = await db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, householdId));
+  return household ?? null;
+}
+
 /** A household row, locked until the transaction ends. Null when it does not exist. */
 export async function getHouseholdForUpdate(db: DbOrTx, householdId: string): Promise<Household | null> {
   const [household] = await db.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, householdId)).for("update");

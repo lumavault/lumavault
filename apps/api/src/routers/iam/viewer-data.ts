@@ -1,22 +1,21 @@
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { type GetViewerResponseSchema, Role } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { eq } from "drizzle-orm";
+import { getUserById } from "#/data/auth/user/get-user.js";
+import { getGracePeriodByUserId, getHeldBytesByHousehold } from "#/data/iam/grace-period/get-grace-period.js";
 import { getHouseholdByUserId } from "#/data/iam/household/get-household.js";
 import type { Db } from "#/db/index.js";
-import { user } from "#/db/schemas/auth.js";
-import { iamGracePeriods } from "#/db/schemas/iam.js";
 import { roleToWire } from "./convert.js";
-import { heldBytesOf, loadHousehold } from "./household-queries.js";
+import { loadHousehold } from "./household-queries.js";
 import { usageMessage, userMessage } from "./messages.js";
 
 /** Everything a client needs about who is signed in. Reads the database, not the request. */
 export async function buildViewer(db: Db, userId: string): Promise<MessageInitShape<typeof GetViewerResponseSchema>> {
-  const [u] = await db.select().from(user).where(eq(user.id, userId));
+  const u = await getUserById(db, userId);
   if (!u) {
     throw new Error(`user ${userId} disappeared`);
   }
-  const [grace] = await db.select().from(iamGracePeriods).where(eq(iamGracePeriods.userId, userId));
+  const grace = await getGracePeriodByUserId(db, userId);
   const gracePeriod = grace
     ? { formerHouseholdName: grace.householdName, privateBytes: grace.heldBytes, deleteAt: timestampFromDate(grace.deleteAt) }
     : undefined;
@@ -30,7 +29,7 @@ export async function buildViewer(db: Db, userId: string): Promise<MessageInitSh
     user: userMessage(u),
     household: loaded.message,
     role: roleToWire(membership.role),
-    usage: usageMessage(loaded.allowance, await heldBytesOf(db, membership.householdId)),
+    usage: usageMessage(loaded.allowance, await getHeldBytesByHousehold(db, membership.householdId)),
     gracePeriod,
   };
 }
