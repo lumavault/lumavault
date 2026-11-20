@@ -2,10 +2,15 @@ import { randomInt } from "node:crypto";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { IamService, PairingStatus } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { and, eq, gt, sql } from "drizzle-orm";
 import { mintBearerSession } from "#/auth/server-helpers.js";
-import { noRowsOnBadUuid, isUniqueViolation } from "#/db/errors.js";
-import { iamPairingRequests } from "#/db/schemas/iam.js";
+import { createPairingRequest } from "#/data/iam/pairing-request/create-pairing-request.js";
+import { getPairingRequest } from "#/data/iam/pairing-request/get-pairing-request.js";
+import {
+  approvePairingRequestByCode,
+  claimApprovedPairingRequest,
+  recordFailedPairingAttempt,
+} from "#/data/iam/pairing-request/update-pairing-request.js";
+import { isUniqueViolation } from "#/db/errors.js";
 import { requireHouseholdMember } from "#/guards.js";
 import {
   PAIRING_APPROVALS_PER_WINDOW,
@@ -56,12 +61,15 @@ export const module: ApiModule = {
       for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
         const code = newPairingCode();
         try {
-          const [row] = await ctx.db
-            .insert(iamPairingRequests)
-            .values({ code, deviceSecretHash: hashSecret(deviceSecret), deviceName, requesterIp: ip, expiresAt })
-            .returning({ id: iamPairingRequests.id });
+          const pairingId = await createPairingRequest(ctx.db, {
+            code,
+            deviceSecretHash: hashSecret(deviceSecret),
+            deviceName,
+            requesterIp: ip,
+            expiresAt,
+          });
           return {
-            pairingId: row!.id,
+            pairingId,
             code,
             deviceSecret,
             expiresAt: timestampFromDate(expiresAt),
@@ -79,12 +87,12 @@ export const module: ApiModule = {
       const { viewer, household } = await requireHouseholdMember(call, ctx);
       if (!approvals.allow(viewer.userId)) throw tooMany();
       const code = required(req.code, "code").toUpperCase().replace(/[\s-]/g, "");
-      const householdId = household.householdId;
-      const [approved] = await ctx.db
-        .update(iamPairingRequests)
-        .set({ status: "approved", approvedBy: viewer.userId, householdId, approvedAt: new Date() })
-        .where(and(eq(iamPairingRequests.code, code), eq(iamPairingRequests.status, "pending"), gt(iamPairingRequests.expiresAt, new Date())))
-        .returning({ deviceName: iamPairingRequests.deviceName });
+      const approved = await approvePairingRequestByCode(
+        ctx.db,
+        code,
+        { userId: viewer.userId, householdId: household.householdId },
+        new Date(),
+      );
       if (!approved) {
         throw new ConnectError("that code is wrong or expired", Code.NotFound);
       }
@@ -94,23 +102,13 @@ export const module: ApiModule = {
     // Polled by the Apple TV. The session token comes back on exactly one poll.
     router.rpc(IamService.method.pollPairing, async (req, call) => {
       if (!polls.allow(call.values.get(clientIpKey))) throw tooMany();
-      const [pairing] = await ctx.db
-        .select()
-        .from(iamPairingRequests)
-        .where(eq(iamPairingRequests.id, sql`${required(req.pairingId, "pairing_id")}::uuid`))
-        .catch(noRowsOnBadUuid);
+      const pairing = await getPairingRequest(ctx.db, required(req.pairingId, "pairing_id"));
       if (!pairing) {
         throw new ConnectError("no such pairing", Code.NotFound);
       }
       if (hashSecret(req.deviceSecret) !== pairing.deviceSecretHash) {
         // Guessing secrets burns the pairing after a few tries.
-        await ctx.db
-          .update(iamPairingRequests)
-          .set({
-            failedAttempts: sql`${iamPairingRequests.failedAttempts} + 1`,
-            status: sql`case when ${iamPairingRequests.failedAttempts} + 1 >= ${PAIRING_MAX_FAILED_ATTEMPTS} then 'expired' else ${iamPairingRequests.status} end`,
-          })
-          .where(eq(iamPairingRequests.id, pairing.id));
+        await recordFailedPairingAttempt(ctx.db, pairing.id, PAIRING_MAX_FAILED_ATTEMPTS);
         throw new ConnectError("wrong device secret", Code.PermissionDenied);
       }
       if (pairing.status === "pending") {
@@ -120,11 +118,7 @@ export const module: ApiModule = {
         return { status: PairingStatus.EXPIRED };
       }
       // Claim first, so two polls racing cannot both get a session.
-      const [claimed] = await ctx.db
-        .update(iamPairingRequests)
-        .set({ status: "claimed", claimedAt: new Date() })
-        .where(and(eq(iamPairingRequests.id, pairing.id), eq(iamPairingRequests.status, "approved")))
-        .returning();
+      const claimed = await claimApprovedPairingRequest(ctx.db, pairing.id, new Date());
       if (!claimed?.approvedBy || !claimed.householdId) {
         return { status: PairingStatus.EXPIRED };
       }
