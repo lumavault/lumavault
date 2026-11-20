@@ -1,8 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { and, eq, inArray, isNull } from "drizzle-orm";
-import { iamHouseholds, iamObjectClaims } from "#/db/schemas/iam.js";
+import { getHouseholdForUpdate, getHouseholdsForUpdate } from "#/data/iam/household/get-household.js";
+import { addUsedBytes, subtractUsedBytes } from "#/data/iam/household/update-household.js";
+import { createObjectClaim } from "#/data/iam/object-claim/create-object-claim.js";
+import { getActiveObjectClaim, getActiveObjectClaimsForUpdate } from "#/data/iam/object-claim/get-object-claim.js";
+import { moveObjectClaims } from "#/data/iam/object-claim/update-object-claim.js";
 import type { ModuleContext } from "#/modules.js";
-import { minusFloor, plus, type Tx } from "./sql.js";
 import type { MovedObjects } from "./types.js";
 
 /**
@@ -20,12 +22,7 @@ export async function moveObjects(
     return { bytes: 0n, count: 0 };
   }
   return ctx.db.transaction(async (tx) => {
-    const claims = await tx
-      .select()
-      .from(iamObjectClaims)
-      .where(and(inArray(iamObjectClaims.objectId, objectIds), isNull(iamObjectClaims.releasedAt)))
-      .orderBy(iamObjectClaims.objectId)
-      .for("update");
+    const claims = await getActiveObjectClaimsForUpdate(tx, objectIds);
     const moving = claims.filter((c) => c.householdId !== toHouseholdId);
     const fromTotals = new Map<string, bigint>();
     let total = 0n;
@@ -35,8 +32,8 @@ export async function moveObjects(
     }
 
     const ids = [...new Set([...fromTotals.keys(), toHouseholdId])].sort();
-    const locked = await lockHouseholds(tx, ids);
-    const target = locked.get(toHouseholdId);
+    const locked = await getHouseholdsForUpdate(tx, ids);
+    const target = locked.find((h) => h.householdId === toHouseholdId);
     if (!target) {
       throw new ConnectError("the new household has no allowance", Code.FailedPrecondition);
     }
@@ -45,14 +42,11 @@ export async function moveObjects(
     }
 
     for (const [householdId, bytes] of fromTotals) {
-      await tx.update(iamHouseholds).set({ usedBytes: minusFloor(iamHouseholds.usedBytes, bytes) }).where(eq(iamHouseholds.householdId, householdId));
+      await subtractUsedBytes(tx, householdId, bytes);
     }
-    await tx.update(iamHouseholds).set({ usedBytes: plus(iamHouseholds.usedBytes, total) }).where(eq(iamHouseholds.householdId, toHouseholdId));
+    await addUsedBytes(tx, toHouseholdId, total);
     if (moving.length > 0) {
-      await tx
-        .update(iamObjectClaims)
-        .set({ householdId: toHouseholdId })
-        .where(inArray(iamObjectClaims.objectId, moving.map((c) => c.objectId)));
+      await moveObjectClaims(tx, moving.map((c) => c.objectId), toHouseholdId);
     }
     return { bytes: total, count: moving.length };
   });
@@ -68,25 +62,22 @@ export async function copyObjectToHousehold(
   toHouseholdId: string,
   userId: string,
 ): Promise<{ objectId: string; bytes: bigint }> {
-  const [source] = await ctx.db
-    .select()
-    .from(iamObjectClaims)
-    .where(and(eq(iamObjectClaims.objectId, objectId), isNull(iamObjectClaims.releasedAt)));
+  const source = await getActiveObjectClaim(ctx.db, objectId);
   if (!source) {
     throw new ConnectError("no such object", Code.NotFound);
   }
   const copy = await ctx.gateway.copy(objectId);
   try {
     await ctx.db.transaction(async (tx) => {
-      const [target] = await tx.select().from(iamHouseholds).where(eq(iamHouseholds.householdId, toHouseholdId)).for("update");
+      const target = await getHouseholdForUpdate(tx, toHouseholdId);
       if (!target) {
         throw new ConnectError("the new household has no allowance", Code.FailedPrecondition);
       }
       if (target.usedBytes + target.reservedBytes + copy.sizeBytes > target.storageCapBytes) {
         throw new ConnectError("the new household does not have room for this copy", Code.ResourceExhausted);
       }
-      await tx.update(iamHouseholds).set({ usedBytes: plus(iamHouseholds.usedBytes, copy.sizeBytes) }).where(eq(iamHouseholds.householdId, toHouseholdId));
-      await tx.insert(iamObjectClaims).values({
+      await addUsedBytes(tx, toHouseholdId, copy.sizeBytes);
+      await createObjectClaim(tx, {
         objectId: copy.id,
         householdId: toHouseholdId,
         uploadedBy: userId,
@@ -99,9 +90,4 @@ export async function copyObjectToHousehold(
     throw err;
   }
   return { objectId: copy.id, bytes: copy.sizeBytes };
-}
-
-async function lockHouseholds(tx: Tx, ids: string[]) {
-  const rows = await tx.select().from(iamHouseholds).where(inArray(iamHouseholds.householdId, ids)).orderBy(iamHouseholds.householdId).for("update");
-  return new Map(rows.map((r) => [r.householdId, r]));
 }

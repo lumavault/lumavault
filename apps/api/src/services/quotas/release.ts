@@ -1,9 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { and, eq, isNull, sql } from "drizzle-orm";
-import { iamHouseholds, iamObjectClaims, iamUploadReservations } from "#/db/schemas/iam.js";
+import { getActiveObjectClaimForUpdate } from "#/data/iam/object-claim/get-object-claim.js";
+import { markObjectClaimReleased } from "#/data/iam/object-claim/update-object-claim.js";
+import { subtractReservedBytes, subtractUsedBytes } from "#/data/iam/household/update-household.js";
+import { getUploadReservationForUpdate } from "#/data/iam/upload-reservation/get-upload-reservation.js";
+import { settleUploadReservation } from "#/data/iam/upload-reservation/update-upload-reservation.js";
 import type { ModuleContext } from "#/modules.js";
-import { notFoundOnBadUuid } from "./finish.js";
-import { minusFloor } from "./sql.js";
 
 /** Gives back a reservation that will not be finished. Cancelling twice is a no-op. */
 export async function cancelReservation(
@@ -11,12 +12,7 @@ export async function cancelReservation(
   input: { userId: string; reservationId: string },
 ): Promise<void> {
   await ctx.db.transaction(async (tx) => {
-    const [res] = await tx
-      .select()
-      .from(iamUploadReservations)
-      .where(eq(iamUploadReservations.id, sql`${input.reservationId}::uuid`))
-      .for("update")
-      .catch(notFoundOnBadUuid);
+    const res = await getUploadReservationForUpdate(tx, input.reservationId);
     if (!res) {
       throw new ConnectError("no such reservation", Code.NotFound);
     }
@@ -26,12 +22,9 @@ export async function cancelReservation(
     if (res.status !== "pending") {
       return;
     }
-    await tx.update(iamUploadReservations).set({ status: "cancelled", settledAt: new Date() }).where(eq(iamUploadReservations.id, res.id));
+    await settleUploadReservation(tx, res.id, "cancelled");
     if (res.householdId) {
-      await tx
-        .update(iamHouseholds)
-        .set({ reservedBytes: minusFloor(iamHouseholds.reservedBytes, res.bytes) })
-        .where(eq(iamHouseholds.householdId, res.householdId));
+      await subtractReservedBytes(tx, res.householdId, res.bytes);
     }
   });
 }
@@ -42,20 +35,13 @@ export async function cancelReservation(
  */
 export async function releaseObject(ctx: Pick<ModuleContext, "db" | "gateway">, objectId: string): Promise<{ refunded: bigint }> {
   const refunded = await ctx.db.transaction(async (tx) => {
-    const [claim] = await tx
-      .select()
-      .from(iamObjectClaims)
-      .where(and(eq(iamObjectClaims.objectId, objectId), isNull(iamObjectClaims.releasedAt)))
-      .for("update");
+    const claim = await getActiveObjectClaimForUpdate(tx, objectId);
     if (!claim) {
       return 0n;
     }
-    await tx.update(iamObjectClaims).set({ releasedAt: new Date() }).where(eq(iamObjectClaims.objectId, objectId));
+    await markObjectClaimReleased(tx, objectId);
     if (claim.householdId) {
-      await tx
-        .update(iamHouseholds)
-        .set({ usedBytes: minusFloor(iamHouseholds.usedBytes, claim.bytes) })
-        .where(eq(iamHouseholds.householdId, claim.householdId));
+      await subtractUsedBytes(tx, claim.householdId, claim.bytes);
     }
     return claim.householdId ? claim.bytes : 0n;
   });

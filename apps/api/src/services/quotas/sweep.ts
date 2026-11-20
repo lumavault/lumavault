@@ -1,8 +1,8 @@
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
-import { iamHouseholds, iamUploadReservations } from "#/db/schemas/iam.js";
+import { subtractReservedBytes } from "#/data/iam/household/update-household.js";
+import { getExpiredUploadReservationsForUpdate } from "#/data/iam/upload-reservation/get-upload-reservation.js";
+import { expireUploadReservations } from "#/data/iam/upload-reservation/update-upload-reservation.js";
 import type { ModuleContext } from "#/modules.js";
 import { SWEEP_BATCH_SIZE } from "./constants.js";
-import { minusFloor } from "./sql.js";
 
 /**
  * Expires pending reservations past their deadline and refunds their households, exactly once.
@@ -13,20 +13,11 @@ export async function expireReservations(ctx: Pick<ModuleContext, "db">, now: Da
   let total = 0;
   for (;;) {
     const expired = await ctx.db.transaction(async (tx) => {
-      const rows = await tx
-        .select({ id: iamUploadReservations.id, householdId: iamUploadReservations.householdId, bytes: iamUploadReservations.bytes })
-        .from(iamUploadReservations)
-        .where(and(eq(iamUploadReservations.status, "pending"), lt(iamUploadReservations.expiresAt, now)))
-        .orderBy(asc(iamUploadReservations.id))
-        .limit(SWEEP_BATCH_SIZE)
-        .for("update", { skipLocked: true });
+      const rows = await getExpiredUploadReservationsForUpdate(tx, now, SWEEP_BATCH_SIZE);
       if (rows.length === 0) {
         return 0;
       }
-      await tx
-        .update(iamUploadReservations)
-        .set({ status: "expired", settledAt: now })
-        .where(inArray(iamUploadReservations.id, rows.map((r) => r.id)));
+      await expireUploadReservations(tx, rows.map((r) => r.id), now);
 
       // Households are updated in a fixed order so two sweepers never wait on each other.
       const refunds = new Map<string, bigint>();
@@ -36,10 +27,7 @@ export async function expireReservations(ctx: Pick<ModuleContext, "db">, now: Da
         }
       }
       for (const householdId of [...refunds.keys()].sort()) {
-        await tx
-          .update(iamHouseholds)
-          .set({ reservedBytes: minusFloor(iamHouseholds.reservedBytes, refunds.get(householdId)!) })
-          .where(eq(iamHouseholds.householdId, householdId));
+        await subtractReservedBytes(tx, householdId, refunds.get(householdId)!);
       }
       return rows.length;
     });

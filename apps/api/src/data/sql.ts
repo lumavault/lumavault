@@ -1,9 +1,5 @@
 import { type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import type { Db } from "#/db/index.js";
-
-/** The transaction handle Drizzle passes to db.transaction callbacks. */
-export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /** A bigint parameter. node-postgres cannot send BigInt values itself. */
 export function big(value: bigint): SQL {

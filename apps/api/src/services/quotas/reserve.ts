@@ -1,9 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { eq } from "drizzle-orm";
-import { iamHouseholds, iamUploadReservations } from "#/db/schemas/iam.js";
+import { getHouseholdForUpdate } from "#/data/iam/household/get-household.js";
+import { addReservedBytes } from "#/data/iam/household/update-household.js";
+import { createUploadReservation } from "#/data/iam/upload-reservation/create-upload-reservation.js";
 import type { ModuleContext } from "#/modules.js";
 import { RESERVATION_TTL_MS, SHARED_LIBRARY_APPS } from "./constants.js";
-import { plus } from "./sql.js";
 import type { Reservation, ReserveInput } from "./types.js";
 
 /**
@@ -21,20 +21,19 @@ export async function reserveUpload(ctx: Pick<ModuleContext, "db">, input: Reser
     if (!SHARED_LIBRARY_APPS.includes(input.app)) {
       throw new ConnectError(`${input.app} has no shared library`, Code.InvalidArgument);
     }
-    const [row] = await ctx.db
-      .insert(iamUploadReservations)
-      .values({ householdId: null, userId: input.userId, app: input.app, bytes: input.sizeBytes, expiresAt })
-      .returning({ id: iamUploadReservations.id });
-    return { reservationId: row!.id, householdId: null, expiresAt };
+    const reservationId = await createUploadReservation(ctx.db, {
+      householdId: null,
+      userId: input.userId,
+      app: input.app,
+      bytes: input.sizeBytes,
+      expiresAt,
+    });
+    return { reservationId, householdId: null, expiresAt };
   }
 
   const householdId = input.billing.householdId;
   return ctx.db.transaction(async (tx) => {
-    const [household] = await tx
-      .select()
-      .from(iamHouseholds)
-      .where(eq(iamHouseholds.householdId, householdId))
-      .for("update");
+    const household = await getHouseholdForUpdate(tx, householdId);
     if (!household) {
       throw new ConnectError("household has no allowance", Code.FailedPrecondition);
     }
@@ -48,14 +47,14 @@ export async function reserveUpload(ctx: Pick<ModuleContext, "db">, input: Reser
     if (committed + input.sizeBytes > household.storageCapBytes) {
       throw new ConnectError("household storage is full", Code.ResourceExhausted);
     }
-    await tx
-      .update(iamHouseholds)
-      .set({ reservedBytes: plus(iamHouseholds.reservedBytes, input.sizeBytes) })
-      .where(eq(iamHouseholds.householdId, householdId));
-    const [row] = await tx
-      .insert(iamUploadReservations)
-      .values({ householdId, userId: input.userId, app: input.app, bytes: input.sizeBytes, expiresAt })
-      .returning({ id: iamUploadReservations.id });
-    return { reservationId: row!.id, householdId, expiresAt };
+    await addReservedBytes(tx, householdId, input.sizeBytes);
+    const reservationId = await createUploadReservation(tx, {
+      householdId,
+      userId: input.userId,
+      app: input.app,
+      bytes: input.sizeBytes,
+      expiresAt,
+    });
+    return { reservationId, householdId, expiresAt };
   });
 }

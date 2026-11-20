@@ -1,7 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { and, eq, isNull } from "drizzle-orm";
 import { type SignedTicket, signReadTicket } from "#/auth/tickets.js";
-import { iamObjectClaims } from "#/db/schemas/iam.js";
+import { getActiveObjectClaim } from "#/data/iam/object-claim/get-object-claim.js";
 import type { ModuleContext } from "#/modules.js";
 
 /**
@@ -9,10 +8,7 @@ import type { ModuleContext } from "#/modules.js";
  * this only refuses objects that were never claimed or were already released.
  */
 export async function signObjectReadTicket(ctx: Pick<ModuleContext, "db" | "config">, objectId: string): Promise<SignedTicket> {
-  const [claim] = await ctx.db
-    .select({ objectId: iamObjectClaims.objectId })
-    .from(iamObjectClaims)
-    .where(and(eq(iamObjectClaims.objectId, objectId), isNull(iamObjectClaims.releasedAt)));
+  const claim = await getActiveObjectClaim(ctx.db, objectId);
   if (!claim) {
     throw new ConnectError("no such object", Code.NotFound);
   }
