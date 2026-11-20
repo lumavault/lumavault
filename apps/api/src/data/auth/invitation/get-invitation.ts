@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "#/db/index.js";
 import { invitation } from "#/db/schemas/auth.js";
 
@@ -11,4 +11,13 @@ export async function getPendingInvitationByEmail(db: DbOrTx, email: string, now
     .orderBy(desc(invitation.createdAt))
     .limit(1);
   return row ?? null;
+}
+
+/** How many pending, unexpired member invitations each of these organizations has. */
+export async function countPendingInvitationsByOrganization(db: DbOrTx, organizationIds: string[], now: Date) {
+  return db
+    .select({ id: invitation.organizationId, n: count() })
+    .from(invitation)
+    .where(and(inArray(invitation.organizationId, organizationIds), eq(invitation.status, "pending"), gt(invitation.expiresAt, now)))
+    .groupBy(invitation.organizationId);
 }

@@ -1,11 +1,18 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { and, asc, count, eq, gt, ilike, inArray, isNull, or, sql, sum } from "drizzle-orm";
-import { noRowsOnBadUuid } from "#/db/errors.js";
-import { invitation, member, organization, user } from "#/db/schemas/auth.js";
-import { iamGracePeriods, iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
-import { HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
+import { countPendingInvitationsByOrganization } from "#/data/auth/invitation/get-invitation.js";
+import { cancelPendingInvitationsOf } from "#/data/auth/invitation/update-invitation.js";
+import { countMembersByOrganization, listOwnersByOrganization } from "#/data/auth/member/get-member.js";
+import { getUserById, listUsersAfter } from "#/data/auth/user/get-user.js";
+import { getHeldBytesByHouseholds } from "#/data/iam/grace-period/get-grace-period.js";
+import { listHouseholdsAfter } from "#/data/iam/household/list-households.js";
+import type { AllowanceChanges } from "#/data/iam/household/types.js";
+import { setHouseholdSuspended, updateHouseholdAllowance } from "#/data/iam/household/update-household.js";
+import { createHouseholdInvite } from "#/data/iam/household-invite/create-household-invite.js";
+import { listOpenHouseholdInvites } from "#/data/iam/household-invite/get-household-invite.js";
+import type { HouseholdInvite } from "#/data/iam/household-invite/types.js";
+import { revokeOpenHouseholdInvite } from "#/data/iam/household-invite/update-household-invite.js";
 import { requireSuperAdmin } from "#/guards.js";
 import {
   DEFAULT_MEMBER_LIMIT,
@@ -22,9 +29,7 @@ import { decodePageToken, encodePageToken, pageSize } from "./paging.js";
 
 const ALLOWANCE_PATHS = ["storage_cap_bytes", "enabled_apps", "member_limit"] as const;
 
-type InviteRow = typeof iamHouseholdInvites.$inferSelect;
-
-function inviteMessage(row: InviteRow) {
+function inviteMessage(row: HouseholdInvite) {
   return {
     id: row.id,
     email: row.email,
@@ -48,49 +53,30 @@ export const module: ApiModule = {
       const allowance = req.allowance;
       const email = required(req.email, "email").toLowerCase();
       const token = newSecret();
-      const [row] = await ctx.db
-        .insert(iamHouseholdInvites)
-        .values({
-          tokenHash: hashSecret(token),
-          email,
-          storageCapBytes: allowance?.storageCapBytes ?? 0n,
-          enabledApps: appsFromWire(allowance?.enabledApps ?? []),
-          memberLimit: memberLimit(allowance?.memberLimit ?? 0),
-          note: req.note.trim(),
-          createdBy: admin.userId,
-          expiresAt: new Date(Date.now() + HOUSEHOLD_INVITE_TTL_MS),
-        })
-        .returning();
+      const row = await createHouseholdInvite(ctx.db, {
+        tokenHash: hashSecret(token),
+        email,
+        storageCapBytes: allowance?.storageCapBytes ?? 0n,
+        enabledApps: appsFromWire(allowance?.enabledApps ?? []),
+        memberLimit: memberLimit(allowance?.memberLimit ?? 0),
+        note: req.note.trim(),
+        createdBy: admin.userId,
+        expiresAt: new Date(Date.now() + HOUSEHOLD_INVITE_TTL_MS),
+      });
       const url = new URL(PORTAL_HOUSEHOLD_INVITE_PATH + token, ctx.config.portalUrl).toString();
       await ctx.email.sendHouseholdInvite(email, { url, inviterName: admin.name });
-      return { invite: inviteMessage(row!), inviteUrl: url };
+      return { invite: inviteMessage(row), inviteUrl: url };
     });
 
     router.rpc(IamService.method.listHouseholdInvites, async (_req, call) => {
       await requireSuperAdmin(call, ctx);
-      const rows = await ctx.db
-        .select()
-        .from(iamHouseholdInvites)
-        .where(
-          and(
-            isNull(iamHouseholdInvites.redeemedAt),
-            isNull(iamHouseholdInvites.revokedAt),
-            gt(iamHouseholdInvites.expiresAt, new Date()),
-          ),
-        )
-        .orderBy(asc(iamHouseholdInvites.createdAt));
+      const rows = await listOpenHouseholdInvites(ctx.db, new Date());
       return { invites: rows.map(inviteMessage) };
     });
 
     router.rpc(IamService.method.revokeHouseholdInvite, async (req, call) => {
       await requireSuperAdmin(call, ctx);
-      const updated = await ctx.db
-        .update(iamHouseholdInvites)
-        .set({ revokedAt: new Date() })
-        .where(and(eq(iamHouseholdInvites.id, sql`${required(req.inviteId, "invite_id")}::uuid`), isNull(iamHouseholdInvites.redeemedAt)))
-        .returning({ id: iamHouseholdInvites.id })
-        .catch(noRowsOnBadUuid);
-      if (updated.length === 0) {
+      if (!(await revokeOpenHouseholdInvite(ctx.db, required(req.inviteId, "invite_id")))) {
         throw new ConnectError("no such open invite", Code.NotFound);
       }
       return {};
@@ -100,41 +86,15 @@ export const module: ApiModule = {
       await requireSuperAdmin(call, ctx);
       const limit = pageSize(req.pageSize);
       const after = decodePageToken(req.pageToken);
-      const rows = await ctx.db
-        .select({ org: organization, household: iamHouseholds })
-        .from(organization)
-        .leftJoin(iamHouseholds, eq(iamHouseholds.householdId, organization.id))
-        .where(after ? gt(organization.id, after) : undefined)
-        .orderBy(asc(organization.id))
-        .limit(limit + 1);
+      const rows = await listHouseholdsAfter(ctx.db, after, limit + 1);
       const page = rows.slice(0, limit);
       const ids = page.map((r) => r.org.id);
-      const memberCounts = ids.length
-        ? await ctx.db.select({ id: member.organizationId, n: count() }).from(member).where(inArray(member.organizationId, ids)).groupBy(member.organizationId)
-        : [];
-      const inviteCounts = ids.length
-        ? await ctx.db
-            .select({ id: invitation.organizationId, n: count() })
-            .from(invitation)
-            .where(and(inArray(invitation.organizationId, ids), eq(invitation.status, "pending"), gt(invitation.expiresAt, new Date())))
-            .groupBy(invitation.organizationId)
-        : [];
+      const memberCounts = ids.length ? await countMembersByOrganization(ctx.db, ids) : [];
+      const inviteCounts = ids.length ? await countPendingInvitationsByOrganization(ctx.db, ids, new Date()) : [];
       const members = new Map(memberCounts.map((c) => [c.id, c.n]));
-      const ownerRows = ids.length
-        ? await ctx.db
-            .select({ householdId: member.organizationId, user })
-            .from(member)
-            .innerJoin(user, eq(user.id, member.userId))
-            .where(and(inArray(member.organizationId, ids), eq(member.role, HOUSEHOLD_OWNER_ROLE)))
-        : [];
+      const ownerRows = ids.length ? await listOwnersByOrganization(ctx.db, ids) : [];
       const owners = new Map(ownerRows.map((o) => [o.householdId, o.user]));
-      const heldRows = ids.length
-        ? await ctx.db
-            .select({ id: iamGracePeriods.householdId, total: sum(iamGracePeriods.heldBytes) })
-            .from(iamGracePeriods)
-            .where(inArray(iamGracePeriods.householdId, ids))
-            .groupBy(iamGracePeriods.householdId)
-        : [];
+      const heldRows = ids.length ? await getHeldBytesByHouseholds(ctx.db, ids) : [];
       const held = new Map(heldRows.map((h) => [h.id, BigInt(h.total ?? 0)]));
       const invites = new Map(inviteCounts.map((c) => [c.id, c.n]));
       return {
@@ -156,7 +116,7 @@ export const module: ApiModule = {
       if (paths.length === 0) {
         throw new ConnectError("update_mask is empty", Code.InvalidArgument);
       }
-      const set: Partial<typeof iamHouseholds.$inferInsert> = {};
+      const set: AllowanceChanges = {};
       for (const path of paths) {
         if (!(ALLOWANCE_PATHS as readonly string[]).includes(path)) {
           throw new ConnectError(`cannot update ${path}`, Code.InvalidArgument);
@@ -170,7 +130,7 @@ export const module: ApiModule = {
         }
       }
       // A cap or limit below current usage is allowed; it only blocks new uploads and invites.
-      await ctx.db.update(iamHouseholds).set(set).where(eq(iamHouseholds.householdId, householdId));
+      await updateHouseholdAllowance(ctx.db, householdId, set);
       const household = await loadHousehold(ctx.db, householdId);
       if (!household?.allowance) {
         throw new ConnectError("no such household", Code.NotFound);
@@ -181,7 +141,7 @@ export const module: ApiModule = {
     router.rpc(IamService.method.setHouseholdSuspended, async (req, call) => {
       await requireSuperAdmin(call, ctx);
       const householdId = required(req.householdId, "household_id");
-      await ctx.db.update(iamHouseholds).set({ suspended: req.suspended }).where(eq(iamHouseholds.householdId, householdId));
+      await setHouseholdSuspended(ctx.db, householdId, req.suspended);
       const household = await loadHousehold(ctx.db, householdId);
       if (!household?.allowance) {
         throw new ConnectError("no such household", Code.NotFound);
@@ -193,14 +153,7 @@ export const module: ApiModule = {
       await requireSuperAdmin(call, ctx);
       const limit = pageSize(req.pageSize);
       const after = decodePageToken(req.pageToken);
-      const q = req.query.trim();
-      const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-      const rows = await ctx.db
-        .select()
-        .from(user)
-        .where(and(q ? or(ilike(user.name, pattern), ilike(user.email, pattern)) : undefined, after ? gt(user.id, after) : undefined))
-        .orderBy(asc(user.id))
-        .limit(limit + 1);
+      const rows = await listUsersAfter(ctx.db, { query: req.query.trim(), afterId: after, limit: limit + 1 });
       const page = rows.slice(0, limit);
       return {
         users: page.map(userMessage),
@@ -214,7 +167,7 @@ export const module: ApiModule = {
       if (userId === admin.userId) {
         throw new ConnectError("you cannot ban yourself", Code.FailedPrecondition);
       }
-      const [target] = await ctx.db.select().from(user).where(eq(user.id, userId));
+      const target = await getUserById(ctx.db, userId);
       if (!target) {
         throw new ConnectError("no such user", Code.NotFound);
       }
@@ -224,11 +177,8 @@ export const module: ApiModule = {
         headers: call.values.get(requestKey)?.headers ?? new Headers(),
       });
       // Pending invites to or from the user die with the ban, so they cannot rejoin through one.
-      await ctx.db
-        .update(invitation)
-        .set({ status: "canceled" })
-        .where(and(eq(invitation.status, "pending"), or(eq(invitation.inviterId, userId), sql`lower(${invitation.email}) = ${target.email.toLowerCase()}`)));
-      const [updated] = await ctx.db.select().from(user).where(eq(user.id, userId));
+      await cancelPendingInvitationsOf(ctx.db, { userId, email: target.email });
+      const updated = await getUserById(ctx.db, userId);
       return { user: userMessage(updated!) };
     });
 
@@ -236,7 +186,7 @@ export const module: ApiModule = {
       await requireSuperAdmin(call, ctx);
       const userId = required(req.userId, "user_id");
       await ctx.auth.api.unbanUser({ body: { userId }, headers: call.values.get(requestKey)?.headers ?? new Headers() });
-      const [updated] = await ctx.db.select().from(user).where(eq(user.id, userId));
+      const updated = await getUserById(ctx.db, userId);
       if (!updated) {
         throw new ConnectError("no such user", Code.NotFound);
       }

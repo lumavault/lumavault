@@ -1,6 +1,7 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { DbOrTx } from "#/db/index.js";
 import { iamHouseholdInvites } from "#/db/schemas/iam.js";
+import type { HouseholdInvite } from "./types.js";
 
 /** An invite to create a household that this email can still redeem: not used, not revoked, not expired. */
 export async function getOpenHouseholdInviteByEmail(
@@ -21,4 +22,13 @@ export async function getOpenHouseholdInviteByEmail(
     )
     .limit(1);
   return row ?? null;
+}
+
+/** Every invite that is not used, not revoked and not expired, oldest first. */
+export async function listOpenHouseholdInvites(db: DbOrTx, now: Date): Promise<HouseholdInvite[]> {
+  return db
+    .select()
+    .from(iamHouseholdInvites)
+    .where(and(isNull(iamHouseholdInvites.redeemedAt), isNull(iamHouseholdInvites.revokedAt), gt(iamHouseholdInvites.expiresAt, now)))
+    .orderBy(asc(iamHouseholdInvites.createdAt));
 }
