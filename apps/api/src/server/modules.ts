@@ -2,12 +2,12 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ConnectRouter } from "@connectrpc/connect";
 import type { Hono } from "hono";
-import type { Auth } from "./auth/auth.js";
-import type { Config } from "./config.js";
-import { MODULE_DIRS } from "./constants.js";
-import type { Db } from "./db/index.js";
-import type { EmailService } from "./email/emails.js";
-import type { StorageGateway } from "./services/storage-gateway.js";
+import type { Auth } from "#/auth/auth.js";
+import type { Config } from "#/config.js";
+import { MODULE_DIRS } from "#/constants.js";
+import type { Db } from "#/db/index.js";
+import type { EmailService } from "#/email/emails.js";
+import type { StorageGateway } from "#/lib/storage-gateway.js";
 import { listSourceFiles } from "./source-files.js";
 
 /** What every module gets: config, the database, Better Auth, email, and the Storage Gateway. */
@@ -35,7 +35,7 @@ export interface ApiModule {
   stop?(): Promise<void> | void;
 }
 
-export const SRC_DIR = fileURLToPath(new URL("./", import.meta.url));
+export const SRC_DIR = fileURLToPath(new URL("../", import.meta.url));
 
 /** Imports every module under the module folders of srcDir, in a stable order. */
 export async function loadModules(srcDir: string = SRC_DIR): Promise<ApiModule[]> {

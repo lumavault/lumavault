@@ -1,11 +1,11 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { SUPER_ADMIN_ROLE } from "./auth/constants.js";
-import { requestContext } from "./context.js";
-import { member, user } from "./db/schemas/auth.js";
-import { iamHouseholds } from "./db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "./db/testing.js";
+import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
+import { requestContext } from "#/server/context.js";
+import { member, user } from "#/db/schemas/auth.js";
+import { iamHouseholds } from "#/db/schemas/iam.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
 import {
   type GuardInput,
   requireHouseholdAdmin,
@@ -14,8 +14,8 @@ import {
   requireSignedIn,
   requireSuperAdmin,
 } from "./guards.js";
-import type { ModuleContext } from "./modules.js";
-import { createTestContext, rpcValues, signUp, type TestUser } from "./testing/context.js";
+import type { ModuleContext } from "#/server/modules.js";
+import { createTestContext, rpcValues, signUp, type TestUser } from "#/testing/context.js";
 
 let database: TestDatabase;
 let ctx: ModuleContext;

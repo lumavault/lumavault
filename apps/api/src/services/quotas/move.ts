@@ -4,7 +4,7 @@ import { addUsedBytes, subtractUsedBytes } from "#/data/iam/household/update-hou
 import { createObjectClaim } from "#/data/iam/object-claim/create-object-claim.js";
 import { getActiveObjectClaim, getActiveObjectClaimsForUpdate } from "#/data/iam/object-claim/get-object-claim.js";
 import { moveObjectClaims } from "#/data/iam/object-claim/update-object-claim.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 import type { MovedObjects } from "./types.js";
 
 /**

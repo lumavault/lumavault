@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApp } from "#/app.js";
-import { requestContext } from "#/context.js";
+import { createApp } from "#/server/app.js";
+import { requestContext } from "#/server/context.js";
 import { user } from "#/db/schemas/auth.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 import { createTestContext, recordingEmail, rpcValues, signUp, TEST_APP_ORIGINS } from "#/testing/context.js";
 import { isBanned } from "./session-policy.js";
 

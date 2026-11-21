@@ -4,7 +4,7 @@ import { markObjectClaimReleased } from "#/data/iam/object-claim/update-object-c
 import { subtractReservedBytes, subtractUsedBytes } from "#/data/iam/household/update-household.js";
 import { getUploadReservationForUpdate } from "#/data/iam/upload-reservation/get-upload-reservation.js";
 import { settleUploadReservation } from "#/data/iam/upload-reservation/update-upload-reservation.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 
 /** Gives back a reservation that will not be finished. Cancelling twice is a no-op. */
 export async function cancelReservation(

@@ -8,7 +8,7 @@ import type { UploadReservation } from "#/data/iam/upload-reservation/types.js";
 import { settleUploadReservation } from "#/data/iam/upload-reservation/update-upload-reservation.js";
 import { isUniqueViolation } from "#/db/errors.js";
 import type { DbOrTx } from "#/db/index.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 import { APP_NAMESPACE } from "./constants.js";
 import type { FinishedUpload, FinishInput } from "./types.js";
 

@@ -1,9 +1,9 @@
 import { type ContextValues, createContextKey } from "@connectrpc/connect";
-import { SUPER_ADMIN_ROLE } from "./auth/constants.js";
-import { hasUserRole } from "./auth/role-checks.js";
-import { isBanned } from "./auth/session-policy.js";
-import { getHouseholdByUserId } from "./data/iam/household/get-household.js";
-import type { HouseholdMembership } from "./data/iam/household/types.js";
+import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
+import { hasUserRole } from "#/auth/role-checks.js";
+import { isBanned } from "#/auth/session-policy.js";
+import { getHouseholdByUserId } from "#/data/iam/household/get-household.js";
+import type { HouseholdMembership } from "#/data/iam/household/types.js";
 import type { ModuleContext } from "./modules.js";
 import { requestKey } from "./request.js";
 

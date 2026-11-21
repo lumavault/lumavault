@@ -3,7 +3,7 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
 import { signUploadTicket } from "#/auth/tickets.js";
 import { requireHouseholdMember, requireSignedIn, requireSuperAdmin } from "#/guards.js";
-import type { ApiModule } from "#/modules.js";
+import type { ApiModule } from "#/server/modules.js";
 import { APP_NAMESPACE, type Billing, cancelReservation, reserveUpload } from "#/services/quotas/index.js";
 import { appFromWire } from "./convert.js";
 

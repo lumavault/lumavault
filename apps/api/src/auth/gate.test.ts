@@ -1,13 +1,13 @@
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApp } from "#/app.js";
-import { requestContext } from "#/context.js";
+import { createApp } from "#/server/app.js";
+import { requestContext } from "#/server/context.js";
 import { invitation, member, user } from "#/db/schemas/auth.js";
 import { iamHouseholdInvites } from "#/db/schemas/iam.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
-import { hashSecret, newSecret } from "#/iam/secrets.js";
-import { loadModules, type ModuleContext } from "#/modules.js";
+import { hashSecret, newSecret } from "#/lib/secrets.js";
+import { loadModules, type ModuleContext } from "#/server/modules.js";
 import { createTestContext, rpcValues, signUp, TEST_WEB_ORIGIN, type TestUser } from "#/testing/context.js";
 import { SUPER_ADMIN_ROLE } from "./constants.js";
 import { isLockedAuthPath } from "./org-lockdown.js";

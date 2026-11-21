@@ -1,15 +1,15 @@
 // Server entry: reads config, loads modules, serves on PORT, and shuts down cleanly.
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.js";
-import { createAuth } from "./auth/auth.js";
+import { createApp } from "#/server/app.js";
+import { createAuth } from "#/auth/auth.js";
 import { loadConfig } from "./config.js";
 import { SHUTDOWN_TIMEOUT_MS } from "./constants.js";
-import { createDatabase, ensureSchemas } from "./db/index.js";
-import * as authTables from "./db/schemas/auth.js";
-import { createEmailService } from "./email/emails.js";
-import { createMailer } from "./email/mailer.js";
-import { createStorageGateway } from "./services/storage-gateway.js";
-import { loadModules, type ModuleContext, startModules, stopModules } from "./modules.js";
+import { createDatabase, ensureSchemas } from "#/db/index.js";
+import * as authTables from "#/db/schemas/auth.js";
+import { createEmailService } from "#/email/emails.js";
+import { createMailer } from "#/email/mailer.js";
+import { createStorageGateway } from "#/lib/storage-gateway.js";
+import { loadModules, type ModuleContext, startModules, stopModules } from "#/server/modules.js";
 
 const config = loadConfig(process.env);
 const database = createDatabase(config.databaseUrl);

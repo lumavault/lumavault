@@ -6,9 +6,9 @@ import { verifyTicket } from "#/auth/tickets.js";
 import { organization, user } from "#/db/schemas/auth.js";
 import { iamHouseholds, iamObjectClaims, iamUploadReservations } from "#/db/schemas/iam.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 import { createTestContext } from "#/testing/context.js";
-import type { StorageGateway, StoredObject } from "#/services/storage-gateway.js";
+import type { StorageGateway, StoredObject } from "#/lib/storage-gateway.js";
 import {
   APP_NAMESPACE,
   cancelReservation,

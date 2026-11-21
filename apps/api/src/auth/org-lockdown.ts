@@ -1,5 +1,5 @@
 import { AUTH_BASE_PATH, LOCKED_AUTH_PREFIXES } from "./constants.js";
-import type { ApiModule } from "#/modules.js";
+import type { ApiModule } from "#/server/modules.js";
 
 /** True for Better Auth paths that only IamService may use, server-side. */
 export function isLockedAuthPath(path: string): boolean {
