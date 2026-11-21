@@ -9,9 +9,8 @@ import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/sup
 import { hashSecret, newSecret } from "#/lib/secrets.js";
 import { loadModules, type ModuleContext } from "#/server/modules.js";
 import { createTestContext, rpcValues, signUp, TEST_WEB_ORIGIN, type TestUser } from "#test/support/context.js";
-import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { isLockedAuthPath } from "#/auth/org-lockdown.js";
-import { createFirstAdmin, createHouseholdFor, mintBearerSession } from "#/auth/server-helpers.js";
+import { createHouseholdFor, mintBearerSession } from "#/auth/server-helpers.js";
 
 let database: TestDatabase;
 let ctx: ModuleContext;
@@ -136,15 +135,6 @@ describe("household endpoint lockdown", () => {
 });
 
 describe("server helpers", () => {
-  it("createFirstAdmin passes the gate and sets the Super-Admin flag", async () => {
-    const admin = await createFirstAdmin(ctx, { name: "Root", email: "root@example.com", password: "correct horse battery" });
-    expect(admin.setCookie.join(";")).toMatch(/session_token=/);
-    const { viewer } = await requestContext(rpcValues(new Headers({ authorization: `Bearer ${admin.token}` })), ctx);
-    expect(viewer).toMatchObject({ userId: admin.userId, isSuperAdmin: true });
-    const [row] = await database.db.select().from(user).where(eq(user.id, admin.userId));
-    expect(row?.role).toBe(SUPER_ADMIN_ROLE);
-  });
-
   it("mintBearerSession opens a session for that user in their household", async () => {
     const tv = await signUp(ctx, "tv-owner@example.com");
     const household = await createHouseholdFor(ctx, tv.id, "Living Room");

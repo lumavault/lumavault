@@ -10,3 +10,6 @@ export interface HouseholdMembership {
   role: HouseholdRole;
   suspended: boolean;
 }
+
+/** What it takes to give a new household its allowance. Usage starts at zero. */
+export type NewHousehold = Pick<typeof iamHouseholds.$inferInsert, "householdId" | "storageCapBytes" | "enabledApps" | "memberLimit">;
