@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:push": "tsx src/db/ensure-schemas.ts && drizzle-kit push",
+    "drizzle:studio": "drizzle-kit studio",
     "auth:generate": "tsx src/tools/generate-auth-schema.ts",
     "auth:check": "tsx src/tools/generate-auth-schema.ts --check",
     "email:preview": "email dev --dir src/email/templates --port 3030"
