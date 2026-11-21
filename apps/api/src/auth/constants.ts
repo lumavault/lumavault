@@ -15,6 +15,12 @@ export const HOUSEHOLD_MEMBER_ROLE = "member";
 export const HOUSEHOLD_ROLES = [HOUSEHOLD_OWNER_ROLE, HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_MEMBER_ROLE] as const;
 export type HouseholdRole = (typeof HOUSEHOLD_ROLES)[number];
 
+// Better Auth stores email and password sign-in as an account with this provider ID.
+export const CREDENTIAL_PROVIDER_ID = "credential";
+
+// Household organizations get a random slug with this prefix. Slugs are never shown.
+export const HOUSEHOLD_SLUG_PREFIX = "household-";
+
 export const PASSKEY_RP_NAME = "LumaVault";
 
 // Better Auth routes clients may never call. IamService does these actions server-side.

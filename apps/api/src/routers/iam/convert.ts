@@ -1,8 +1,28 @@
 // Conversions between IamService wire types and the API's own values. Shared by the IAM
 // router files; it registers no RPCs itself.
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { App, Role } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_MEMBER_ROLE, HOUSEHOLD_OWNER_ROLE, type HouseholdRole } from "#/auth/constants.js";
+import {
+  App,
+  type GracePeriodSchema,
+  type HouseholdSchema,
+  Role,
+  type UsageSchema,
+  type UserSchema,
+} from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
+import {
+  HOUSEHOLD_ADMIN_ROLE,
+  HOUSEHOLD_MEMBER_ROLE,
+  HOUSEHOLD_OWNER_ROLE,
+  type HouseholdRole,
+  SUPER_ADMIN_ROLE,
+} from "#/auth/constants.js";
+import { hasUserRole } from "#/auth/role-checks.js";
+import type { Organization } from "#/data/auth/organization/types.js";
+import type { User } from "#/data/auth/user/types.js";
+import type { GracePeriod } from "#/data/iam/grace-period/types.js";
+import type { Household } from "#/data/iam/household/types.js";
 import type { IamApp } from "#/iam/constants.js";
 
 const APP_TO_WIRE: Record<IamApp, App> = { photos: App.PHOTOS, cinema: App.CINEMA, arcade: App.ARCADE };
@@ -48,4 +68,47 @@ export function required(value: string, field: string): string {
     throw new ConnectError(`${field} is required`, Code.InvalidArgument);
   }
   return trimmed;
+}
+
+/** A user row as an IamService User. */
+export function userToWire(u: User): MessageInitShape<typeof UserSchema> {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    imageUrl: u.image ?? "",
+    isSuperAdmin: hasUserRole(u.role, SUPER_ADMIN_ROLE),
+    banned: u.banned ?? false,
+    banReason: u.banned ? (u.banReason ?? "") : "",
+    createdAt: timestampFromDate(u.createdAt),
+  };
+}
+
+/** A household's name and identity, its allowance row, and its Owner as an IamService Household. */
+export function householdToWire(org: Organization, h: Household, ownerUserId: string): MessageInitShape<typeof HouseholdSchema> {
+  return {
+    id: org.id,
+    name: org.name,
+    suspended: h.suspended,
+    allowance: {
+      storageCapBytes: h.storageCapBytes,
+      enabledApps: h.enabledApps.map(appToWire),
+      memberLimit: h.memberLimit,
+    },
+    ownerUserId,
+    createdAt: timestampFromDate(org.createdAt),
+  };
+}
+
+/**
+ * Usage with remaining bytes floored at zero, since a cap may be lowered below usage. Held
+ * bytes are already part of used bytes; they are reported so the household can see them.
+ */
+export function usageToWire(h: Household, heldBytes: bigint): MessageInitShape<typeof UsageSchema> {
+  const left = h.storageCapBytes - h.usedBytes - h.reservedBytes;
+  return { usedBytes: h.usedBytes, reservedBytes: h.reservedBytes, remainingBytes: left > 0n ? left : 0n, heldBytes };
+}
+
+export function gracePeriodToWire(g: GracePeriod): MessageInitShape<typeof GracePeriodSchema> {
+  return { formerHouseholdName: g.householdName, privateBytes: g.heldBytes, deleteAt: timestampFromDate(g.deleteAt) };
 }
