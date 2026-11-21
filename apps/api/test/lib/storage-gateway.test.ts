@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { Code, ConnectError, LumaVaultClient, Namespace } from "@lumavault/sdk";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signUploadTicket } from "#/auth/tickets.js";
-import { TEST_ENV } from "#/testing/context.js";
-import { startTestGateway, type TestGateway } from "#/testing/gateway.js";
-import { createStorageGateway, type StorageGateway } from "./storage-gateway.js";
+import { TEST_ENV } from "#test/support/context.js";
+import { startTestGateway, type TestGateway } from "#test/support/gateway.js";
+import { createStorageGateway, type StorageGateway } from "#/lib/storage-gateway.js";
 
 let gw: TestGateway;
 let storage: StorageGateway;

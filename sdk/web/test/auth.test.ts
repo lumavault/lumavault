@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authHeaders } from "./auth.js";
-import { Code, ConnectError, LumaVaultClient, Namespace } from "./index.js";
-import { startGateway, type TestGateway } from "./testutil/gateway.js";
-import { mintTicket, TEST_SERVICE_KEY, TICKET_ENV } from "./testutil/tickets.js";
-import { patternBytes } from "./testutil/vectors.js";
+import { authHeaders } from "#/auth.js";
+import { Code, ConnectError, LumaVaultClient, Namespace } from "#/index.js";
+import { startGateway, type TestGateway } from "#test/support/gateway.js";
+import { mintTicket, TEST_SERVICE_KEY, TICKET_ENV } from "#test/support/tickets.js";
+import { patternBytes } from "#test/support/vectors.js";
 
 const MIB = 1024 * 1024;
 

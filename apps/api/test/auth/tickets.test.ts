@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { READ_TICKET_TTL_SECONDS, UPLOAD_TICKET_TTL_SECONDS } from "./constants.js";
-import { signReadTicket, signUploadTicket, TicketError, verifyTicket } from "./tickets.js";
+import { READ_TICKET_TTL_SECONDS, UPLOAD_TICKET_TTL_SECONDS } from "#/auth/constants.js";
+import { signReadTicket, signUploadTicket, TicketError, verifyTicket } from "#/auth/tickets.js";
 
 interface Vectors {
   secret: string;

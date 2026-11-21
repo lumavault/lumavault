@@ -4,10 +4,10 @@ import { promisify } from "node:util";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as authTables from "#/db/schemas/auth.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
-import { createAuth } from "./auth.js";
-import { HOUSEHOLD_OWNER_ROLE } from "./constants.js";
-import { allowSignUp } from "./sign-up-gate.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
+import { createAuth } from "#/auth/auth.js";
+import { HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
+import { allowSignUp } from "#/auth/sign-up-gate.js";
 import { toAuthSchema } from "#/tools/generate-auth-schema.js";
 
 const API_DIR = fileURLToPath(new URL("../../", import.meta.url));

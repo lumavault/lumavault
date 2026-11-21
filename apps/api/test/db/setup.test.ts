@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DB_SCHEMAS } from "./constants.js";
-import { ensureSchemas, loadSchemaModules, parseSchemaFilter } from "./index.js";
-import * as namespaces from "./schemas/namespaces.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "./testing.js";
+import { DB_SCHEMAS } from "#/db/constants.js";
+import { ensureSchemas, loadSchemaModules, parseSchemaFilter } from "#/db/index.js";
+import * as namespaces from "#/db/schemas/namespaces.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 
 const execFileAsync = promisify(execFile);
 const API_DIR = fileURLToPath(new URL("../../", import.meta.url));

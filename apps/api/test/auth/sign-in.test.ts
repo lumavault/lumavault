@@ -4,10 +4,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "#/server/app.js";
 import { requestContext } from "#/server/context.js";
 import { user } from "#/db/schemas/auth.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 import type { ModuleContext } from "#/server/modules.js";
-import { createTestContext, recordingEmail, rpcValues, signUp, TEST_APP_ORIGINS } from "#/testing/context.js";
-import { isBanned } from "./session-policy.js";
+import { createTestContext, recordingEmail, rpcValues, signUp, TEST_APP_ORIGINS } from "#test/support/context.js";
+import { isBanned } from "#/auth/session-policy.js";
 
 const [PORTAL, PHOTOS, CINEMA, ARCADE] = TEST_APP_ORIGINS as [string, string, string, string];
 const PASSWORD = "correct horse battery";

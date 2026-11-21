@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { pushSchema } from "drizzle-kit/api";
 import pg from "pg";
-import { DB_SCHEMAS, DEFAULT_TEST_DATABASE_URL, TEST_DATABASE_PREFIX } from "./constants.js";
-import { createDatabase, type Database, loadSchemaModules } from "./index.js";
+import { DB_SCHEMAS, DEFAULT_TEST_DATABASE_URL, TEST_DATABASE_PREFIX } from "#/db/constants.js";
+import { createDatabase, type Database, loadSchemaModules } from "#/db/index.js";
 
 export interface TestDatabase extends Database {
   url: string;

@@ -9,10 +9,10 @@ import { createHouseholdFor } from "#/auth/server-helpers.js";
 import { verifyTicket } from "#/auth/tickets.js";
 import { user } from "#/db/schemas/auth.js";
 import { iamHouseholds, iamUploadReservations } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 import { loadModules, type ModuleContext } from "#/server/modules.js";
-import { createTestContext, signUp, type TestUser } from "#/testing/context.js";
-import { iamClient } from "#/testing/rpc.js";
+import { createTestContext, signUp, type TestUser } from "#test/support/context.js";
+import { iamClient } from "#test/support/rpc.js";
 import { createSweeper } from "#/workers/iam-sweeper.js";
 
 let database: TestDatabase;

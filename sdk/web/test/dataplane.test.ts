@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getChunk, putChunk } from "./dataplane.js";
+import { getChunk, putChunk } from "#/dataplane.js";
 
 const BASE = "http://gw:8080";
 const HASH = "a".repeat(64);

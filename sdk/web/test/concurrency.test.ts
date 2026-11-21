@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { forEachConcurrent } from "./concurrency.js";
+import { forEachConcurrent } from "#/concurrency.js";
 
 describe("forEachConcurrent", () => {
   it("never runs more than the limit at once and visits every item", async () => {

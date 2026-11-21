@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { Code, ConnectError, LumaVaultClient, Namespace, type UploadProgress } from "./index.js";
-import { startGateway, type TestGateway } from "./testutil/gateway.js";
-import { patternBytes } from "./testutil/vectors.js";
+import { Code, ConnectError, LumaVaultClient, Namespace, type UploadProgress } from "#/index.js";
+import { startGateway, type TestGateway } from "#test/support/gateway.js";
+import { patternBytes } from "#test/support/vectors.js";
 
 const MIB = 1024 * 1024;
 

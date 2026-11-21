@@ -5,9 +5,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { verifyTicket } from "#/auth/tickets.js";
 import { organization, user } from "#/db/schemas/auth.js";
 import { iamHouseholds, iamObjectClaims, iamUploadReservations } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 import type { ModuleContext } from "#/server/modules.js";
-import { createTestContext } from "#/testing/context.js";
+import { createTestContext } from "#test/support/context.js";
 import type { StorageGateway, StoredObject } from "#/lib/storage-gateway.js";
 import {
   APP_NAMESPACE,
@@ -19,7 +19,7 @@ import {
   releaseObject,
   reserveUpload,
   signObjectReadTicket,
-} from "./index.js";
+} from "#/services/quotas/index.js";
 
 /** An in-memory Gateway: tests "commit" objects by adding them here. */
 class FakeGateway implements StorageGateway {

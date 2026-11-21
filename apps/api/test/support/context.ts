@@ -4,7 +4,7 @@ import { createAuth } from "#/auth/auth.js";
 import { allowSignUp } from "#/auth/sign-up-gate.js";
 import { loadConfig } from "#/config.js";
 import * as authTables from "#/db/schemas/auth.js";
-import type { TestDatabase } from "#/db/testing.js";
+import type { TestDatabase } from "#test/support/db.js";
 import { createEmailService, type EmailService } from "#/email/emails.js";
 import { createMailer } from "#/email/mailer.js";
 import type { ModuleContext } from "#/server/modules.js";
