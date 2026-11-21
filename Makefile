@@ -15,7 +15,7 @@ JS_MANIFESTS := package.json pnpm-workspace.yaml pnpm-lock.yaml \
 SDK_BUILD := sdk/web/dist/index.js
 SDK_SRCS := $(shell find sdk/web/src -name '*.ts' -not -name '*.test.ts' 2>/dev/null)
 
-.PHONY: proto build test lint run clean \
+.PHONY: proto build test lint run dev clean \
 	lint-go lint-js lint-swift test-go test-js test-swift
 
 proto:
@@ -67,6 +67,10 @@ test-swift: $(PROTO_STAMP)
 
 run: $(PROTO_STAMP)
 	go run ./cmd/lumavault
+
+# The Gateway, the API, and the Portal. Start Postgres and Mailpit first with docker compose up -d.
+dev:
+	./scripts/dev.sh
 
 clean:
 	rm -rf bin/ gen/ sdk/web/src/gen/ sdk/web/dist/ sdk/swift/Sources/LumaVaultSDK/Gen/

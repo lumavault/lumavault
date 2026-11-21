@@ -114,6 +114,7 @@ Better:
 - `make lint` — Run `buf lint`, `go vet ./...`, and SDK/workspace static checks.
 - `make test` — Run Go unit/integration tests (`go test -race ./...`) and SDK/app tests.
 - `make build` — Compile `cmd/lumavault` and workspace packages.
+- `make dev` — Run the Gateway, API, and Portal with development settings, against Postgres and Mailpit from `docker compose up -d`. Ctrl-C stops it.
 
 ## 6. Ticket Workflow (Branch, PR, Linear)
 
