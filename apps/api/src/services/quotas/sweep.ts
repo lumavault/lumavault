@@ -1,7 +1,7 @@
 import { subtractReservedBytes } from "#/data/iam/household/update-household.js";
 import { getExpiredUploadReservationsForUpdate } from "#/data/iam/upload-reservation/get-upload-reservation.js";
 import { expireUploadReservations } from "#/data/iam/upload-reservation/update-upload-reservation.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 import { SWEEP_BATCH_SIZE } from "./constants.js";
 
 /**

@@ -7,9 +7,9 @@ import * as authTables from "#/db/schemas/auth.js";
 import type { TestDatabase } from "#/db/testing.js";
 import { createEmailService, type EmailService } from "#/email/emails.js";
 import { createMailer } from "#/email/mailer.js";
-import type { ModuleContext } from "#/modules.js";
-import { createStorageGateway, type StorageGateway } from "#/services/storage-gateway.js";
-import { requestKey } from "#/request.js";
+import type { ModuleContext } from "#/server/modules.js";
+import { createStorageGateway, type StorageGateway } from "#/lib/storage-gateway.js";
+import { requestKey } from "#/server/request.js";
 
 export const TEST_WEB_ORIGIN = "http://localhost:3000";
 // Portal, Photos, Cinema, and Arcade.

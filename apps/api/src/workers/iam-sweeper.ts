@@ -1,4 +1,4 @@
-import type { ApiModule, ModuleContext } from "#/modules.js";
+import type { ApiModule, ModuleContext } from "#/server/modules.js";
 import { expireReservations } from "#/services/quotas/index.js";
 
 // Abandoned uploads give their bytes back within this long after their 24-hour expiry.

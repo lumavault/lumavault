@@ -2,7 +2,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { listSourceFiles } from "#/source-files.js";
+import { listSourceFiles } from "#/server/source-files.js";
 import { DB_SCHEMAS, type DbSchema, SCHEMA_SETUP_LOCK_KEY, SCHEMAS_DIR_NAME } from "./constants.js";
 
 export { DB_SCHEMAS, type DbSchema } from "./constants.js";

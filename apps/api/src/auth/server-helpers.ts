@@ -1,5 +1,5 @@
 import { setUserRole } from "#/data/auth/user/update-user.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 import { SUPER_ADMIN_ROLE } from "./constants.js";
 import { allowSignUp } from "./sign-up-gate.js";
 

@@ -6,7 +6,7 @@ import {
 } from "@connectrpc/connect/protocol";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { AUTH_BASE_PATH } from "./auth/constants.js";
+import { AUTH_BASE_PATH } from "#/auth/constants.js";
 import {
   CORS_ALLOW_HEADERS,
   CORS_ALLOW_METHODS,
@@ -14,7 +14,7 @@ import {
   HEALTH_PATH,
   RPC_PREFIX,
   RPC_READ_MAX_BYTES,
-} from "./constants.js";
+} from "#/constants.js";
 import type { ApiModule, ModuleContext } from "./modules.js";
 import { requestKey } from "./request.js";
 

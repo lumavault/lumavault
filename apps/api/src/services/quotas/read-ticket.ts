@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { type SignedTicket, signReadTicket } from "#/auth/tickets.js";
 import { getActiveObjectClaim } from "#/data/iam/object-claim/get-object-claim.js";
-import type { ModuleContext } from "#/modules.js";
+import type { ModuleContext } from "#/server/modules.js";
 
 /**
  * Signs a read ticket for an object the ledger knows about. Apps decide who may see what;
