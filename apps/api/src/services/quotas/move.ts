@@ -9,13 +9,15 @@ import type { MovedObjects } from "./types.js";
 
 /**
  * Bills objects to another household instead of the one that holds them, all or nothing.
- * Used when a person moves and takes their private data along. Locks the claims, then both
- * households in a fixed order, and refuses the move if it would push the new household over
- * its cap. Objects already in the new household, or already released, are skipped.
+ * Used when a person moves and takes their private data along, so every object must come
+ * from fromHouseholdId. Objects already in the new household, or already released, are
+ * skipped, so running a move twice is safe. Locks the claims, then both households in a fixed
+ * order, and refuses the move if it would push the new household over its cap.
  */
 export async function moveObjects(
   ctx: Pick<ModuleContext, "db">,
   objectIds: string[],
+  fromHouseholdId: string,
   toHouseholdId: string,
 ): Promise<MovedObjects> {
   if (objectIds.length === 0) {
@@ -24,15 +26,12 @@ export async function moveObjects(
   return ctx.db.transaction(async (tx) => {
     const claims = await getActiveObjectClaimsForUpdate(tx, objectIds);
     const moving = claims.filter((c) => c.householdId !== toHouseholdId);
-    const fromTotals = new Map<string, bigint>();
-    let total = 0n;
-    for (const c of moving) {
-      total += c.bytes;
-      if (c.householdId) fromTotals.set(c.householdId, (fromTotals.get(c.householdId) ?? 0n) + c.bytes);
+    if (moving.some((c) => c.householdId !== fromHouseholdId)) {
+      throw new ConnectError("every object must belong to the household it moves from", Code.FailedPrecondition);
     }
+    const total = moving.reduce((sum, c) => sum + c.bytes, 0n);
 
-    const ids = [...new Set([...fromTotals.keys(), toHouseholdId])].sort();
-    const locked = await getHouseholdsForUpdate(tx, ids);
+    const locked = await getHouseholdsForUpdate(tx, [...new Set([fromHouseholdId, toHouseholdId])].sort());
     const target = locked.find((h) => h.householdId === toHouseholdId);
     if (!target) {
       throw new ConnectError("the new household has no allowance", Code.FailedPrecondition);
@@ -40,14 +39,13 @@ export async function moveObjects(
     if (target.usedBytes + target.reservedBytes + total > target.storageCapBytes) {
       throw new ConnectError("the new household does not have room for this data", Code.ResourceExhausted);
     }
+    if (moving.length === 0) {
+      return { bytes: 0n, count: 0 };
+    }
 
-    for (const [householdId, bytes] of fromTotals) {
-      await subtractUsedBytes(tx, householdId, bytes);
-    }
+    await subtractUsedBytes(tx, fromHouseholdId, total);
     await addUsedBytes(tx, toHouseholdId, total);
-    if (moving.length > 0) {
-      await moveObjectClaims(tx, moving.map((c) => c.objectId), toHouseholdId);
-    }
+    await moveObjectClaims(tx, moving.map((c) => c.objectId), toHouseholdId);
     return { bytes: total, count: moving.length };
   });
 }

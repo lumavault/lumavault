@@ -284,19 +284,28 @@ describe("moving and copying between households", () => {
     const a = await stored(100n);
     const b = await stored(200n);
     const target = await otherHousehold(1000n);
-    expect(await moveObjects(ctx, [a, b], target)).toEqual({ bytes: 300n, count: 2 });
+    expect(await moveObjects(ctx, [a, b], householdId, target)).toEqual({ bytes: 300n, count: 2 });
     expect(await usage()).toEqual({ used: 0n, reserved: 0n });
     expect(await usageOf(target)).toEqual({ used: 300n, reserved: 0n });
     // Moving again changes nothing.
-    expect(await moveObjects(ctx, [a, b], target)).toEqual({ bytes: 0n, count: 0 });
+    expect(await moveObjects(ctx, [a, b], householdId, target)).toEqual({ bytes: 0n, count: 0 });
   });
 
   it("refuses a move that does not fit, leaving both households as they were", async () => {
     const a = await stored(400n);
     const tight = await otherHousehold(100n);
-    expect(await codeOf(moveObjects(ctx, [a], tight))).toBe(Code.ResourceExhausted);
+    expect(await codeOf(moveObjects(ctx, [a], householdId, tight))).toBe(Code.ResourceExhausted);
     expect(await usage()).toEqual({ used: 400n, reserved: 0n });
     expect(await usageOf(tight)).toEqual({ used: 0n, reserved: 0n });
+  });
+
+  it("refuses objects that are not in the household they move from, changing nothing", async () => {
+    const a = await stored(100n);
+    const elsewhere = await otherHousehold(1000n);
+    const target = await otherHousehold(1000n);
+    expect(await codeOf(moveObjects(ctx, [a], elsewhere, target))).toBe(Code.FailedPrecondition);
+    expect(await usage()).toEqual({ used: 100n, reserved: 0n });
+    expect(await usageOf(target)).toEqual({ used: 0n, reserved: 0n });
   });
 
   it("copies a shared item so both households keep one, and removes a copy that does not fit", async () => {
