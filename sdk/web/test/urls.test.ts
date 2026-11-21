@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkUrl, streamUrl } from "./urls.js";
+import { chunkUrl, streamUrl } from "#/urls.js";
 
 describe("urls", () => {
   for (const base of ["http://gw:8080", "http://gw:8080/"]) {

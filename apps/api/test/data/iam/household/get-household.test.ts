@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { member, organization } from "#/db/schemas/auth.js";
 import { iamHouseholds } from "#/db/schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#/db/testing.js";
-import { createTestContext, signUp } from "#/testing/context.js";
-import { getHouseholdByUserId } from "./get-household.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
+import { createTestContext, signUp } from "#test/support/context.js";
+import { getHouseholdByUserId } from "#/data/iam/household/get-household.js";
 
 let database: TestDatabase;
 let userId: string;

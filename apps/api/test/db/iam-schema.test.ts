@@ -3,11 +3,11 @@ import { sql } from "drizzle-orm";
 import { pushSchema } from "drizzle-kit/api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_MEMBER_LIMIT } from "#/iam/constants.js";
-import { DB_SCHEMAS } from "./constants.js";
-import { loadSchemaModules } from "./index.js";
-import { organization, user } from "./schemas/auth.js";
-import { iamGracePeriods, iamHouseholdInvites, iamHouseholds, iamInstanceSettings, iamObjectClaims, iamPairingRequests } from "./schemas/iam.js";
-import { createTestDatabase, pushAllSchemas, type TestDatabase } from "./testing.js";
+import { DB_SCHEMAS } from "#/db/constants.js";
+import { loadSchemaModules } from "#/db/index.js";
+import { organization, user } from "#/db/schemas/auth.js";
+import { iamGracePeriods, iamHouseholdInvites, iamHouseholds, iamInstanceSettings, iamObjectClaims, iamPairingRequests } from "#/db/schemas/iam.js";
+import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 
 let database: TestDatabase;
 let userId: string;

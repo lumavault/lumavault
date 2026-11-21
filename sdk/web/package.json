@@ -18,6 +18,10 @@
   "files": [
     "dist"
   ],
+  "imports": {
+    "#/*": "./src/*",
+    "#test/*": "./test/*"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.build.json",
@@ -31,7 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   },
   "engines": {

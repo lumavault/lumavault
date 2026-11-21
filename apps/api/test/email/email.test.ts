@@ -2,8 +2,8 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import { SMTPServer } from "smtp-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createEmailService, type EmailService } from "./emails.js";
-import { createMailer } from "./mailer.js";
+import { createEmailService, type EmailService } from "#/email/emails.js";
+import { createMailer } from "#/email/mailer.js";
 
 const LINK = "http://localhost:3000/login/verify?token=abc123";
 

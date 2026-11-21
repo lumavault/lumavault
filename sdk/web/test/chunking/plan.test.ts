@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, it } from "vitest";
-import { loadVectors, patternBytes } from "../testutil/vectors.js";
-import { planChunks } from "./plan.js";
+import { loadVectors, patternBytes } from "#test/support/vectors.js";
+import { planChunks } from "#/chunking/plan.js";
 
 describe("planChunks", () => {
   for (const vector of loadVectors().files) {

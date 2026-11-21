@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasUserRole, isHouseholdRole } from "./role-checks.js";
+import { hasUserRole, isHouseholdRole } from "#/auth/role-checks.js";
 
 describe("isHouseholdRole", () => {
   it("accepts only the three household roles", () => {

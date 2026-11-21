@@ -13,7 +13,7 @@ JS_MANIFESTS := package.json pnpm-workspace.yaml pnpm-lock.yaml \
 
 # Workspace packages import the SDK from its build output, so build it first.
 SDK_BUILD := sdk/web/dist/index.js
-SDK_SRCS := $(shell find sdk/web/src -name '*.ts' -not -name '*.test.ts' 2>/dev/null)
+SDK_SRCS := $(shell find sdk/web/src -name '*.ts' 2>/dev/null)
 
 .PHONY: proto build test lint run dev clean \
 	lint-go lint-js lint-swift test-go test-js test-swift

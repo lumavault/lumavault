@@ -52,6 +52,7 @@
     "#/*": {
       "@lumavault/dist": "./dist/*",
       "default": "./src/*"
-    }
+    },
+    "#test/*": "./test/*"
   }
 }
