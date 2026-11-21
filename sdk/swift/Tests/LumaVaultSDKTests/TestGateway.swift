@@ -1,6 +1,6 @@
 import Foundation
 
-/// Builds cmd/lumavault once and runs a fresh instance per test on a random port.
+/// Builds core/cmd/lumavault once and runs a fresh instance per test on a random port.
 final class TestGateway {
     let baseURL: URL
     private let process: Process
@@ -14,7 +14,7 @@ final class TestGateway {
         let out = FileManager.default.temporaryDirectory.appending(component: "lumavault-swift-test-\(UUID().uuidString)")
         let build = Process()
         build.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        build.arguments = ["go", "build", "-o", out.path, "./cmd/lumavault"]
+        build.arguments = ["go", "build", "-o", out.path, "./core/cmd/lumavault"]
         build.currentDirectoryURL = repoRoot
         try build.run()
         build.waitUntilExit()

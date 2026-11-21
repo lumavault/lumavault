@@ -7,7 +7,6 @@ bin/
 *.exe
 *.test
 *.out
-go.work
 
 # Generated Protobuf & Connect-RPC Stubs (run `make proto`)
 gen/

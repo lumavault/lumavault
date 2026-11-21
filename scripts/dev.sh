@@ -66,7 +66,7 @@ stop_all() {
 trap stop_all EXIT
 trap "exit 130" INT TERM
 
-start gateway go run ./cmd/lumavault -addr ":${GATEWAY_PORT}"
+start gateway go run ./core/cmd/lumavault -addr ":${GATEWAY_PORT}"
 start api pnpm --dir apps/api dev
 if [[ -f apps/portal/package.json ]]; then
   start portal env VITE_API_URL="http://localhost:${PORT}" VITE_PORTAL_URL="${LUMAVAULT_PORTAL_URL}" \

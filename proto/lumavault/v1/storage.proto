@@ -5,7 +5,7 @@ package lumavault.v1;
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/lumavault/lumavault/gen/go/lumavault/v1;lumavaultv1";
+option go_package = "github.com/lumavault/lumavault/core/gen/go/lumavault/v1;lumavaultv1";
 
 // Namespace partitions stored objects across the three LumaVault applications.
 enum Namespace {
