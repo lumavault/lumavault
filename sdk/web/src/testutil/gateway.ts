@@ -14,13 +14,13 @@ export interface TestGateway {
 }
 
 /**
- * Builds cmd/lumavault and runs it on a random port with a throwaway data dir. Pass env to
+ * Builds core/cmd/lumavault and runs it on a random port with a throwaway data dir. Pass env to
  * turn on storage ticket checks.
  */
 export async function startGateway(env: Record<string, string> = {}): Promise<TestGateway> {
   const dir = mkdtempSync(join(tmpdir(), "lumavault-sdk-test-"));
   const bin = join(dir, "lumavault");
-  execFileSync("go", ["build", "-o", bin, "./cmd/lumavault"], { cwd: REPO_ROOT, stdio: "inherit" });
+  execFileSync("go", ["build", "-o", bin, "./core/cmd/lumavault"], { cwd: REPO_ROOT, stdio: "inherit" });
 
   const proc = spawn(bin, ["-addr", "127.0.0.1:0", "-data-dir", join(dir, "data")], {
     env: { ...process.env, ...env },

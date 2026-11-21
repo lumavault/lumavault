@@ -5,7 +5,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/lumavault/lumavault/gen/go
+      value: github.com/lumavault/lumavault/core/gen/go
 plugins:
   # Web / TypeScript Protobuf v2 & Connect-ES service descriptors
   - remote: buf.build/bufbuild/es

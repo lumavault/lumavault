@@ -1,10 +1,10 @@
 BUF ?= $(shell command -v buf 2>/dev/null || echo $(shell go env GOPATH)/bin/buf)
 PNPM ?= pnpm
 
-# Regenerate stubs whenever any proto or buf config changes. The stamp lives in gen/, which
+# Regenerate stubs whenever any proto or buf config changes. The stamp lives in core/gen/, which
 # make clean removes along with the stubs.
 PROTO_SRCS := $(shell find proto -name '*.proto')
-PROTO_STAMP := gen/.proto-stamp
+PROTO_STAMP := core/gen/.proto-stamp
 
 # pnpm writes this file on every successful install.
 JS_DEPS := node_modules/.modules.yaml
@@ -22,12 +22,12 @@ proto:
 	$(BUF) lint
 	$(BUF) generate
 	$(BUF) generate --template buf.gen.go.yaml --path proto/lumavault/v1
-	@mkdir -p gen && touch $(PROTO_STAMP)
+	@mkdir -p core/gen && touch $(PROTO_STAMP)
 
 $(PROTO_STAMP): $(PROTO_SRCS) buf.yaml buf.gen.yaml buf.gen.go.yaml
 	$(BUF) generate
 	$(BUF) generate --template buf.gen.go.yaml --path proto/lumavault/v1
-	@mkdir -p gen && touch $@
+	@mkdir -p core/gen && touch $@
 
 $(JS_DEPS): $(JS_MANIFESTS)
 	$(PNPM) install --frozen-lockfile
@@ -38,7 +38,7 @@ $(SDK_BUILD): $(PROTO_STAMP) $(JS_DEPS) $(SDK_SRCS) sdk/web/tsconfig.json sdk/we
 
 build: $(PROTO_STAMP) $(SDK_BUILD)
 	@mkdir -p bin
-	go build -o bin/lumavault ./cmd/lumavault
+	go build -o bin/lumavault ./core/cmd/lumavault
 	$(PNPM) -r --if-present run build
 	swift build
 
@@ -46,7 +46,7 @@ lint: lint-go lint-js lint-swift
 
 lint-go: $(PROTO_STAMP)
 	$(BUF) lint
-	go vet ./...
+	go vet ./core/...
 
 lint-js: $(SDK_BUILD)
 	$(PNPM) -r --if-present run typecheck
@@ -57,7 +57,7 @@ lint-swift: $(PROTO_STAMP)
 test: test-go test-js test-swift
 
 test-go: $(PROTO_STAMP)
-	go test -race ./...
+	go test -race ./core/...
 
 test-js: $(SDK_BUILD)
 	$(PNPM) -r --if-present run test
@@ -66,11 +66,11 @@ test-swift: $(PROTO_STAMP)
 	swift test
 
 run: $(PROTO_STAMP)
-	go run ./cmd/lumavault
+	go run ./core/cmd/lumavault
 
 # The Gateway, the API, and the Portal. Start Postgres and Mailpit first with docker compose up -d.
 dev:
 	./scripts/dev.sh
 
 clean:
-	rm -rf bin/ gen/ sdk/web/src/gen/ sdk/web/dist/ sdk/swift/Sources/LumaVaultSDK/Gen/
+	rm -rf bin/ core/gen/ sdk/web/src/gen/ sdk/web/dist/ sdk/swift/Sources/LumaVaultSDK/Gen/

@@ -25,22 +25,22 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
 
 **Stay inside your issue's owned paths** (table below) unless the issue explicitly covers cross-package work.
 
-**Contracts are the boundary:** `proto/lumavault/v1/`, `pkg/metadata/store.go` (`MetadataStore`), and `pkg/chunkstore/store.go` (`ChunkStore`) are shared contracts. Do not break their signatures without updating all callers and running `make proto`. Generated stubs (`gen/go/`, `sdk/web/src/gen/`, `sdk/swift/Sources/LumaVaultSDK/Gen/`) are gitignored.
+**Contracts are the boundary:** `proto/lumavault/v1/`, `core/internal/metadata/store.go` (`MetadataStore`), and `core/internal/chunkstore/store.go` (`ChunkStore`) are shared contracts. Do not break their signatures without updating all callers and running `make proto`. Generated stubs (`core/gen/go/`, `sdk/web/src/gen/`, `sdk/swift/Sources/LumaVaultSDK/Gen/`) are gitignored.
 
 | Execution Order & Project | Linear ID | Owned Paths |
 | :--- | :--- | :--- |
-| **`1. Core Backend, Contracts & Basic Data Layer`** | `P-LUM-1` | `proto/lumavault/v1/storage.proto`, `buf.*`, `Makefile`, `docker-compose.yml`, `.gitignore`, `go.*`, `Package.swift`, `sdk/web/package.json`, `sdk/web/tsconfig.json`, `pkg/constants/`, `pkg/validate/`, `pkg/metadata/`, `pkg/chunkstore/`, `pkg/gateway/`, `cmd/lumavault/` |
+| **`1. Core Backend, Contracts & Basic Data Layer`** | `P-LUM-1` | `proto/lumavault/v1/storage.proto`, `buf.*`, `Makefile`, `docker-compose.yml`, `.gitignore`, `go.work`, `core/go.*`, `Package.swift`, `sdk/web/package.json`, `sdk/web/tsconfig.json`, `core/internal/constants/`, `core/internal/validate/`, `core/internal/metadata/`, `core/internal/chunkstore/`, `core/internal/gateway/`, `core/cmd/lumavault/` |
 | **`2. Client SDKs (Web/TypeScript & Swift)`** | `P-LUM-2` | `sdk/web/`, `sdk/swift/`, `sdk/testdata/`, `Package.swift`, `Makefile` (SDK test targets) |
 | **`3. App Platform, Auth & Multi-Tenant RBAC`** | `P-LUM-7` | `pnpm-workspace.yaml`, `proto/lumavault/iam/v1/iam.proto`, `packages/ui/`, `apps/portal/`, `apps/api/` *(excluding per-app `schemas/{photos,cinema,arcade}.ts`, `routers/{photos,cinema,arcade}.ts`, and `workers/photos*.ts`)* |
 | **`4. LumaVault Photos`** | `P-LUM-3` | `proto/lumavault/photos/v1/photos.proto`, `apps/api/src/db/schemas/photos.ts`, `apps/api/src/routers/photos.ts`, `apps/api/src/workers/photos*.ts`, `apps/photos/` |
 | **`5. LumaVault Cinema`** | `P-LUM-4` | `proto/lumavault/cinema/v1/cinema.proto`, `apps/api/src/db/schemas/cinema.ts`, `apps/api/src/routers/cinema.ts`, `apps/cinema/` |
 | **`6. LumaVault Arcade`** | `P-LUM-5` | `proto/lumavault/arcade/v1/arcade.proto`, `apps/api/src/db/schemas/arcade.ts`, `apps/api/src/routers/arcade.ts`, `apps/arcade/` |
-| **`7. Distributed Systems Upgrades (Paxos & Chunkservers)`** | `P-LUM-6` | `proto/lumavault/v1/paxos.proto`, `proto/lumavault/v1/chunk.proto`, `pkg/consensus/`, `pkg/chunkserver/` |
+| **`7. Distributed Systems Upgrades (Paxos & Chunkservers)`** | `P-LUM-6` | `proto/lumavault/v1/paxos.proto`, `proto/lumavault/v1/chunk.proto`, `core/internal/consensus/`, `core/internal/chunkserver/` |
 
 ## 2. Core Architectural Invariants
 
 1. **Pure Storage Core vs. Multi-Tenant Hono + PostgreSQL Application Layer:**
-   - **LumaVault Storage Core (`pkg/gateway/`, `pkg/metadata/`, `pkg/chunkstore/`, `pkg/consensus/`, `pkg/chunkserver/`):** Stores **only** content-addressed object manifests (`ObjectMetadata`) and immutable `SHA-256` chunks. The Gateway (`:8080`) talks **only** to `MetadataStore` and `ChunkStore` and verifies requests statelessly via HMAC/Ed25519 **Signed Storage Tickets**—never querying PostgreSQL or holding domain logic.
+   - **LumaVault Storage Core (`core/internal/gateway/`, `core/internal/metadata/`, `core/internal/chunkstore/`, `core/internal/consensus/`, `core/internal/chunkserver/`):** Stores **only** content-addressed object manifests (`ObjectMetadata`) and immutable `SHA-256` chunks. The Gateway (`:8080`) talks **only** to `MetadataStore` and `ChunkStore` and verifies requests statelessly via HMAC/Ed25519 **Signed Storage Tickets**—never querying PostgreSQL or holding domain logic.
    - **Headless Multi-Tenant App API & PostgreSQL Layer (`apps/api` `:4000` + `docker-compose.yml` `:5432`):** All authentication (`better-auth` SSO + Bearer), Server Super-Admin household allowances/quotas, cross-household RBAC grants (`iam`), external metadata (`TMDB`, `IGDB`), background media/retention workers, and mutable domain state (`photos`, `cinema`, `arcade` Drizzle schemas) live in PostgreSQL behind the headless **Node.js + Hono** Connect-RPC server (`apps/api`), referencing `lumavault_object_id`.
    - **Pure Client Frontends (`apps/portal`, `apps/{photos,cinema,arcade}/web` Vite SPAs + `apple/` SwiftUI):** Web apps are pure client-side Vite + React 19 + TanStack Router/Query SPAs (zero SSR servers in prod), sharing headless hooks/primitives from `@lumavault/ui` while maintaining independent visual design systems.
 2. **Content-Addressed Chunks (`4MB–64MB` over Raw HTTP) & Household Isolation:** Raw media bytes never enter `MetadataStore`, PostgreSQL, `apps/api` client proxy paths, the Paxos log, or Protobuf messages. Multi-tenant uploads commit with `skip_dedup = true` at the Storage Core (so each household owns an isolated `ObjectMetadata` manifest while `ChunkStore` still deduplicates 100% of identical `SHA-256` chunks on disk via `chunkRefs`).
@@ -51,7 +51,7 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
 
 1. **No Markdown syntax in code comments, ever.** No backticks, `**bold**`, `_italics_`, `#` headings, `[links](...)`, or bullet lists inside `//`, `/** */`, `///`, or `#` comments (Go, TypeScript, Swift, Protobuf, shell). Write identifiers and paths as plain text: `Uploads via PUT /v1/chunks/{sha256} and returns the stored size.` not ``Uploads via `PUT /v1/chunks/{sha256}`...``. Markdown belongs only in `.md` files.
 2. **Keep files focused, without over-splitting.** Prefer a few cohesive files over many tiny ones. Split a file when it mixes unrelated concerns or grows past roughly 300 lines of non-test code.
-   - Public contracts and types live apart from implementations when a package has more than one implementation (mirror `pkg/chunkstore/store.go` vs `local.go`, `pkg/metadata/store.go` vs `engine.go` vs `local.go`).
+   - Public contracts and types live apart from implementations when a package has more than one implementation (mirror `core/internal/chunkstore/store.go` vs `local.go`, `core/internal/metadata/store.go` vs `engine.go` vs `local.go`).
    - Constants live in a constants file or package, never inline in core logic.
    - Validation, URL building, HTTP/body helpers, and other utilities get their own module once they are shared or large. A small helper with one caller can stay beside it.
    - One canonical implementation per helper (one hash validator, one object ID validator, one fetch resolver). Do not duplicate helpers across files with drifting rules.
@@ -113,7 +113,7 @@ Better:
 - `make proto` — Run `buf lint` and `buf generate` (Go, Swift, and TypeScript/Connect-ES stubs).
 - `make lint` — Run `buf lint`, `go vet ./...`, and SDK/workspace static checks.
 - `make test` — Run Go unit/integration tests (`go test -race ./...`) and SDK/app tests.
-- `make build` — Compile `cmd/lumavault` and workspace packages.
+- `make build` — Compile `core/cmd/lumavault` and workspace packages.
 - `make dev` — Run the Gateway, API, and Portal with development settings, against Postgres and Mailpit from `docker compose up -d`. Ctrl-C stops it.
 
 ## 6. Ticket Workflow (Branch, PR, Linear)

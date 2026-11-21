@@ -42,7 +42,8 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
 
       # Reads the pnpm version from packageManager in package.json.
       - uses: pnpm/action-setup@v4
@@ -63,7 +64,7 @@ jobs:
 
       - name: Build
         run: |
-          go build -o bin/lumavault ./cmd/lumavault
+          go build -o bin/lumavault ./core/cmd/lumavault
           pnpm -r --if-present run build
 
   swift:
@@ -76,10 +77,11 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      # The Swift integration tests build and run cmd/lumavault.
+      # The Swift integration tests build and run core/cmd/lumavault.
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
 
       - name: Generate Protobuf stubs
         run: make proto

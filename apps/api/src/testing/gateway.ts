@@ -15,11 +15,11 @@ export interface TestGateway {
   stop(): void;
 }
 
-/** Builds cmd/lumavault and runs it with the same ticket secret and service key as TEST_ENV. */
+/** Builds core/cmd/lumavault and runs it with the same ticket secret and service key as TEST_ENV. */
 export async function startTestGateway(): Promise<TestGateway> {
   const dir = mkdtempSync(join(tmpdir(), "lv-api-gateway-"));
   const bin = join(dir, "lumavault");
-  execFileSync("go", ["build", "-o", bin, "./cmd/lumavault"], { cwd: REPO_ROOT, stdio: "inherit" });
+  execFileSync("go", ["build", "-o", bin, "./core/cmd/lumavault"], { cwd: REPO_ROOT, stdio: "inherit" });
   const proc = spawn(bin, ["-addr", "127.0.0.1:0", "-data-dir", join(dir, "data")], {
     env: {
       ...process.env,

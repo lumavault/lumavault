@@ -10,10 +10,10 @@ LumaVault separates **pure distributed object/chunk storage** (modeled after **G
 
 | Layer | Technology Choice | Purpose |
 | :--- | :--- | :--- |
-| **Monorepo & Codegen** | **Buf** (`buf.yaml`, `buf.gen.yaml`) + `Makefile` + `go.mod` + `Package.swift` + `pnpm-workspace.yaml` | Single source of truth for `.proto` contracts (`storage`, `iam`, `photos`, `cinema`, `arcade`); generates Go server stubs, Swift SDK (`sdk/swift`), and TypeScript/Connect-ES descriptors (`sdk/web`). |
-| **Storage & Consensus Core** | **Go (Golang)** (`pkg/metadata`, `pkg/chunkstore`, `pkg/consensus`, `pkg/chunkserver`) | Pure domain-agnostic object & chunk engine: pluggable `MetadataStore` (deterministic `Engine` + `<id>.pb` files -> Multi-Paxos) and `ChunkStore` (`SHA-256` blobs -> $N=3$ replicated chunkservers). |
+| **Monorepo & Codegen** | **Buf** (`buf.yaml`, `buf.gen.yaml`) + `Makefile` + `core/go.mod` + `Package.swift` + `pnpm-workspace.yaml` | Single source of truth for `.proto` contracts (`storage`, `iam`, `photos`, `cinema`, `arcade`); generates Go server stubs, Swift SDK (`sdk/swift`), and TypeScript/Connect-ES descriptors (`sdk/web`). |
+| **Storage & Consensus Core** | **Go (Golang)** (`core/internal/metadata`, `core/internal/chunkstore`, `core/internal/consensus`, `core/internal/chunkserver`) | Pure domain-agnostic object & chunk engine: pluggable `MetadataStore` (deterministic `Engine` + `<id>.pb` files -> Multi-Paxos) and `ChunkStore` (`SHA-256` blobs -> $N=3$ replicated chunkservers). |
 | **Internal Node-to-Node API** | **gRPC + Protocol Buffers (`proto3`)** | Strictly-typed binary RPCs for Paxos voting (`Prepare`/`Promise`/`Accept`/`Accepted`) and inter-node chunk replication. |
-| **Client-Facing Storage Gateway (`:8080`)** | **Go `connectrpc/go` + HTTP Data Plane + Stateless Ticket Auth (`pkg/gateway`)** | Serves `StorageService` Control Plane RPCs (`< 100 KB`), raw streaming HTTP chunk transfers (`PUT/GET /v1/chunks/{sha256}`), and `HTTP 206` byte-range streaming (`GET /v1/stream/{id}`). Authorizes requests statelessly via short-lived HMAC/Ed25519 **Signed Storage Tickets** (`Bearer` / `?token=...`) with **zero PostgreSQL coupling**. |
+| **Client-Facing Storage Gateway (`:8080`)** | **Go `connectrpc/go` + HTTP Data Plane + Stateless Ticket Auth (`core/internal/gateway`)** | Serves `StorageService` Control Plane RPCs (`< 100 KB`), raw streaming HTTP chunk transfers (`PUT/GET /v1/chunks/{sha256}`), and `HTTP 206` byte-range streaming (`GET /v1/stream/{id}`). Authorizes requests statelessly via short-lived HMAC/Ed25519 **Signed Storage Tickets** (`Bearer` / `?token=...`) with **zero PostgreSQL coupling**. |
 | **Headless Multi-Tenant App API (`:4000`)** | **Node.js + Hono + Connect-RPC + `better-auth` + Drizzle ORM (`apps/api`)** | Central headless backend mounting `better-auth` (`/api/auth/*` — SSO cookies, `bearer()` native tokens, `admin()` Super-Admin, `organization()` Households), modular Connect-RPC routers (`/api/rpc/*` — `iam`, `photos`, `cinema`, `arcade`), Drizzle `pgSchema` queries on PostgreSQL (`:5432`), Storage Ticket minting, `TMDB`/`IGDB` proxies, and background workers (`512px` `sharp`/`ffmpeg` thumbnails + Trash sweeper). |
 | **Client SDKs & Shared Primitives** | **`@lumavault/sdk` (`sdk/web`)** + **`LumaVaultSDK` (`sdk/swift`)** + **`@lumavault/ui` (`packages/ui`)** | Generated Connect-ES / `@connectrpc/connect-query` & `Connect-Swift` clients, streaming `SHA-256` chunk uploaders with Storage Ticket support, and headless auth/share hooks + CSS-tokenized Radix/`shadcn` primitives (no forced layout shell). |
 | **Client Applications (Web SPAs & Apple)** | **Vite + React 19 + TanStack Router/Query + Tailwind v4** & **SwiftUI (`iOS`, `iPadOS`, `tvOS`, `macOS`)** | Pure client-side SPAs (static `dist/` builds, zero SSR servers in prod) and native Apple apps, each with its own tailored design language: **Portal** (`:3000` admin/SSO), **Photos** (`:3001` Google Photos style), **Cinema** (`:3002` Netflix style), and **Arcade** (`:3003` console launcher style). |
@@ -76,7 +76,7 @@ flowchart TD
 
 > [!IMPORTANT]
 > **Pure Storage Core (`MetadataStore` + `ChunkStore`) + Multi-Tenant Relational Layer (`apps/api` + `PostgreSQL`):**
-> LumaVault's Go storage engine (`pkg/metadata`, `pkg/chunkstore`, `pkg/gateway`, `pkg/consensus`, `pkg/chunkserver`) is a **pure content-addressed object and chunk store**. It knows nothing about users, households, albums, TMDB/IGDB catalogs, or playback heartbeats.
+> LumaVault's Go storage engine (`core/internal/metadata`, `core/internal/chunkstore`, `core/internal/gateway`, `core/internal/consensus`, `core/internal/chunkserver`) is a **pure content-addressed object and chunk store**. It knows nothing about users, households, albums, TMDB/IGDB catalogs, or playback heartbeats.
 > All multi-tenant authentication (`better-auth`), Household quotas/allowances, cross-household resource grants, domain catalogs, and high-frequency user state live in **PostgreSQL** behind the headless **Hono Connect-RPC server (`apps/api`)**, referencing `lumavault_object_id`.
 
 ### A. Multi-Tenancy, Households & Stateless Signed Storage Tickets
@@ -97,8 +97,8 @@ flowchart TD
 3. **Day-1 `LocalChunkStore` -> Drop-In `ReplicatedChunkStore` ($N=3$):** Starts with sharded local disk blobs (`StatChunks` pre-commit size verification + `ReadChunkRange`), upgrading behind `ChunkStore` to $N=3$ gRPC chunkservers, background `SHA-256` bit-rot scrubbing, and predicate-driven GC (`MetadataStore.IsChunkReferenced`).
 
 ### C. `MetadataStore` (The Control Plane: Object Manifests & Pluggable Paxos)
-1. **Deterministic `metadata.Engine` & `LocalMetadataStore` (`pkg/metadata/`):** Pure in-memory state machine tracking manifests and $O(1)$ chunk reference counts (`chunkRefs`), persisted atomically per object (`<rootDir>/objects/<id>.pb`).
-2. **Drop-In `PaxosMetadataStore` (`pkg/consensus/`):** Single-Decree and leader-driven Multi-Paxos replicated log (`paxos.proto`) driving `metadata.Engine` with log snapshotting/compaction.
+1. **Deterministic `metadata.Engine` & `LocalMetadataStore` (`core/internal/metadata/`):** Pure in-memory state machine tracking manifests and $O(1)$ chunk reference counts (`chunkRefs`), persisted atomically per object (`<rootDir>/objects/<id>.pb`).
+2. **Drop-In `PaxosMetadataStore` (`core/internal/consensus/`):** Single-Decree and leader-driven Multi-Paxos replicated log (`paxos.proto`) driving `metadata.Engine` with log snapshotting/compaction.
 
 ---
 
@@ -123,7 +123,7 @@ The SDKs let apps upload, download, and stream files through the Storage Gateway
 
 ## 4. The Four Web SPAs & Three Media Applications
 
-All web frontends are **pure client-side Vite + React 19 + `@tanstack/react-router` + `@tanstack/react-query` (`@connectrpc/connect-query`) + Tailwind v4 SPAs** talking to `apps/api` (`:4000`) and `pkg/gateway` (`:8080`), paired with native **SwiftUI** apps:
+All web frontends are **pure client-side Vite + React 19 + `@tanstack/react-router` + `@tanstack/react-query` (`@connectrpc/connect-query`) + Tailwind v4 SPAs** talking to `apps/api` (`:4000`) and `core/internal/gateway` (`:8080`), paired with native **SwiftUI** apps:
 
 ### Platform Portal: LumaVault Portal (`apps/portal` — `:3000`)
 - Central SSO login/registration, Household switcher, member/role invitations, unified Cross-Household Share management, and the **Server Super-Admin Console** (provisioning new households, storage quotas, and app/sharing allowances).
@@ -167,8 +167,9 @@ lumavault/
 ├── pnpm-workspace.yaml               # Links sdk/web, packages/ui, apps/api, apps/portal, apps/*/web
 ├── docker-compose.yml                # Shared PostgreSQL (:5432 - auth, iam, photos, cinema, arcade schemas)
 ├── buf.yaml                          # Protobuf module & linter configuration
-├── buf.gen.yaml                      # Generates Go (gen/go), Swift (sdk/swift), Web/Node (sdk/web)
-├── go.mod                            # Go module: github.com/lumavault/lumavault
+├── buf.gen.yaml                      # Generates Swift (sdk/swift) and Web/Node (sdk/web) stubs
+├── buf.gen.go.yaml                   # Generates Go Storage Core stubs (core/gen/go)
+├── go.work                           # Go workspace, so go commands run from the repo root
 ├── Package.swift                     # Swift Package for iOS, iPadOS, tvOS, macOS
 ├── docs/
 │   └── BLUEPRINT.md                  # Product & Architecture Blueprint
@@ -178,16 +179,18 @@ lumavault/
 │   ├── photos/v1/photos.proto        # PhotosService Connect-RPC contract
 │   ├── cinema/v1/cinema.proto        # CinemaService Connect-RPC contract
 │   └── arcade/v1/arcade.proto        # ArcadeService Connect-RPC contract
-├── cmd/
-│   └── lumavault/main.go             # Go Storage Gateway server entrypoint (:8080)
-├── pkg/
-│   ├── constants/                    # Shared storage invariants (chunk size, SHA-256 hex length)
-│   ├── validate/                     # Shared request checks (SHA-256 digests, namespaces, object IDs, commit manifests)
-│   ├── metadata/                     # MetadataStore interface + deterministic Engine + LocalMetadataStore
-│   ├── chunkstore/                   # ChunkStore interface + LocalChunkStore (SHA-256)
-│   ├── gateway/                      # Connect-RPC Control Plane + HTTP Data Plane + Stateless Ticket Auth
-│   ├── consensus/                    # Single-Decree & Multi-Paxos (PaxosMetadataStore)
-│   └── chunkserver/                  # Replicated chunk storage & bit-rot scrubber (ReplicatedChunkStore)
+├── core/                             # Go Storage Core module: github.com/lumavault/lumavault/core
+│   ├── go.mod
+│   ├── cmd/lumavault/main.go         # Go Storage Gateway server entrypoint (:8080)
+│   └── internal/
+│       ├── constants/                # Shared storage invariants (chunk size, SHA-256 hex length)
+│       ├── validate/                 # Shared request checks (SHA-256 digests, namespaces, object IDs, commit manifests)
+│       ├── metadata/                 # MetadataStore interface + deterministic Engine + LocalMetadataStore
+│       ├── chunkstore/               # ChunkStore interface + LocalChunkStore (SHA-256)
+│       ├── ticket/                   # Signed Storage Ticket claims + verifier
+│       ├── gateway/                  # Connect-RPC Control Plane + HTTP Data Plane + Stateless Ticket Auth
+│       ├── consensus/                # Single-Decree & Multi-Paxos (PaxosMetadataStore)
+│       └── chunkserver/              # Replicated chunk storage & bit-rot scrubber (ReplicatedChunkStore)
 ├── sdk/
 │   ├── web/                          # @lumavault/sdk (Connect-ES/Query + "./gen/*" + Web Crypto chunker)
 │   └── swift/                        # LumaVaultSDK (Storage + App Connect-Swift clients + CryptoKit chunker)
