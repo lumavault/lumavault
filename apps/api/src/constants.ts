@@ -22,3 +22,6 @@ export const CORS_ALLOW_HEADERS = [
   "Connect-Content-Encoding",
 ];
 export const CORS_EXPOSE_HEADERS = ["Connect-Content-Encoding", "Set-Auth-Token"];
+
+// Client address used for rate limits when the server cannot tell who is calling.
+export const UNKNOWN_CLIENT_IP = "unknown";
