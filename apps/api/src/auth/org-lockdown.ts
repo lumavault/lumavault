@@ -1,4 +1,4 @@
-import { AUTH_BASE_PATH, LOCKED_AUTH_PREFIXES } from "./constants.js";
+import { AUTH_BASE_PATH, LOCKED_AUTH_PREFIXES } from "#/routes.js";
 import type { ApiModule } from "#/server/modules.js";
 
 /** True for Better Auth paths that only IamService may use, server-side. */

@@ -13,13 +13,6 @@ export const MAX_MEMBER_LIMIT = 2 ** 31 - 1;
 // A household creation invite can be redeemed for this long.
 export const HOUSEHOLD_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Portal page a household creation invite links to. The invite's secret follows this path.
-export const HOUSEHOLD_INVITE_PATH = "/invite/household/";
-
-// Page sizes for Super-Admin list calls. A request for more than the maximum gets the maximum.
-export const DEFAULT_PAGE_SIZE = 50;
-export const MAX_PAGE_SIZE = 200;
-
 // Media apps a household can have enabled. Matches the App enum in iam.proto.
 export const IAM_APPS = ["photos", "cinema", "arcade"] as const;
 export type IamApp = (typeof IAM_APPS)[number];

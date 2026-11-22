@@ -1,5 +1,5 @@
 import { and, eq, ilike, or } from "drizzle-orm";
-import { keysetAfter, keysetOrder, type PageCursor } from "#/data/sql.js";
+import { keysetAfter, keysetOrder, likeContains, type PageCursor } from "#/data/sql.js";
 import type { DbOrTx } from "#/db/index.js";
 import { user } from "#/db/schemas/auth.js";
 import type { User } from "./types.js";
@@ -7,11 +7,6 @@ import type { User } from "./types.js";
 export async function getUserById(db: DbOrTx, userId: string): Promise<User | null> {
   const [row] = await db.select().from(user).where(eq(user.id, userId));
   return row ?? null;
-}
-
-/** Escapes LIKE wildcards so the query matches them literally. */
-function likeContains(query: string): string {
-  return `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
 /** A page of users in creation order, optionally only those whose name or email contains query, ignoring case. */

@@ -1,4 +1,5 @@
-import { and, desc, eq, gt, isNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, type SQL } from "drizzle-orm";
+import { uuid } from "#/data/sql.js";
 import { noRowsOnBadUuid } from "#/db/errors.js";
 import type { DbOrTx } from "#/db/index.js";
 import { iamHouseholdInvites } from "#/db/schemas/iam.js";
@@ -37,7 +38,7 @@ export async function getHouseholdInviteForUpdate(db: DbOrTx, inviteId: string):
   const [row] = await db
     .select()
     .from(iamHouseholdInvites)
-    .where(eq(iamHouseholdInvites.id, sql`${inviteId}::uuid`))
+    .where(eq(iamHouseholdInvites.id, uuid(inviteId)))
     .for("update")
     .catch(noRowsOnBadUuid);
   return row ?? null;

@@ -10,7 +10,9 @@ import { createOrganization } from "#/data/auth/organization/create-organization
 import { createHousehold } from "#/data/iam/household/create-household.js";
 import { invitation, session } from "#/db/schemas/auth.js";
 import { iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
-import { DEFAULT_MEMBER_LIMIT, HOUSEHOLD_INVITE_PATH, MAX_PAGE_SIZE } from "#/iam/constants.js";
+import { DEFAULT_MEMBER_LIMIT } from "#/iam/constants.js";
+import { MAX_PAGE_SIZE } from "#/lib/constants.js";
+import { HOUSEHOLD_INVITE_PATH } from "#/routes.js";
 import { hashSecret } from "#/lib/secrets.js";
 import { createApp } from "#/server/app.js";
 import { loadModules, type ModuleContext } from "#/server/modules.js";

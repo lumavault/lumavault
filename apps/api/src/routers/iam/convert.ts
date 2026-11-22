@@ -25,8 +25,9 @@ import type { Organization } from "#/data/auth/organization/types.js";
 import type { User } from "#/data/auth/user/types.js";
 import type { GracePeriod } from "#/data/iam/grace-period/types.js";
 import type { HouseholdInvite } from "#/data/iam/household-invite/types.js";
-import type { Household, HouseholdSummary } from "#/data/iam/household/types.js";
+import type { Household } from "#/data/iam/household/types.js";
 import type { IamApp } from "#/iam/constants.js";
+import type { HouseholdSummary, HouseholdView } from "#/services/households/index.js";
 
 const APP_TO_WIRE: Record<IamApp, App> = { photos: App.PHOTOS, cinema: App.CINEMA, arcade: App.ARCADE };
 
@@ -136,4 +137,8 @@ export function householdSummaryToWire(s: HouseholdSummary): MessageInitShape<ty
     memberCount: s.memberCount,
     pendingInviteCount: s.pendingInviteCount,
   };
+}
+
+export function householdViewToWire(v: HouseholdView): MessageInitShape<typeof HouseholdSchema> {
+  return householdToWire(v.organization, v.household, v.ownerUserId);
 }
