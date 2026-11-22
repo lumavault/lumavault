@@ -9,6 +9,8 @@ import {
   type HouseholdInviteSchema,
   type HouseholdSchema,
   type HouseholdSummarySchema,
+  type MemberInviteSchema,
+  type MemberSchema,
   Role,
   type UsageSchema,
   type UserSchema,
@@ -20,7 +22,9 @@ import {
   type HouseholdRole,
   SUPER_ADMIN_ROLE,
 } from "#/auth/constants.js";
-import { hasUserRole } from "#/auth/role-checks.js";
+import { hasUserRole, isHouseholdRole } from "#/auth/role-checks.js";
+import type { Invitation } from "#/data/auth/invitation/types.js";
+import type { MemberWithUser } from "#/data/auth/member/types.js";
 import type { Organization } from "#/data/auth/organization/types.js";
 import type { User } from "#/data/auth/user/types.js";
 import type { GracePeriod } from "#/data/iam/grace-period/types.js";
@@ -141,4 +145,18 @@ export function householdSummaryToWire(s: HouseholdSummary): MessageInitShape<ty
 
 export function householdViewToWire(v: HouseholdView): MessageInitShape<typeof HouseholdSchema> {
   return householdToWire(v.organization, v.household, v.ownerUserId);
+}
+
+/** A stored role string as a wire Role. Unknown values become ROLE_UNSPECIFIED. */
+function storedRoleToWire(role: string | null): Role {
+  return role && isHouseholdRole(role) ? roleToWire(role) : Role.UNSPECIFIED;
+}
+
+export function memberToWire(m: MemberWithUser): MessageInitShape<typeof MemberSchema> {
+  return { user: userToWire(m.user), role: storedRoleToWire(m.member.role), joinedAt: timestampFromDate(m.member.createdAt) };
+}
+
+/** A member invitation as an IamService MemberInvite. Invitations without a role invite a Member. */
+export function memberInviteToWire(i: Invitation): MessageInitShape<typeof MemberInviteSchema> {
+  return { id: i.id, email: i.email, role: storedRoleToWire(i.role ?? HOUSEHOLD_MEMBER_ROLE), expiresAt: timestampFromDate(i.expiresAt) };
 }

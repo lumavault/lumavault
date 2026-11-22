@@ -12,3 +12,6 @@ export const LOCKED_AUTH_PREFIXES = ["/organization/", "/admin/"] as const;
 
 // Portal pages. A household creation invite link is the Portal URL, this path, and the invite's secret.
 export const HOUSEHOLD_INVITE_PATH = "/invite/household/";
+
+// A member invite link is the Portal URL, this path, and the invite's ID.
+export const MEMBER_INVITE_PATH = "/invite/member/";

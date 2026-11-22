@@ -15,3 +15,15 @@ export async function cancelPendingInvitationsForUser(db: DbOrTx, input: { email
       and(eq(invitation.status, "pending"), or(sql`lower(${invitation.email}) = ${input.email}`, eq(invitation.inviterId, input.userId))),
     );
 }
+
+export async function cancelInvitation(db: DbOrTx, invitationId: string): Promise<void> {
+  await db.update(invitation).set({ status: "canceled" }).where(eq(invitation.id, invitationId));
+}
+
+/** Cancels this household's pending member invitations to this lowercased email. */
+export async function cancelPendingInvitationsByEmail(db: DbOrTx, organizationId: string, email: string): Promise<void> {
+  await db
+    .update(invitation)
+    .set({ status: "canceled" })
+    .where(and(eq(invitation.organizationId, organizationId), eq(invitation.status, "pending"), sql`lower(${invitation.email}) = ${email}`));
+}

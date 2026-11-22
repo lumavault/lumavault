@@ -1,8 +1,9 @@
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
 import type { DbOrTx } from "#/db/index.js";
 import type { User } from "#/data/auth/user/types.js";
 import { member, user } from "#/db/schemas/auth.js";
+import type { Member, MemberWithUser } from "./types.js";
 
 /** The user who owns a household, or null if it has none. */
 export async function getOwnerUserId(db: DbOrTx, organizationId: string): Promise<string | null> {
@@ -30,4 +31,23 @@ export async function countMembersByOrganizationIds(db: DbOrTx, organizationIds:
     .from(member)
     .where(inArray(member.organizationId, organizationIds))
     .groupBy(member.organizationId);
+}
+
+/** A user's membership in this household, or null when they are not in it. */
+export async function getMember(db: DbOrTx, organizationId: string, userId: string): Promise<Member | null> {
+  const [row] = await db
+    .select()
+    .from(member)
+    .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));
+  return row ?? null;
+}
+
+/** Every member of a household with their user row, the Owner first, then by join time. */
+export async function getMembersWithUsers(db: DbOrTx, organizationId: string): Promise<MemberWithUser[]> {
+  return db
+    .select({ member, user })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(eq(member.organizationId, organizationId))
+    .orderBy(desc(eq(member.role, HOUSEHOLD_OWNER_ROLE)), asc(member.createdAt), asc(member.id));
 }

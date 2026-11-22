@@ -7,16 +7,21 @@ import type { Config } from "#/config.js";
 import { MODULE_DIRS } from "#/constants.js";
 import type { Db } from "#/db/index.js";
 import type { EmailService } from "#/email/emails.js";
+import type { AppDataHooks } from "#/iam/app-data.js";
 import type { StorageGateway } from "#/lib/storage-gateway.js";
 import { listSourceFiles } from "./source-files.js";
 
-/** What every module gets: config, the database, Better Auth, email, and the Storage Gateway. */
+/**
+ * What every module gets: config, the database, Better Auth, email, the Storage Gateway, and
+ * the data hooks of every media app module.
+ */
 export interface ModuleContext {
   config: Config;
   db: Db;
   auth: Auth;
   email: EmailService;
   gateway: StorageGateway;
+  apps: AppDataHooks[];
 }
 
 /**
@@ -33,6 +38,13 @@ export interface ApiModule {
   start?(ctx: ModuleContext): Promise<void> | void;
   /** Stops background work. Called on shutdown, in reverse start order. */
   stop?(): Promise<void> | void;
+  /** A media app's data hooks, collected into ModuleContext.apps. */
+  appData?: AppDataHooks;
+}
+
+/** The data hooks of every media app module. */
+export function appDataHooks(modules: ApiModule[]): AppDataHooks[] {
+  return modules.flatMap((m) => (m.appData ? [m.appData] : []));
 }
 
 export const SRC_DIR = fileURLToPath(new URL("../", import.meta.url));
