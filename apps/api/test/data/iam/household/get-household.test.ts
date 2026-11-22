@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { member, organization } from "#/db/schemas/auth.js";
 import { iamHouseholds } from "#/db/schemas/iam.js";
@@ -49,11 +50,22 @@ describe("getHouseholdByUserId", () => {
     await expect(
       database.db.transaction(async (tx) => {
         const householdId = await addHousehold(tx, "owner");
-        expect(await getHouseholdByUserId(tx, userId)).toEqual({ householdId, role: "owner" });
+        expect(await getHouseholdByUserId(tx, userId)).toEqual({ householdId, role: "owner", enabledApps: [] });
         expect(await getHouseholdByUserId(database.db, userId)).toBeNull();
         throw new Error("rollback");
       }),
     ).rejects.toThrow("rollback");
     expect(await getHouseholdByUserId(database.db, userId)).toBeNull();
+  });
+
+  it("returns the household's enabled apps", async () => {
+    await expect(
+      database.db.transaction(async (tx) => {
+        const householdId = await addHousehold(tx, "member");
+        await tx.update(iamHouseholds).set({ enabledApps: ["cinema", "photos"] }).where(eq(iamHouseholds.householdId, householdId));
+        expect((await getHouseholdByUserId(tx, userId))?.enabledApps).toEqual(["cinema", "photos"]);
+        throw new Error("rollback");
+      }),
+    ).rejects.toThrow("rollback");
   });
 });
