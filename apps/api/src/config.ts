@@ -36,6 +36,7 @@ function schema(isTest: boolean) {
     LUMAVAULT_COOKIE_DOMAIN: optional,
     SMTP_URL: optional,
     LUMAVAULT_MAIL_FROM: optional,
+    LUMAVAULT_TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   });
 }
 
@@ -56,6 +57,8 @@ export interface Config {
   smtpUrl?: string;
   /** Sender for every email, for example "LumaVault <no-reply@example.com>". */
   mailFrom: string;
+  /** Read the client address from the last X-Forwarded-For entry, which a reverse proxy adds. */
+  trustProxy: boolean;
 }
 
 /** Reads and checks config from the environment. Throws one error listing every problem. */
@@ -81,5 +84,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     cookieDomain: e.LUMAVAULT_COOKIE_DOMAIN,
     smtpUrl: e.SMTP_URL,
     mailFrom: e.LUMAVAULT_MAIL_FROM ?? DEFAULT_MAIL_FROM,
+    trustProxy: e.LUMAVAULT_TRUST_PROXY === "true",
   };
 }

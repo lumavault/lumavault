@@ -9,7 +9,7 @@ import { cors } from "hono/cors";
 import { CORS_ALLOW_HEADERS, CORS_ALLOW_METHODS, CORS_EXPOSE_HEADERS, RPC_READ_MAX_BYTES } from "#/constants.js";
 import { AUTH_BASE_PATH, HEALTH_PATH, RPC_PREFIX } from "#/routes.js";
 import type { ApiModule, ModuleContext } from "./modules.js";
-import { requestKey } from "./request.js";
+import { clientIp, clientIpKey, requestKey } from "./request.js";
 
 /** Builds the HTTP app: health check, module routes, Better Auth, and Connect RPCs. */
 export function createApp(ctx: ModuleContext, modules: ApiModule[]): Hono {
@@ -52,7 +52,9 @@ export function createApp(ctx: ModuleContext, modules: ApiModule[]): Hono {
       return c.json({ code: "unimplemented", message: "no such method" }, 404);
     }
     const req = universalServerRequestFromFetch(c.req.raw, {});
-    req.contextValues = createContextValues().set(requestKey, c.req.raw);
+    req.contextValues = createContextValues()
+      .set(requestKey, c.req.raw)
+      .set(clientIpKey, clientIp(c, ctx.config.trustProxy));
     return universalServerResponseToFetch(await handler(req));
   });
 
