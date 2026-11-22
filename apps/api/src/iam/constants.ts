@@ -22,3 +22,9 @@ export const SECRET_HASH_PATTERN = "^[0-9a-f]{64}$";
 
 // The instance settings table holds exactly one row with this ID.
 export const INSTANCE_SETTINGS_ID = 1;
+
+// A member invite can be used for this long.
+export const MEMBER_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Someone removed from a household keeps read-only access to their private data for this long.
+export const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;

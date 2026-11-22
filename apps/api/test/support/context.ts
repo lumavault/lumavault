@@ -7,6 +7,7 @@ import * as authTables from "#/db/schemas/auth.js";
 import type { TestDatabase } from "#test/support/db.js";
 import { createEmailService, type EmailService } from "#/email/emails.js";
 import { createMailer } from "#/email/mailer.js";
+import type { AppDataHooks } from "#/iam/app-data.js";
 import type { ModuleContext } from "#/server/modules.js";
 import { createStorageGateway, type StorageGateway } from "#/lib/storage-gateway.js";
 import { requestKey } from "#/server/request.js";
@@ -46,7 +47,7 @@ export function recordingEmail(): EmailService & { sent: { kind: string; to: str
 /** A ModuleContext on a test database, with Better Auth wired to its tables. */
 export function createTestContext(
   database: Pick<TestDatabase, "db">,
-  options: { env?: Record<string, string>; email?: EmailService; gateway?: StorageGateway } = {},
+  options: { env?: Record<string, string>; email?: EmailService; gateway?: StorageGateway; apps?: AppDataHooks[] } = {},
 ): ModuleContext {
   const config = loadConfig({ ...TEST_ENV, ...options.env });
   const email = options.email ?? createEmailService(createMailer({ from: config.mailFrom, log: () => {} }));
@@ -61,7 +62,7 @@ export function createTestContext(
   });
   const gateway =
     options.gateway ?? createStorageGateway({ baseUrl: config.gatewayUrl, serviceKey: config.serviceKey });
-  return { config, db: database.db, auth, email, gateway };
+  return { config, db: database.db, auth, email, gateway, apps: options.apps ?? [] };
 }
 
 export interface TestUser {
