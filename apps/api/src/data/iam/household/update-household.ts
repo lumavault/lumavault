@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { DbOrTx } from "#/db/index.js";
 import { iamHouseholds } from "#/db/schemas/iam.js";
 import { minusFloor, plus } from "#/data/sql.js";
+import type { AllowancePatch, Household } from "./types.js";
 
 /** Holds more bytes against the household's cap. */
 export async function addReservedBytes(db: DbOrTx, householdId: string, bytes: bigint): Promise<void> {
@@ -40,4 +41,16 @@ export async function settleReservedBytes(
       usedBytes: plus(iamHouseholds.usedBytes, input.billedBytes),
     })
     .where(eq(iamHouseholds.householdId, householdId));
+}
+
+/** Changes the given allowance fields. Null when the household does not exist. */
+export async function updateHouseholdAllowance(db: DbOrTx, householdId: string, patch: AllowancePatch): Promise<Household | null> {
+  const [row] = await db.update(iamHouseholds).set(patch).where(eq(iamHouseholds.householdId, householdId)).returning();
+  return row ?? null;
+}
+
+/** Suspends or reactivates a household. Null when it does not exist. */
+export async function setHouseholdSuspended(db: DbOrTx, householdId: string, suspended: boolean): Promise<Household | null> {
+  const [row] = await db.update(iamHouseholds).set({ suspended }).where(eq(iamHouseholds.householdId, householdId)).returning();
+  return row ?? null;
 }
