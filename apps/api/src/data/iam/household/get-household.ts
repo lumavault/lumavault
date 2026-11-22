@@ -10,14 +10,15 @@ import type { Household, HouseholdMembership } from "./types.js";
 /** A user's one household, read from membership rather than the session, so it is always current. */
 export async function getHouseholdByUserId(db: DbOrTx, userId: string): Promise<HouseholdMembership | null> {
   const [row] = await db
-    .select({ householdId: member.organizationId, role: member.role })
+    .select({ householdId: member.organizationId, role: member.role, enabledApps: iamHouseholds.enabledApps })
     .from(member)
+    .leftJoin(iamHouseholds, eq(iamHouseholds.householdId, member.organizationId))
     .where(eq(member.userId, userId))
     .limit(1);
   if (!row || !isHouseholdRole(row.role)) {
     return null;
   }
-  return { householdId: row.householdId, role: row.role };
+  return { householdId: row.householdId, role: row.role, enabledApps: row.enabledApps ?? [] };
 }
 
 /** A household row, or null when it has no allowance row. */

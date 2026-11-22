@@ -5,9 +5,11 @@ import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { requestContext } from "#/server/context.js";
 import { member, user } from "#/db/schemas/auth.js";
 import { iamHouseholds } from "#/db/schemas/iam.js";
+import type { IamApp } from "#/iam/constants.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 import {
   type GuardInput,
+  requireApp,
   requireHouseholdAdmin,
   requireHouseholdMember,
   requireHouseholdOwner,
@@ -35,6 +37,10 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
   } catch (err) {
     return ConnectError.from(err).code;
   }
+}
+
+async function setEnabledApps(id: string, enabledApps: IamApp[]): Promise<void> {
+  await database.db.update(iamHouseholds).set({ enabledApps }).where(eq(iamHouseholds.householdId, id));
 }
 
 beforeAll(async () => {
@@ -69,7 +75,7 @@ describe("requestContext", () => {
   it("reads the viewer and their one household from membership, not the session", async () => {
     const { viewer, household } = await requestContext(as(owner).values, ctx);
     expect(viewer).toMatchObject({ userId: owner.id, isSuperAdmin: false });
-    expect(household).toEqual({ householdId, role: "owner" });
+    expect(household).toEqual({ householdId, role: "owner", enabledApps: [] });
     // Members never chose an active household on their session; they still resolve.
     expect((await requestContext(as(memberUser).values, ctx)).household?.role).toBe("member");
   });
@@ -120,5 +126,61 @@ describe("guards", () => {
     expect(await codeOf(requireHouseholdMember(as(leaver), ctx))).toBe("ok");
     await database.db.delete(member).where(eq(member.userId, leaver.id));
     expect(await codeOf(requireHouseholdMember(as(leaver), ctx))).toBe(Code.FailedPrecondition);
+  });
+});
+
+describe("requireApp", () => {
+  const superAdminOnly = { allowSuperAdminWithoutHousehold: true } as const;
+  let loneSuperAdmin: TestUser;
+
+  beforeAll(async () => {
+    loneSuperAdmin = await signUp(ctx, "lone-root@example.com");
+    await database.db.update(user).set({ role: SUPER_ADMIN_ROLE }).where(eq(user.id, loneSuperAdmin.id));
+  });
+
+  it("refuses a member of a household without the app", async () => {
+    await setEnabledApps(householdId, ["photos"]);
+    try {
+      expect(await codeOf(requireApp(as(memberUser), ctx, "cinema"))).toBe(Code.PermissionDenied);
+      expect(await codeOf(requireApp(as(memberUser), ctx, "cinema", superAdminOnly))).toBe(Code.PermissionDenied);
+      expect(await codeOf(requireApp(as(memberUser), ctx, "photos"))).toBe("ok");
+    } finally {
+      await setEnabledApps(householdId, []);
+    }
+  });
+
+  it("lets a member in with their household when the app is on", async () => {
+    await setEnabledApps(householdId, ["cinema"]);
+    try {
+      const caller = await requireApp(as(memberUser), ctx, "cinema", superAdminOnly);
+      expect(caller.household?.householdId).toBe(householdId);
+    } finally {
+      await setEnabledApps(householdId, []);
+    }
+  });
+
+  it("needs sign-in and a household like requireHouseholdMember", async () => {
+    expect(await codeOf(requireApp(as(), ctx, "cinema", superAdminOnly))).toBe(Code.Unauthenticated);
+    expect(await codeOf(requireApp(as(outsider), ctx, "cinema", superAdminOnly))).toBe(Code.FailedPrecondition);
+    expect(await codeOf(requireApp(as(loneSuperAdmin), ctx, "cinema"))).toBe(Code.FailedPrecondition);
+  });
+
+  it("lets a Super-Admin with no household in when allowed", async () => {
+    const caller = await requireApp(as(loneSuperAdmin), ctx, "cinema", superAdminOnly);
+    expect(caller).toMatchObject({ viewer: { userId: loneSuperAdmin.id }, household: null });
+  });
+
+  it("lets a Super-Admin in without the app when allowed", async () => {
+    expect(await codeOf(requireApp(as(superAdmin), ctx, "cinema"))).toBe(Code.PermissionDenied);
+    expect((await requireApp(as(superAdmin), ctx, "cinema", superAdminOnly)).household).toBeNull();
+  });
+
+  it("gives a Super-Admin their household when it has the app on", async () => {
+    await setEnabledApps(householdId, ["cinema"]);
+    try {
+      expect((await requireApp(as(superAdmin), ctx, "cinema", superAdminOnly)).household?.householdId).toBe(householdId);
+    } finally {
+      await setEnabledApps(householdId, []);
+    }
   });
 });

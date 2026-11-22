@@ -2,6 +2,7 @@ import { Code, type ContextValues, ConnectError } from "@connectrpc/connect";
 import { HOUSEHOLD_MEMBER_ROLE, HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
 import { requestContext, type Viewer } from "#/server/context.js";
 import type { HouseholdMembership } from "#/data/iam/household/types.js";
+import type { IamApp } from "#/iam/constants.js";
 import type { ModuleContext } from "#/server/modules.js";
 
 /** The part of a Connect handler context the guards read. */
@@ -40,6 +41,55 @@ export async function requireHouseholdMember(input: GuardInput, ctx: ModuleConte
     throw new ConnectError("you are not in a household", Code.FailedPrecondition);
   }
   return { viewer, household };
+}
+
+export interface AppCaller {
+  viewer: Viewer;
+  /** Null only for a Super-Admin let in without a household that has the app on. */
+  household: HouseholdMembership | null;
+}
+
+export interface RequireAppOptions {
+  /** Let a Super-Admin in with no household, or one without the app. */
+  allowSuperAdminWithoutHousehold?: boolean;
+}
+
+/** A member of a household that has this app turned on. */
+export async function requireApp(input: GuardInput, ctx: ModuleContext, app: IamApp): Promise<HouseholdCaller>;
+export async function requireApp(
+  input: GuardInput,
+  ctx: ModuleContext,
+  app: IamApp,
+  options: RequireAppOptions & { allowSuperAdminWithoutHousehold: true },
+): Promise<AppCaller>;
+export async function requireApp(
+  input: GuardInput,
+  ctx: ModuleContext,
+  app: IamApp,
+  options?: RequireAppOptions,
+): Promise<HouseholdCaller | AppCaller>;
+export async function requireApp(
+  input: GuardInput,
+  ctx: ModuleContext,
+  app: IamApp,
+  options: RequireAppOptions = {},
+): Promise<HouseholdCaller | AppCaller> {
+  if (options.allowSuperAdminWithoutHousehold) {
+    const viewer = await requireSignedIn(input, ctx);
+    const { household } = await requestContext(input.values, ctx);
+    if (viewer.isSuperAdmin && !hasApp(household, app)) {
+      return { viewer, household: null };
+    }
+  }
+  const caller = await requireHouseholdMember(input, ctx);
+  if (!caller.household.enabledApps.includes(app)) {
+    throw new ConnectError(`${app} is not enabled for this household`, Code.PermissionDenied);
+  }
+  return caller;
+}
+
+function hasApp(household: HouseholdMembership | null, app: IamApp): boolean {
+  return household !== null && household.enabledApps.includes(app);
 }
 
 /** The household's Owner or an Admin. */
