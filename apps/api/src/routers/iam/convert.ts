@@ -6,7 +6,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   App,
   type GracePeriodSchema,
+  type HouseholdInviteSchema,
   type HouseholdSchema,
+  type HouseholdSummarySchema,
   Role,
   type UsageSchema,
   type UserSchema,
@@ -22,7 +24,8 @@ import { hasUserRole } from "#/auth/role-checks.js";
 import type { Organization } from "#/data/auth/organization/types.js";
 import type { User } from "#/data/auth/user/types.js";
 import type { GracePeriod } from "#/data/iam/grace-period/types.js";
-import type { Household } from "#/data/iam/household/types.js";
+import type { HouseholdInvite } from "#/data/iam/household-invite/types.js";
+import type { Household, HouseholdSummary } from "#/data/iam/household/types.js";
 import type { IamApp } from "#/iam/constants.js";
 
 const APP_TO_WIRE: Record<IamApp, App> = { photos: App.PHOTOS, cinema: App.CINEMA, arcade: App.ARCADE };
@@ -111,4 +114,26 @@ export function usageToWire(h: Household, heldBytes: bigint): MessageInitShape<t
 
 export function gracePeriodToWire(g: GracePeriod): MessageInitShape<typeof GracePeriodSchema> {
   return { formerHouseholdName: g.householdName, privateBytes: g.heldBytes, deleteAt: timestampFromDate(g.deleteAt) };
+}
+
+/** A household creation invite row as an IamService HouseholdInvite. The secret is never stored, so never returned. */
+export function householdInviteToWire(i: HouseholdInvite): MessageInitShape<typeof HouseholdInviteSchema> {
+  return {
+    id: i.id,
+    email: i.email,
+    allowance: { storageCapBytes: i.storageCapBytes, enabledApps: i.enabledApps.map(appToWire), memberLimit: i.memberLimit },
+    note: i.note,
+    expiresAt: timestampFromDate(i.expiresAt),
+    createdAt: timestampFromDate(i.createdAt),
+  };
+}
+
+export function householdSummaryToWire(s: HouseholdSummary): MessageInitShape<typeof HouseholdSummarySchema> {
+  return {
+    household: householdToWire(s.organization, s.household, s.owner?.id ?? ""),
+    owner: s.owner ? userToWire(s.owner) : undefined,
+    usage: usageToWire(s.household, s.heldBytes),
+    memberCount: s.memberCount,
+    pendingInviteCount: s.pendingInviteCount,
+  };
 }
