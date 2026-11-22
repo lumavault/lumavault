@@ -3,7 +3,7 @@ import { type Client, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
 import type { Hono } from "hono";
-import { RPC_PREFIX } from "#/constants.js";
+import { RPC_PREFIX } from "#/routes.js";
 
 export function iamClient(app: Hono, headers?: Headers, options: { useHttpGet?: boolean } = {}): Client<typeof IamService> {
   return createClient(

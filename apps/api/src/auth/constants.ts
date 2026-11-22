@@ -1,6 +1,3 @@
-// Better Auth is mounted under this path on the API server.
-export const AUTH_BASE_PATH = "/api/auth";
-
 // Admin plugin roles on the user. "admin" is the Super-Admin flag; everyone else is "user".
 export const SUPER_ADMIN_ROLE = "admin";
 export const DEFAULT_USER_ROLE = "user";
@@ -22,9 +19,6 @@ export const CREDENTIAL_PROVIDER_ID = "credential";
 export const HOUSEHOLD_SLUG_PREFIX = "household-";
 
 export const PASSKEY_RP_NAME = "LumaVault";
-
-// Better Auth routes clients may never call. IamService does these actions server-side.
-export const LOCKED_AUTH_PREFIXES = ["/organization/", "/admin/"] as const;
 
 // Storage tickets: the format is fixed by the storage tickets scoping doc and checked against
 // sdk/testdata/ticket-vectors.json, which the Go Gateway also passes.

@@ -1,38 +1,24 @@
-import type { MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { type Allowance, type HouseholdSchema, IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { z } from "zod";
+import { type Allowance, IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
 import { cancelPendingInvitationsForUser } from "#/data/auth/invitation/update-invitation.js";
-import { getOwnerUserId } from "#/data/auth/member/get-member.js";
-import { getOrganizationById } from "#/data/auth/organization/get-organization.js";
 import { deleteSessionsByUserId } from "#/data/auth/session/delete-session.js";
 import { getUsers } from "#/data/auth/user/get-user.js";
 import { banUser, unbanUser } from "#/data/auth/user/update-user.js";
-import { getHouseholdSummaries } from "#/data/iam/household/get-household-summaries.js";
 import type { AllowancePatch, Household } from "#/data/iam/household/types.js";
 import { setHouseholdSuspended, updateHouseholdAllowance } from "#/data/iam/household/update-household.js";
 import { createHouseholdInvite } from "#/data/iam/household-invite/create-household-invite.js";
 import { getHouseholdInviteForUpdate, getOpenHouseholdInvites } from "#/data/iam/household-invite/get-household-invite.js";
 import { revokeHouseholdInvite, revokeUnusedHouseholdInvitesByEmail } from "#/data/iam/household-invite/update-household-invite.js";
-import type { PageCursor } from "#/data/sql.js";
 import type { DbOrTx } from "#/db/index.js";
 import { requireSuperAdmin } from "#/guards.js";
-import {
-  DEFAULT_MEMBER_LIMIT,
-  DEFAULT_PAGE_SIZE,
-  HOUSEHOLD_INVITE_PATH,
-  HOUSEHOLD_INVITE_TTL_MS,
-  MAX_MEMBER_LIMIT,
-  MAX_PAGE_SIZE,
-  MAX_STORAGE_CAP_BYTES,
-} from "#/iam/constants.js";
+import { DEFAULT_MEMBER_LIMIT, HOUSEHOLD_INVITE_TTL_MS, MAX_MEMBER_LIMIT, MAX_STORAGE_CAP_BYTES } from "#/iam/constants.js";
+import { paged } from "#/lib/paging.js";
 import { hashSecret, newSecret } from "#/lib/secrets.js";
+import { emailSchema, uuidSchema } from "#/lib/validation.js";
+import { HOUSEHOLD_INVITE_PATH } from "#/routes.js";
 import type { ApiModule } from "#/server/modules.js";
-import { appsFromWire, householdInviteToWire, householdSummaryToWire, householdToWire, required, userToWire } from "./convert.js";
-
-const emailSchema = z.email();
-const uuidSchema = z.uuid();
-const cursorSchema = z.object({ c: z.iso.datetime(), i: z.string().min(1) });
+import { getHouseholdSummaries, getHouseholdView } from "#/services/households/index.js";
+import { appsFromWire, householdInviteToWire, householdSummaryToWire, householdViewToWire, required, userToWire } from "./convert.js";
 
 // Allowance fields, by their update_mask path.
 
@@ -80,56 +66,13 @@ function allowancePatch(allowance: Allowance | undefined, paths: string[]): Allo
   return patch;
 }
 
-// Keyset paging. The token is the last row's sort key, so new rows never shift later pages.
-
-function pageSize(requested: number): number {
-  if (requested < 0) {
-    throw new ConnectError("page_size must not be negative", Code.InvalidArgument);
-  }
-  return requested === 0 ? DEFAULT_PAGE_SIZE : Math.min(requested, MAX_PAGE_SIZE);
-}
-
-function encodePageToken(cursor: PageCursor): string {
-  return Buffer.from(JSON.stringify({ c: cursor.createdAt.toISOString(), i: cursor.id })).toString("base64url");
-}
-
-function decodePageToken(token: string): PageCursor | undefined {
-  if (!token) {
-    return undefined;
-  }
-  try {
-    const parsed = cursorSchema.parse(JSON.parse(Buffer.from(token, "base64url").toString("utf8")));
-    return { createdAt: new Date(parsed.c), id: parsed.i };
-  } catch {
-    throw new ConnectError("page_token is not valid", Code.InvalidArgument);
-  }
-}
-
-/** Reads one extra row to learn whether another page follows. */
-async function paged<T>(
-  token: string,
-  requestedSize: number,
-  load: (after: PageCursor | undefined, limit: number) => Promise<T[]>,
-  cursorOf: (row: T) => PageCursor,
-): Promise<{ rows: T[]; nextPageToken: string }> {
-  const size = pageSize(requestedSize);
-  const rows = await load(decodePageToken(token), size + 1);
-  if (rows.length <= size) {
-    return { rows, nextPageToken: "" };
-  }
-  const kept = rows.slice(0, size);
-  return { rows: kept, nextPageToken: encodePageToken(cursorOf(kept[kept.length - 1]!)) };
-}
-
-async function householdWire(db: DbOrTx, household: Household): Promise<MessageInitShape<typeof HouseholdSchema>> {
-  const [org, ownerUserId] = await Promise.all([
-    getOrganizationById(db, household.householdId),
-    getOwnerUserId(db, household.householdId),
-  ]);
-  if (!org) {
+/** The household as sent on the wire. NotFound when its organization is gone. */
+async function householdWire(db: DbOrTx, household: Household) {
+  const view = await getHouseholdView(db, household);
+  if (!view) {
     throw new ConnectError("household not found", Code.NotFound);
   }
-  return householdToWire(org, household, ownerUserId ?? "");
+  return householdViewToWire(view);
 }
 
 // Every call here is for the server owner only. Writes go straight to Postgres in one
@@ -207,8 +150,7 @@ export const module: ApiModule = {
       await requireSuperAdmin(call, ctx);
       const now = new Date();
       const { rows, nextPageToken } = await paged(
-        req.pageToken,
-        req.pageSize,
+        req,
         (after, limit) => getHouseholdSummaries(ctx.db, { after, limit, now }),
         (s) => ({ createdAt: s.organization.createdAt, id: s.organization.id }),
       );
@@ -241,8 +183,7 @@ export const module: ApiModule = {
       await requireSuperAdmin(call, ctx);
       const query = req.query.trim() || undefined;
       const { rows, nextPageToken } = await paged(
-        req.pageToken,
-        req.pageSize,
+        req,
         (after, limit) => getUsers(ctx.db, { query, after, limit }),
         (u) => ({ createdAt: u.createdAt, id: u.id }),
       );

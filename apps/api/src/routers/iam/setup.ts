@@ -1,6 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { z } from "zod";
 import { HOUSEHOLD_OWNER_ROLE, SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { createCredentialAccount } from "#/data/auth/account/create-account.js";
 import { createMember } from "#/data/auth/member/create-member.js";
@@ -11,10 +10,9 @@ import { createInstanceSettingsIfMissing } from "#/data/iam/instance-settings/cr
 import { getInstanceSettings, getInstanceSettingsForUpdate } from "#/data/iam/instance-settings/get-instance-settings.js";
 import { markSetupCompleted } from "#/data/iam/instance-settings/update-instance-settings.js";
 import { DEFAULT_MEMBER_LIMIT, IAM_APPS, SETUP_STORAGE_CAP_BYTES } from "#/iam/constants.js";
+import { emailSchema } from "#/lib/validation.js";
 import type { ApiModule, ModuleContext } from "#/server/modules.js";
 import { householdToWire, required, userToWire } from "./convert.js";
-
-const emailSchema = z.email();
 
 async function checkPassword(ctx: ModuleContext, password: string): Promise<string> {
   const { config } = (await ctx.auth.$context).password;

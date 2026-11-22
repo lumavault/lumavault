@@ -1,8 +1,5 @@
 export const DEFAULT_PORT = 4000;
 
-export const HEALTH_PATH = "/healthz";
-export const RPC_PREFIX = "/api/rpc";
-
 // Connect messages larger than this are rejected before they reach a handler.
 export const RPC_READ_MAX_BYTES = 1 << 20;
 

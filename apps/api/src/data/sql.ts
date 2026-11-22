@@ -6,6 +6,16 @@ export function big(value: bigint): SQL {
   return sql`${value.toString()}::bigint`;
 }
 
+/** A text parameter cast to uuid, for IDs that come from clients. Pair with noRowsOnBadUuid. */
+export function uuid(value: string): SQL {
+  return sql`${value}::uuid`;
+}
+
+/** A LIKE pattern matching text that contains value, with its wildcards taken literally. */
+export function likeContains(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
 /** column + value. */
 export function plus(column: AnyPgColumn, value: bigint): SQL {
   return sql`${column} + ${big(value)}`;

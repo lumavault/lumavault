@@ -4,8 +4,8 @@ import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, bearer, magicLink, organization } from "better-auth/plugins";
 import type { Db } from "#/db/index.js";
+import { AUTH_BASE_PATH } from "#/routes.js";
 import {
-  AUTH_BASE_PATH,
   DEFAULT_USER_ROLE,
   HOUSEHOLD_OWNER_ROLE,
   PASSKEY_RP_NAME,
