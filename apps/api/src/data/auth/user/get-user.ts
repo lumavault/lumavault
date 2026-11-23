@@ -9,6 +9,12 @@ export async function getUserById(db: DbOrTx, userId: string): Promise<User | nu
   return row ?? null;
 }
 
+/** A user, locked until the transaction ends, so changes to their membership run one at a time. */
+export async function getUserForUpdate(db: DbOrTx, userId: string): Promise<User | null> {
+  const [row] = await db.select().from(user).where(eq(user.id, userId)).for("update");
+  return row ?? null;
+}
+
 /** A page of users in creation order, optionally only those whose name or email contains query, ignoring case. */
 export async function getUsers(db: DbOrTx, page: { query?: string; after?: PageCursor; limit: number }): Promise<User[]> {
   const pattern = page.query ? likeContains(page.query) : undefined;

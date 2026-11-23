@@ -43,3 +43,15 @@ export async function getHouseholdInviteForUpdate(db: DbOrTx, inviteId: string):
     .catch(noRowsOnBadUuid);
   return row ?? null;
 }
+
+/** An invite by the hash of its link secret. Null when no invite has that hash. */
+export async function getHouseholdInviteByTokenHash(db: DbOrTx, tokenHash: string): Promise<HouseholdInvite | null> {
+  const [row] = await db.select().from(iamHouseholdInvites).where(eq(iamHouseholdInvites.tokenHash, tokenHash));
+  return row ?? null;
+}
+
+/** An invite by the hash of its link secret, locked until the transaction ends. */
+export async function getHouseholdInviteByTokenHashForUpdate(db: DbOrTx, tokenHash: string): Promise<HouseholdInvite | null> {
+  const [row] = await db.select().from(iamHouseholdInvites).where(eq(iamHouseholdInvites.tokenHash, tokenHash)).for("update");
+  return row ?? null;
+}
