@@ -3,6 +3,7 @@ import { FieldMaskSchema } from "@bufbuild/protobuf/wkt";
 import { type Client, Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { authHeaders } from "./auth.js";
+import { getRange } from "./dataplane.js";
 import { gatewayChunkFetcher, verifiedStream } from "./download.js";
 import { ObjectMetadataSchema, type ObjectMetadata, StorageService } from "./gen/lumavault/v1/storage_pb.js";
 import type {
@@ -55,6 +56,14 @@ export class LumaVaultClient {
   /** A URL for video players and other byte-range readers. Not hash-checked. */
   streamUrl(id: string, ticket?: string): string {
     return streamUrl(this.#baseUrl, id, ticket);
+  }
+
+  /**
+   * Reads length bytes from start, fewer at the end of the object. Not hash-checked. Fails
+   * with out_of_range for an empty object or a start past the end.
+   */
+  readRange(id: string, start: number, length: number, options: DownloadOptions = {}): Promise<Uint8Array<ArrayBuffer>> {
+    return getRange(this.#baseUrl, id, start, length, this.#headers(options.ticket), options.signal);
   }
 
   /** A URL for one chunk, for example to show it in an image element. */

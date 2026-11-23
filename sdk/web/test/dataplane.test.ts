@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getChunk, putChunk } from "#/dataplane.js";
+import { getChunk, getRange, putChunk } from "#/dataplane.js";
 
 const BASE = "http://gw:8080";
 const HASH = "a".repeat(64);
@@ -21,6 +21,7 @@ describe("data plane errors", () => {
   const cases: [number, Code][] = [
     [400, Code.InvalidArgument],
     [404, Code.NotFound],
+    [416, Code.OutOfRange],
     [413, Code.InvalidArgument],
     [401, Code.Unauthenticated],
     [403, Code.PermissionDenied],
@@ -49,5 +50,27 @@ describe("data plane errors", () => {
   it("accepts a PUT when the stored size matches", async () => {
     respond(201, { sha256: HASH, size_bytes: 3 });
     await expect(putChunk(BASE, HASH, new Uint8Array(3), {})).resolves.toBeUndefined();
+  });
+});
+
+describe("getRange", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("asks the stream route for an inclusive byte range with the caller's headers", async () => {
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 206 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await getRange(BASE, "obj/1", 10, 3, { "X-Test": "yes" })).toEqual(new Uint8Array([1, 2, 3]));
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${BASE}/v1/stream/obj%2F1`);
+    expect(init.headers).toEqual({ "X-Test": "yes", Range: "bytes=10-12" });
+  });
+
+  it("rejects a negative start or a length below one without calling the gateway", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    for (const [start, length] of [[-1, 1], [0, 0], [0.5, 1]] as const) {
+      expect((await failure(getRange(BASE, "o", start, length, {}))).code).toBe(Code.InvalidArgument);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

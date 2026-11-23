@@ -28,12 +28,16 @@ class FakeGateway implements StorageGateway {
 
   commit(app: "photos" | "cinema" | "arcade", sizeBytes: bigint): string {
     const id = randomUUID();
-    this.objects.set(id, { id, namespace: APP_NAMESPACE[app], sizeBytes, sha256Digest: "0".repeat(64) });
+    this.objects.set(id, { id, namespace: APP_NAMESPACE[app], sizeBytes, sha256Digest: "0".repeat(64), mimeType: "", filename: "" });
     return id;
   }
 
   async stat(objectId: string) {
     return this.objects.get(objectId) ?? null;
+  }
+
+  async readHead(objectId: string) {
+    return this.objects.has(objectId) ? new Uint8Array(0) : null;
   }
 
   async delete(objectId: string) {
