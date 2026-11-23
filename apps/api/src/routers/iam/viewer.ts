@@ -3,14 +3,13 @@ import { IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
 import { getOwnerUserId } from "#/data/auth/member/get-member.js";
 import { getOrganizationById } from "#/data/auth/organization/get-organization.js";
 import { getUserById } from "#/data/auth/user/get-user.js";
-import { getGracePeriodByUserId, getHeldBytesByHousehold } from "#/data/iam/grace-period/get-grace-period.js";
 import { getHouseholdById, getHouseholdByUserId } from "#/data/iam/household/get-household.js";
 import { requireSignedIn } from "#/guards.js";
 import type { ApiModule } from "#/server/modules.js";
-import { gracePeriodToWire, householdToWire, roleToWire, usageToWire, userToWire } from "./convert.js";
+import { householdToWire, roleToWire, usageToWire, userToWire } from "./convert.js";
 
 // GetViewer uses requireSignedIn, not the household guards, so it keeps working for people
-// in a grace period with no household.
+// with no household yet.
 export const module: ApiModule = {
   name: "iam-viewer",
   rpc(router, ctx) {
@@ -20,18 +19,16 @@ export const module: ApiModule = {
       if (!u) {
         throw new ConnectError("sign in required", Code.Unauthenticated);
       }
-      const grace = await getGracePeriodByUserId(ctx.db, u.id);
-      const result = { user: userToWire(u), gracePeriod: grace ? gracePeriodToWire(grace) : undefined };
+      const result = { user: userToWire(u) };
 
       const membership = await getHouseholdByUserId(ctx.db, u.id);
       if (!membership) {
         return result;
       }
-      const [org, household, ownerUserId, heldBytes] = await Promise.all([
+      const [org, household, ownerUserId] = await Promise.all([
         getOrganizationById(ctx.db, membership.householdId),
         getHouseholdById(ctx.db, membership.householdId),
         getOwnerUserId(ctx.db, membership.householdId),
-        getHeldBytesByHousehold(ctx.db, membership.householdId),
       ]);
       if (!org || !household) {
         return result;
@@ -40,7 +37,7 @@ export const module: ApiModule = {
         ...result,
         household: householdToWire(org, household, ownerUserId ?? ""),
         role: roleToWire(membership.role),
-        usage: usageToWire(household, heldBytes),
+        usage: usageToWire(household),
       };
     });
   },

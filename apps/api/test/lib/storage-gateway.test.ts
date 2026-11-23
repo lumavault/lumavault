@@ -69,15 +69,6 @@ describe("StorageGateway against a Gateway with ticket checks on", () => {
     await expect(storage.delete(obj.id)).resolves.toBeUndefined();
   });
 
-  it("copies an object into a new one with the same bytes", async () => {
-    const bytes = new Uint8Array(500).fill(4);
-    const obj = await uploadObject(bytes);
-    const copy = await storage.copy(obj.id);
-    expect(copy.id).not.toBe(obj.id);
-    expect(copy).toMatchObject({ namespace: Namespace.PHOTOS, sizeBytes: 500n, sha256Digest: sha(bytes) });
-    await storage.delete(obj.id);
-    expect(await storage.stat(copy.id)).not.toBeNull();
-  });
 
   it("is rejected without the right service key", async () => {
     const wrong = createStorageGateway({ baseUrl: gw.baseUrl, serviceKey: "not-the-key" });

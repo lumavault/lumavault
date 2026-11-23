@@ -33,16 +33,6 @@ export async function getHouseholdForUpdate(db: DbOrTx, householdId: string): Pr
   return household ?? null;
 }
 
-/** Households by ID, locked in ID order so concurrent callers never wait on each other in a cycle. */
-export async function getHouseholdsForUpdate(db: DbOrTx, householdIds: string[]): Promise<Household[]> {
-  return db
-    .select()
-    .from(iamHouseholds)
-    .where(inArray(iamHouseholds.householdId, householdIds))
-    .orderBy(iamHouseholds.householdId)
-    .for("update");
-}
-
 /** A page of households in creation order, each with its organization row. */
 export async function getHouseholdPage(
   db: DbOrTx,

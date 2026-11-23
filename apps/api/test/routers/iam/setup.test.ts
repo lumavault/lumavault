@@ -5,7 +5,7 @@ import type { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SUPER_ADMIN_ROLE } from "#/auth/constants.js";
 import { user } from "#/db/schemas/auth.js";
-import { iamGracePeriods, iamHouseholds } from "#/db/schemas/iam.js";
+import { iamHouseholds } from "#/db/schemas/iam.js";
 import { IAM_APPS, SETUP_STORAGE_CAP_BYTES } from "#/iam/constants.js";
 import { createApp } from "#/server/app.js";
 import { loadModules, type ModuleContext } from "#/server/modules.js";
@@ -111,7 +111,7 @@ describe("the setup response", () => {
       memberLimit: 4,
     });
     expect(viewer.household?.allowance?.enabledApps).toHaveLength(IAM_APPS.length);
-    expect(viewer.usage).toMatchObject({ usedBytes: 0n, reservedBytes: 0n, remainingBytes: SETUP_STORAGE_CAP_BYTES, heldBytes: 0n });
+    expect(viewer.usage).toMatchObject({ usedBytes: 0n, reservedBytes: 0n, remainingBytes: SETUP_STORAGE_CAP_BYTES });
   });
 
   it("lets the admin sign in again with the same password", async () => {
@@ -163,25 +163,16 @@ describe("GetViewer", () => {
     expect(viewer.household).toBeUndefined();
     expect(viewer.usage).toBeUndefined();
     expect(viewer.role).toBe(Role.UNSPECIFIED);
-    expect(viewer.gracePeriod).toBeUndefined();
   });
 
-  it("floors remaining bytes at zero and reports held bytes and grace periods", async () => {
-    const leaver = await signUp(server.ctx, "leaver@example.com");
-    const deleteAt = new Date("2030-01-01T00:00:00Z");
-    await server.database.db.insert(iamGracePeriods).values({ userId: leaver.id, householdId, householdName: "Home", heldBytes: 7n, deleteAt });
+  it("floors remaining bytes at zero", async () => {
     await server.database.db
       .update(iamHouseholds)
       .set({ storageCapBytes: 10n, usedBytes: 50n, reservedBytes: 0n })
       .where(eq(iamHouseholds.householdId, householdId));
 
     const admin = await iamClient(server.app, adminHeaders).getViewer({});
-    expect(admin.usage).toMatchObject({ usedBytes: 50n, remainingBytes: 0n, heldBytes: 7n });
-
-    const viewer = await iamClient(server.app, leaver.headers).getViewer({});
-    expect(viewer.household).toBeUndefined();
-    expect(viewer.gracePeriod).toMatchObject({ formerHouseholdName: "Home", privateBytes: 7n });
-    expect(viewer.gracePeriod?.deleteAt?.seconds).toBe(BigInt(deleteAt.getTime() / 1000));
+    expect(admin.usage).toMatchObject({ usedBytes: 50n, remainingBytes: 0n });
   });
 
 });

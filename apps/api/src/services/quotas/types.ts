@@ -30,9 +30,3 @@ export interface FinishedUpload {
   householdId: string | null;
   bytes: bigint;
 }
-
-export interface MovedObjects {
-  /** Bytes now billed to the new household. */
-  bytes: bigint;
-  count: number;
-}
