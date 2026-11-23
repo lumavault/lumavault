@@ -43,6 +43,9 @@ export const iamHouseholds = iamSchema.table(
     memberLimit: integer("member_limit").notNull().default(DEFAULT_MEMBER_LIMIT),
     usedBytes: bigint("used_bytes", { mode: "bigint" }).notNull().default(sql`'0'`),
     reservedBytes: bigint("reserved_bytes", { mode: "bigint" }).notNull().default(sql`'0'`),
+    // Set when the last member leaves or moves out. The household and everything in it is
+    // deleted after this time unless someone joins first.
+    closesAt: timestamp("closes_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -51,6 +54,7 @@ export const iamHouseholds = iamSchema.table(
   },
   (t) => [
     enabledAppsCheck("households", t.enabledApps),
+    index("households_closes_at_idx").on(t.closesAt).where(sql`${t.closesAt} is not null`),
     check("households_storage_cap_bytes_nonnegative", sql`${t.storageCapBytes} >= 0`),
     check("households_used_bytes_nonnegative", sql`${t.usedBytes} >= 0`),
     check("households_reserved_bytes_nonnegative", sql`${t.reservedBytes} >= 0`),

@@ -48,3 +48,8 @@ export async function updateHouseholdAllowance(db: DbOrTx, householdId: string, 
   const [row] = await db.update(iamHouseholds).set(patch).where(eq(iamHouseholds.householdId, householdId)).returning();
   return row ?? null;
 }
+
+/** Sets or clears the time an empty household closes. */
+export async function setHouseholdClosesAt(db: DbOrTx, householdId: string, closesAt: Date | null): Promise<void> {
+  await db.update(iamHouseholds).set({ closesAt }).where(eq(iamHouseholds.householdId, householdId));
+}

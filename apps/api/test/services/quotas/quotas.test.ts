@@ -8,9 +8,8 @@ import { iamHouseholds, iamObjectClaims, iamUploadReservations } from "#/db/sche
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 import type { ModuleContext } from "#/server/modules.js";
 import { createTestContext } from "#test/support/context.js";
-import type { StorageGateway, StoredObject } from "#/lib/storage-gateway.js";
+import { FakeGateway } from "#test/support/fake-gateway.js";
 import {
-  APP_NAMESPACE,
   cancelReservation,
   copyObjectToHousehold,
   expireReservations,
@@ -20,37 +19,6 @@ import {
   reserveUpload,
   signObjectReadTicket,
 } from "#/services/quotas/index.js";
-
-/** An in-memory Gateway: tests "commit" objects by adding them here. */
-class FakeGateway implements StorageGateway {
-  objects = new Map<string, StoredObject>();
-  deleted: string[] = [];
-
-  commit(app: "photos" | "cinema" | "arcade", sizeBytes: bigint): string {
-    const id = randomUUID();
-    this.objects.set(id, { id, namespace: APP_NAMESPACE[app], sizeBytes, sha256Digest: "0".repeat(64) });
-    return id;
-  }
-
-  async stat(objectId: string) {
-    return this.objects.get(objectId) ?? null;
-  }
-
-  async delete(objectId: string) {
-    this.deleted.push(objectId);
-    this.objects.delete(objectId);
-  }
-
-  async setThumbnail() {}
-
-  async copy(objectId: string) {
-    const source = this.objects.get(objectId);
-    if (!source) throw new ConnectError("not found", Code.NotFound);
-    const id = randomUUID();
-    this.objects.set(id, { ...source, id });
-    return this.objects.get(id)!;
-  }
-}
 
 let database: TestDatabase;
 let ctx: ModuleContext;

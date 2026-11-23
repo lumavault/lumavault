@@ -19,6 +19,7 @@ import { loadModules, type ModuleContext } from "#/server/modules.js";
 import { createTestContext, recordingEmail, signUp, TEST_WEB_ORIGIN, type TestUser } from "#test/support/context.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 import { iamClient } from "#test/support/rpc.js";
+import { noopAppHooks } from "#test/support/stand-in-app.js";
 
 let database: TestDatabase;
 let ctx: ModuleContext;
@@ -37,7 +38,7 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
 
 // A stand-in media app: every unreleased object a person uploaded is their private data.
 const fakePhotos: AppDataHooks = {
-  app: "photos",
+  ...noopAppHooks("photos"),
   async privateObjects(db, userId, householdId) {
     const rows = await db
       .select({ objectId: iamObjectClaims.objectId })

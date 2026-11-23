@@ -29,6 +29,9 @@ export const MEMBER_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // Someone removed from a household keeps read-only access to their private data for this long.
 export const GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 
+// A household whose last member left or moved out is kept this long, then closed.
+export const EMPTY_HOUSEHOLD_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 // Apple TV pairing codes: 6 characters from 32 with no lookalikes (no 0, 1, I, or O).
 export const PAIRING_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const PAIRING_CODE_LENGTH = 6;

@@ -3,7 +3,7 @@
 // IamService also uses reserveUpload, cancelReservation, expireReservations, and the move and
 // copy functions for people who change household.
 export { finishUpload } from "./finish.js";
-export { copyObjectToHousehold, moveObjects } from "./move.js";
+export { billCopyInTx, copyObjectToHousehold, moveObjects, moveObjectsInTx } from "./move.js";
 export { signObjectReadTicket, signThumbnailReadTicket } from "./read-ticket.js";
 export { cancelReservation, releaseObject } from "./release.js";
 export { reserveUpload } from "./reserve.js";

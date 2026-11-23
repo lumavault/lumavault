@@ -32,12 +32,21 @@ export async function cancelReservation(
 /**
  * Refunds the household that paid for an object, exactly once, then deletes the object from
  * the Gateway. Call it when an app deletes something for good. Locks the claim, then the household.
+ * With onlyFromHouseholdId, an object billed to any other household, for example because its
+ * owner just moved, is left alone.
  */
-export async function releaseObject(ctx: Pick<ModuleContext, "db" | "gateway">, objectId: string): Promise<{ refunded: bigint }> {
+export async function releaseObject(
+  ctx: Pick<ModuleContext, "db" | "gateway">,
+  objectId: string,
+  options: { onlyFromHouseholdId?: string } = {},
+): Promise<{ refunded: bigint }> {
   const refunded = await ctx.db.transaction(async (tx) => {
     const claim = await getActiveObjectClaimForUpdate(tx, objectId);
     if (!claim) {
       return 0n;
+    }
+    if (options.onlyFromHouseholdId !== undefined && claim.householdId !== options.onlyFromHouseholdId) {
+      return null;
     }
     await markObjectClaimReleased(tx, objectId);
     if (claim.householdId) {
@@ -45,6 +54,9 @@ export async function releaseObject(ctx: Pick<ModuleContext, "db" | "gateway">, 
     }
     return claim.householdId ? claim.bytes : 0n;
   });
+  if (refunded === null) {
+    return { refunded: 0n };
+  }
   await ctx.gateway.delete(objectId);
   return { refunded };
 }
