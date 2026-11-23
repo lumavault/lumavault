@@ -1,12 +1,16 @@
 import { Code, ConnectError, LumaVaultClient, type ObjectMetadata } from "@lumavault/sdk";
 
-/** What the API needs to know about a stored object to bill it. */
+/** What the API needs to know about a stored object to bill it and check its type. */
 export interface StoredObject {
   id: string;
   /** Storage Namespace enum value. */
   namespace: number;
   sizeBytes: bigint;
   sha256Digest: string;
+  /** Empty when the uploader gave none. */
+  mimeType: string;
+  /** Empty when the uploader gave none. */
+  filename: string;
 }
 
 /**
@@ -16,6 +20,11 @@ export interface StoredObject {
 export interface StorageGateway {
   /** The object, or null when the Gateway has no such object. */
   stat(objectId: string): Promise<StoredObject | null>;
+  /**
+   * Up to maxBytes from the start of an object, fewer when it is smaller, and empty when it
+   * is empty. Null when the Gateway has no such object. The bytes are not hash-checked.
+   */
+  readHead(objectId: string, maxBytes: number): Promise<Uint8Array | null>;
   /** Deletes an object's manifest. Deleting an object that is already gone succeeds. */
   delete(objectId: string): Promise<void>;
   /** Points an object at a thumbnail chunk that is already uploaded. */
@@ -35,6 +44,21 @@ export function createStorageGateway(options: { baseUrl: string; serviceKey: str
         throw err;
       }
     },
+    async readHead(objectId, maxBytes) {
+      try {
+        return await client.readRange(objectId, 0, maxBytes);
+      } catch (err) {
+        switch (ConnectError.from(err).code) {
+          case Code.NotFound:
+            return null;
+          // The Gateway refuses any range of an empty object.
+          case Code.OutOfRange:
+            return new Uint8Array(0);
+          default:
+            throw err;
+        }
+      }
+    },
     async delete(objectId) {
       try {
         await client.delete(objectId);
@@ -51,5 +75,12 @@ export function createStorageGateway(options: { baseUrl: string; serviceKey: str
 }
 
 function toStored(o: ObjectMetadata): StoredObject {
-  return { id: o.id, namespace: o.namespace, sizeBytes: o.sizeBytes, sha256Digest: o.sha256Digest };
+  return {
+    id: o.id,
+    namespace: o.namespace,
+    sizeBytes: o.sizeBytes,
+    sha256Digest: o.sha256Digest,
+    mimeType: o.mimeType,
+    filename: o.filename,
+  };
 }

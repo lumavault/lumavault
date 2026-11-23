@@ -16,6 +16,8 @@ export function codeForStatus(status: number): Code {
       return Code.PermissionDenied;
     case 404:
       return Code.NotFound;
+    case 416:
+      return Code.OutOfRange;
     case 500:
       return Code.Internal;
     default:

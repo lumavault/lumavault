@@ -37,6 +37,19 @@ describe("LumaVaultClient against a real gateway", () => {
     expect(events.at(-1)).toEqual({ phase: "uploading", loaded: 9 * MIB, total: 9 * MIB, percentage: 100 });
   }, 30_000); // Hashing and moving 9 MiB can pass 5s on shared CI runners.
 
+  it("reads byte ranges, across chunks and cut short at the end", async () => {
+    const bytes = patternBytes(13, 9 * MIB);
+    const obj = await client.upload(new File([bytes], "range.bin"), { namespace: Namespace.CINEMA });
+    expect(await client.readRange(obj.id, 0, 64 * 1024)).toEqual(bytes.slice(0, 64 * 1024));
+    expect(await client.readRange(obj.id, 4 * MIB - 10, 20)).toEqual(bytes.slice(4 * MIB - 10, 4 * MIB + 10));
+    expect(await client.readRange(obj.id, 9 * MIB - 5, 100)).toEqual(bytes.slice(9 * MIB - 5));
+
+    const past = await client.readRange(obj.id, 9 * MIB, 1).catch((e: unknown) => e);
+    expect((past as ConnectError).code).toBe(Code.OutOfRange);
+    const missing = await client.readRange("no-such-object", 0, 1).catch((e: unknown) => e);
+    expect((missing as ConnectError).code).toBe(Code.NotFound);
+  }, 30_000);
+
   it("re-uploading the same bytes sends no chunks and creates a new object", async () => {
     const bytes = patternBytes(7, 5 * MIB);
     const fetchSpy = vi.spyOn(globalThis, "fetch");

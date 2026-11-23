@@ -11,6 +11,8 @@ export const DEFAULT_UPLOAD_CONCURRENCY = 4;
 // Gateway data plane routes, relative to the gateway base URL.
 export const CHUNKS_PATH = "v1/chunks/";
 export const STREAM_PATH = "v1/stream/";
+export const RANGE_HEADER = "Range";
+export const RANGE_BYTES_PREFIX = "bytes=";
 
 // Storage ticket credentials. Tickets go in Authorization as a Bearer token, or in the
 // token query parameter on URLs handed to video and image elements. The service key is for
