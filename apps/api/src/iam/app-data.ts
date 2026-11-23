@@ -1,13 +1,10 @@
-import type { DbOrTx } from "#/db/index.js";
 import type { IamApp } from "./constants.js";
 
 /**
- * What a media app tells IAM about its data, so IAM can handle people leaving a household
- * without knowing app details. Each app decides what is private to a person and what is
- * shared with the household. An app module provides these through its appData field.
+ * What a media app tells IAM about its data, so IAM can act across apps without knowing app
+ * details. An app module provides these through its appData field. Hooks are added here only
+ * when a platform flow needs one.
  */
 export interface AppDataHooks {
   app: IamApp;
-  /** Stored object IDs that are this person's private data in the household. */
-  privateObjects(db: DbOrTx, userId: string, householdId: string): Promise<string[]>;
 }

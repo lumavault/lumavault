@@ -5,7 +5,6 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   App,
-  type GracePeriodSchema,
   type HouseholdInviteSchema,
   type HouseholdSchema,
   type HouseholdSummarySchema,
@@ -27,7 +26,6 @@ import type { Invitation } from "#/data/auth/invitation/types.js";
 import type { MemberWithUser } from "#/data/auth/member/types.js";
 import type { Organization } from "#/data/auth/organization/types.js";
 import type { User } from "#/data/auth/user/types.js";
-import type { GracePeriod } from "#/data/iam/grace-period/types.js";
 import type { HouseholdInvite } from "#/data/iam/household-invite/types.js";
 import type { Household } from "#/data/iam/household/types.js";
 import type { IamApp } from "#/iam/constants.js";
@@ -105,17 +103,10 @@ export function householdToWire(org: Organization, h: Household, ownerUserId: st
   };
 }
 
-/**
- * Usage with remaining bytes floored at zero, since a cap may be lowered below usage. Held
- * bytes are already part of used bytes; they are reported so the household can see them.
- */
-export function usageToWire(h: Household, heldBytes: bigint): MessageInitShape<typeof UsageSchema> {
+/** Usage with remaining bytes floored at zero, since a cap may be lowered below usage. */
+export function usageToWire(h: Household): MessageInitShape<typeof UsageSchema> {
   const left = h.storageCapBytes - h.usedBytes - h.reservedBytes;
-  return { usedBytes: h.usedBytes, reservedBytes: h.reservedBytes, remainingBytes: left > 0n ? left : 0n, heldBytes };
-}
-
-export function gracePeriodToWire(g: GracePeriod): MessageInitShape<typeof GracePeriodSchema> {
-  return { formerHouseholdName: g.householdName, privateBytes: g.heldBytes, deleteAt: timestampFromDate(g.deleteAt) };
+  return { usedBytes: h.usedBytes, reservedBytes: h.reservedBytes, remainingBytes: left > 0n ? left : 0n };
 }
 
 /** A household creation invite row as an IamService HouseholdInvite. The secret is never stored, so never returned. */
@@ -134,7 +125,7 @@ export function householdSummaryToWire(s: HouseholdSummary): MessageInitShape<ty
   return {
     household: householdToWire(s.organization, s.household, s.owner?.id ?? ""),
     owner: s.owner ? userToWire(s.owner) : undefined,
-    usage: usageToWire(s.household, s.heldBytes),
+    usage: usageToWire(s.household),
     memberCount: s.memberCount,
     pendingInviteCount: s.pendingInviteCount,
   };

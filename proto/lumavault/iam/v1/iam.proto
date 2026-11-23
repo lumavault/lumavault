@@ -10,10 +10,7 @@ import "google/protobuf/timestamp.proto";
 // clients never call Better Auth's household endpoints directly. Every byte count is
 // 64-bit. Read-only calls are marked side-effect-free so browsers can send them as GET.
 //
-// A user belongs to at most one household. Moving to another household moves the user's
-// private data with them and can copy shared items they choose. A user removed from a
-// household keeps read-only access to their private data for a grace period, then it is
-// deleted. Each app decides what is private and what is shared; IAM only moves it.
+// A user belongs to at most one household.
 service IamService {
   // Setup and viewer context.
 
@@ -26,8 +23,7 @@ service IamService {
   // signs it in. Runs only while no Super-Admin exists.
   rpc CompleteSetup(CompleteSetupRequest) returns (CompleteSetupResponse);
 
-  // Returns who is signed in, their household and role, its allowance and usage, and their
-  // grace period if they were removed from a household.
+  // Returns who is signed in, their household and role, and its allowance and usage.
   rpc GetViewer(GetViewerRequest) returns (GetViewerResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
@@ -61,23 +57,15 @@ service IamService {
 
   // Invites and joining a household.
 
-  // Describes an invite before it is used: who sent it, which household, and, when the
-  // caller already belongs to a household, what moving would involve. Works signed out
-  // too, so the invite page can show who the invite is from before sign-up.
+  // Describes an invite before it is used: who sent it and which household. Works signed
+  // out too, so the invite page can show who the invite is from before sign-up.
   rpc GetInvite(GetInviteRequest) returns (GetInviteResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
 
-  // Lists the shared items in the caller's current household that they may copy when they
-  // move. Every app contributes its own items; private data always moves and is not listed.
-  rpc ListCopyableItems(ListCopyableItemsRequest) returns (ListCopyableItemsResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
-  }
-
   // Uses an invite. A new person invited as a member joins automatically when they sign up,
-  // so this is for household creation invites and for people who already have an account.
-  // A caller in another household moves: their private data goes with them, the chosen
-  // shared items are copied, and an Owner leaving others behind names the next Owner.
+  // so this is for household creation invites and for people who already have an account
+  // but no household.
   rpc JoinHousehold(JoinHouseholdRequest) returns (JoinHouseholdResponse);
 
   // Household members. These act on the caller's own household.
@@ -93,10 +81,6 @@ service IamService {
 
   rpc CancelMemberInvite(CancelMemberInviteRequest) returns (CancelMemberInviteResponse);
 
-  // Removes a member, who keeps read-only access to their private data for the grace
-  // period. The Owner cannot be removed. Admin or Owner only.
-  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
-
   // Makes a member an Admin or a Member. The Owner's role changes only through
   // TransferOwnership. Admin or Owner only.
   rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (UpdateMemberRoleResponse);
@@ -104,10 +88,6 @@ service IamService {
   // Hands the Owner role to another member, who must already belong to the household. The
   // previous Owner becomes an Admin. Owner only.
   rpc TransferOwnership(TransferOwnershipRequest) returns (TransferOwnershipResponse);
-
-  // Leaves the household without joining another, starting the grace period. An Owner
-  // leaving others behind names the next Owner; a sole member closes the household.
-  rpc LeaveHousehold(LeaveHouseholdRequest) returns (LeaveHouseholdResponse);
 
   // Apple TV pairing.
 
@@ -168,13 +148,13 @@ message Allowance {
 }
 
 // Usage is the household's current storage accounting. Reserved bytes belong to uploads
-// that are prepared but not finished. Held bytes belong to removed members in their grace
-// period and still count against the cap. Remaining bytes never go below zero.
+// that are prepared but not finished. Remaining bytes never go below zero.
 message Usage {
   uint64 used_bytes = 1;
   uint64 reserved_bytes = 2;
   uint64 remaining_bytes = 3;
-  uint64 held_bytes = 4;
+  reserved 4;
+  reserved "held_bytes";
 }
 
 message Household {
@@ -185,14 +165,6 @@ message Household {
   Allowance allowance = 4;
   string owner_user_id = 5;
   google.protobuf.Timestamp created_at = 6;
-}
-
-// GracePeriod describes a user removed from a household. Until delete_at they can sign in
-// and read or download their private data; joining a household moves it there.
-message GracePeriod {
-  string former_household_name = 1;
-  uint64 private_bytes = 2;
-  google.protobuf.Timestamp delete_at = 3;
 }
 
 message GetSetupStatusRequest {}
@@ -224,8 +196,8 @@ message GetViewerResponse {
   Role role = 3;
   // Usage of the viewer's household. Unset when there is no household.
   Usage usage = 4;
-  // Set while the viewer is in a grace period after leaving or being removed.
-  GracePeriod grace_period = 5;
+  reserved 5;
+  reserved "grace_period";
 }
 
 message HouseholdInvite {
@@ -322,19 +294,6 @@ enum InviteKind {
   INVITE_KIND_MEMBER = 2;
 }
 
-// Move describes what using an invite means for a caller who already belongs to a household.
-message Move {
-  Household current_household = 1;
-  // Private data that always moves with the caller.
-  uint64 private_bytes = 2;
-  // True when the caller is the Owner and others remain, so they must name the next Owner.
-  bool must_choose_next_owner = 3;
-  // Members who could become the next Owner.
-  repeated Member next_owner_candidates = 4;
-  // True when the caller is the only member, so their current household closes.
-  bool closes_current_household = 5;
-}
-
 message GetInviteRequest {
   InviteRef invite = 1;
 }
@@ -348,47 +307,16 @@ message GetInviteResponse {
   // The role to join with. Owner for a new household invite.
   Role role = 5;
   google.protobuf.Timestamp expires_at = 6;
-  // Set when the caller is signed in and already belongs to a household.
-  Move move = 7;
-}
-
-// ItemRef names one app-owned shared item, such as a Photos album or a Cinema movie. The
-// app defines kind and id.
-message ItemRef {
-  App app = 1;
-  string kind = 2;
-  string id = 3;
-}
-
-message CopyableItem {
-  ItemRef ref = 1;
-  string name = 2;
-  uint64 size_bytes = 3;
-  // True when the caller uploaded it. Items others uploaded can be copied too.
-  bool uploaded_by_caller = 4;
-}
-
-message ListCopyableItemsRequest {
-  // Optional filter to one app.
-  App app = 1;
-  int32 page_size = 2;
-  string page_token = 3;
-}
-
-message ListCopyableItemsResponse {
-  repeated CopyableItem items = 1;
-  string next_page_token = 2;
+  reserved 7;
+  reserved "move";
 }
 
 message JoinHouseholdRequest {
   InviteRef invite = 1;
   // Required for a new household invite: the new household's name.
   string household_name = 2;
-  // Shared items to copy from the current household. The current household keeps its own
-  // copy, and the copies count against the new household's quota.
-  repeated ItemRef copy_items = 3;
-  // Required when the caller owns their current household and others remain.
-  string next_owner_user_id = 4;
+  reserved 3, 4;
+  reserved "copy_items", "next_owner_user_id";
 }
 
 message JoinHouseholdResponse {
@@ -435,12 +363,6 @@ message CancelMemberInviteRequest {
 
 message CancelMemberInviteResponse {}
 
-message RemoveMemberRequest {
-  string user_id = 1;
-}
-
-message RemoveMemberResponse {}
-
 message UpdateMemberRoleRequest {
   string user_id = 1;
   // ROLE_ADMIN or ROLE_MEMBER.
@@ -456,13 +378,6 @@ message TransferOwnershipRequest {
 }
 
 message TransferOwnershipResponse {}
-
-message LeaveHouseholdRequest {
-  // Required when the caller is the Owner and others remain.
-  string next_owner_user_id = 1;
-}
-
-message LeaveHouseholdResponse {}
 
 message StartPairingRequest {
   // Shown to the approver, for example "Living Room".

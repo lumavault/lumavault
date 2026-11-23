@@ -19,6 +19,4 @@ export interface HouseholdSummary {
   memberCount: number;
   /** Member invites still pending and not expired. They hold seats under the member limit. */
   pendingInviteCount: number;
-  /** Bytes held for people in their grace period, already part of used bytes. */
-  heldBytes: bigint;
 }

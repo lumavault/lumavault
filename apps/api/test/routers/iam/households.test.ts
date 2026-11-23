@@ -6,13 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_MEMBER_ROLE, HOUSEHOLD_OWNER_ROLE, type HouseholdRole } from "#/auth/constants.js";
 import { createMember } from "#/data/auth/member/create-member.js";
 import { createOrganization } from "#/data/auth/organization/create-organization.js";
-import { getGracePeriodByUserId, getHeldBytesByHousehold } from "#/data/iam/grace-period/get-grace-period.js";
 import { createHousehold } from "#/data/iam/household/create-household.js";
 import { createObjectClaim } from "#/data/iam/object-claim/create-object-claim.js";
 import { member } from "#/db/schemas/auth.js";
 import { iamObjectClaims } from "#/db/schemas/iam.js";
 import type { AppDataHooks } from "#/iam/app-data.js";
-import { DEFAULT_MEMBER_LIMIT, GRACE_PERIOD_MS } from "#/iam/constants.js";
+import { DEFAULT_MEMBER_LIMIT } from "#/iam/constants.js";
 import { MEMBER_INVITE_PATH } from "#/routes.js";
 import { createApp } from "#/server/app.js";
 import { loadModules, type ModuleContext } from "#/server/modules.js";
@@ -34,18 +33,6 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
     return ConnectError.from(err).code;
   }
 }
-
-// A stand-in media app: every unreleased object a person uploaded is their private data.
-const fakePhotos: AppDataHooks = {
-  app: "photos",
-  async privateObjects(db, userId, householdId) {
-    const rows = await db
-      .select({ objectId: iamObjectClaims.objectId })
-      .from(iamObjectClaims)
-      .where(and(eq(iamObjectClaims.uploadedBy, userId), eq(iamObjectClaims.householdId, householdId), isNull(iamObjectClaims.releasedAt)));
-    return rows.map((r) => r.objectId);
-  },
-};
 
 interface TestHousehold {
   id: string;
@@ -81,7 +68,7 @@ beforeAll(async () => {
   database = await createTestDatabase();
   await pushAllSchemas(database);
   email = recordingEmail();
-  ctx = createTestContext(database, { email, apps: [fakePhotos] });
+  ctx = createTestContext(database, { email });
   app = createApp(ctx, await loadModules());
 });
 
@@ -203,40 +190,5 @@ describe("TransferOwnership", () => {
     const admin = await addMember(h, HOUSEHOLD_ADMIN_ROLE);
     expect(await codeOf(iamClient(app, admin.headers).transferOwnership({ userId: admin.id }))).toBe(Code.PermissionDenied);
     expect(await codeOf(iamClient(app, h.owner.headers).transferOwnership({ userId: other.owner.id }))).toBe(Code.NotFound);
-  });
-});
-
-describe("RemoveMember", () => {
-  it("rejects removing the Owner", async () => {
-    const h = await makeHousehold();
-    const admin = await addMember(h, HOUSEHOLD_ADMIN_ROLE);
-    expect(await codeOf(iamClient(app, admin.headers).removeMember({ userId: h.owner.id }))).toBe(Code.FailedPrecondition);
-    expect(await roleOf(h.id, h.owner.id)).toBe(HOUSEHOLD_OWNER_ROLE);
-  });
-
-  it("starts a grace period whose private data counts as held storage", async () => {
-    const h = await makeHousehold();
-    const plain = await addMember(h, HOUSEHOLD_MEMBER_ROLE);
-    await createObjectClaim(ctx.db, { objectId: `obj-${plain.id}-1`, householdId: h.id, uploadedBy: plain.id, app: "photos", bytes: 300n });
-    await createObjectClaim(ctx.db, { objectId: `obj-${plain.id}-2`, householdId: h.id, uploadedBy: plain.id, app: "photos", bytes: 200n });
-    await createObjectClaim(ctx.db, { objectId: `obj-${h.owner.id}`, householdId: h.id, uploadedBy: h.owner.id, app: "photos", bytes: 999n });
-
-    const before = Date.now();
-    await iamClient(app, h.owner.headers).removeMember({ userId: plain.id });
-
-    expect(await roleOf(h.id, plain.id)).toBeUndefined();
-    const grace = await getGracePeriodByUserId(ctx.db, plain.id);
-    expect(grace).toMatchObject({ householdId: h.id, householdName: expect.stringMatching(/^House /), heldBytes: 500n });
-    expect(grace!.deleteAt.getTime()).toBeGreaterThanOrEqual(before + GRACE_PERIOD_MS);
-    expect(await getHeldBytesByHousehold(ctx.db, h.id)).toBe(500n);
-    expect((await iamClient(app, plain.headers).getViewer({})).gracePeriod?.privateBytes).toBe(500n);
-  });
-
-  it("is for Admins only and not for removing yourself", async () => {
-    const h = await makeHousehold();
-    const plain = await addMember(h, HOUSEHOLD_MEMBER_ROLE);
-    const admin = await addMember(h, HOUSEHOLD_ADMIN_ROLE);
-    expect(await codeOf(iamClient(app, plain.headers).removeMember({ userId: admin.id }))).toBe(Code.PermissionDenied);
-    expect(await codeOf(iamClient(app, admin.headers).removeMember({ userId: admin.id }))).toBe(Code.FailedPrecondition);
   });
 });

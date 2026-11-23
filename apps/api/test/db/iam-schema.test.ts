@@ -6,7 +6,7 @@ import { DEFAULT_MEMBER_LIMIT } from "#/iam/constants.js";
 import { DB_SCHEMAS } from "#/db/constants.js";
 import { loadSchemaModules } from "#/db/index.js";
 import { organization, user } from "#/db/schemas/auth.js";
-import { iamGracePeriods, iamHouseholdInvites, iamHouseholds, iamInstanceSettings, iamObjectClaims, iamPairingRequests } from "#/db/schemas/iam.js";
+import { iamHouseholdInvites, iamHouseholds, iamInstanceSettings, iamObjectClaims, iamPairingRequests } from "#/db/schemas/iam.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 
 let database: TestDatabase;
@@ -123,17 +123,6 @@ describe("secrets", () => {
       database.db.insert(iamPairingRequests).values({ ...base, code: "DUP234", deviceSecretHash: sha256("b") }),
       "pairing_requests_pending_code_unique",
     );
-  });
-});
-
-describe("grace periods", () => {
-  it("allow one per user and never negative held bytes", async () => {
-    const householdId = await newHousehold();
-    const row = { userId, householdId, householdName: "Home", heldBytes: 10n, deleteAt: inAnHour() };
-    await database.db.insert(iamGracePeriods).values(row);
-    await expectConstraint(database.db.insert(iamGracePeriods).values(row), "grace_periods_pkey");
-    await database.db.delete(iamGracePeriods);
-    await expectConstraint(database.db.insert(iamGracePeriods).values({ ...row, heldBytes: -1n }), "grace_periods_held_bytes_nonnegative");
   });
 });
 

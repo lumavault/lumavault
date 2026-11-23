@@ -12,10 +12,8 @@ import type { StorageGateway, StoredObject } from "#/lib/storage-gateway.js";
 import {
   APP_NAMESPACE,
   cancelReservation,
-  copyObjectToHousehold,
   expireReservations,
   finishUpload,
-  moveObjects,
   releaseObject,
   reserveUpload,
   signObjectReadTicket,
@@ -42,14 +40,6 @@ class FakeGateway implements StorageGateway {
   }
 
   async setThumbnail() {}
-
-  async copy(objectId: string) {
-    const source = this.objects.get(objectId);
-    if (!source) throw new ConnectError("not found", Code.NotFound);
-    const id = randomUUID();
-    this.objects.set(id, { ...source, id });
-    return this.objects.get(id)!;
-  }
 }
 
 let database: TestDatabase;
@@ -278,47 +268,6 @@ describe("moving and copying between households", () => {
     expect(claim?.uploadedBy).toBe(userId);
   });
 
-  it("moves private data to the new household, all or nothing", async () => {
-    const a = await stored(100n);
-    const b = await stored(200n);
-    const target = await otherHousehold(1000n);
-    expect(await moveObjects(ctx, [a, b], householdId, target)).toEqual({ bytes: 300n, count: 2 });
-    expect(await usage()).toEqual({ used: 0n, reserved: 0n });
-    expect(await usageOf(target)).toEqual({ used: 300n, reserved: 0n });
-    // Moving again changes nothing.
-    expect(await moveObjects(ctx, [a, b], householdId, target)).toEqual({ bytes: 0n, count: 0 });
-  });
-
-  it("refuses a move that does not fit, leaving both households as they were", async () => {
-    const a = await stored(400n);
-    const tight = await otherHousehold(100n);
-    expect(await codeOf(moveObjects(ctx, [a], householdId, tight))).toBe(Code.ResourceExhausted);
-    expect(await usage()).toEqual({ used: 400n, reserved: 0n });
-    expect(await usageOf(tight)).toEqual({ used: 0n, reserved: 0n });
-  });
-
-  it("refuses objects that are not in the household they move from, changing nothing", async () => {
-    const a = await stored(100n);
-    const elsewhere = await otherHousehold(1000n);
-    const target = await otherHousehold(1000n);
-    expect(await codeOf(moveObjects(ctx, [a], elsewhere, target))).toBe(Code.FailedPrecondition);
-    expect(await usage()).toEqual({ used: 100n, reserved: 0n });
-    expect(await usageOf(target)).toEqual({ used: 0n, reserved: 0n });
-  });
-
-  it("copies a shared item so both households keep one, and removes a copy that does not fit", async () => {
-    const a = await stored(50n);
-    const target = await otherHousehold(1000n);
-    const copy = await copyObjectToHousehold(ctx, a, target, userId);
-    expect(copy.objectId).not.toBe(a);
-    expect(await usage()).toEqual({ used: 50n, reserved: 0n });
-    expect(await usageOf(target)).toEqual({ used: 50n, reserved: 0n });
-
-    const tiny = await otherHousehold(10n);
-    const before = gateway.objects.size;
-    expect(await codeOf(copyObjectToHousehold(ctx, a, tiny, userId))).toBe(Code.ResourceExhausted);
-    expect(gateway.objects.size).toBe(before);
-  });
 });
 
 describe("read tickets", () => {

@@ -4,7 +4,6 @@ import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js"
 import { createInvitation } from "#/data/auth/invitation/create-invitation.js";
 import { getInvitationForUpdate, getPendingInvitationsByOrganizationId } from "#/data/auth/invitation/get-invitation.js";
 import { cancelInvitation, cancelPendingInvitationsByEmail } from "#/data/auth/invitation/update-invitation.js";
-import { deleteMember } from "#/data/auth/member/delete-member.js";
 import { getMember, getMembersWithUsers } from "#/data/auth/member/get-member.js";
 import { updateMemberRole } from "#/data/auth/member/update-member.js";
 import { getOrganizationById } from "#/data/auth/organization/get-organization.js";
@@ -13,7 +12,6 @@ import type { Household } from "#/data/iam/household/types.js";
 import type { DbOrTx } from "#/db/index.js";
 import { requireHouseholdAdmin, requireHouseholdMember, requireHouseholdOwner } from "#/guards.js";
 import { MEMBER_INVITE_TTL_MS } from "#/iam/constants.js";
-import { startGracePeriod } from "#/iam/grace.js";
 import { emailSchema } from "#/lib/validation.js";
 import { MEMBER_INVITE_PATH } from "#/routes.js";
 import type { ApiModule } from "#/server/modules.js";
@@ -166,25 +164,5 @@ export const module: ApiModule = {
       return {};
     });
 
-    router.rpc(IamService.method.removeMember, async (req, call) => {
-      const { viewer, household } = await requireHouseholdAdmin(call, ctx);
-      const userId = required(req.userId, "user_id");
-      if (userId === viewer.userId) {
-        throw new ConnectError("use LeaveHousehold to leave your own household", Code.FailedPrecondition);
-      }
-      await ctx.db.transaction(async (tx) => {
-        await lockHousehold(tx, household.householdId);
-        await nonOwnerMember(tx, household.householdId, userId);
-        const org = await getOrganizationById(tx, household.householdId);
-        await deleteMember(tx, household.householdId, userId);
-        await startGracePeriod(tx, ctx.apps, {
-          userId,
-          householdId: household.householdId,
-          householdName: org?.name ?? "",
-          now: new Date(),
-        });
-      });
-      return {};
-    });
   },
 };
