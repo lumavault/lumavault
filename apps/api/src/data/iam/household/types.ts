@@ -8,7 +8,6 @@ export type Household = typeof iamHouseholds.$inferSelect;
 export interface HouseholdMembership {
   householdId: string;
   role: HouseholdRole;
-  suspended: boolean;
 }
 
 /** What it takes to give a new household its allowance. Usage starts at zero. */

@@ -1,11 +1,8 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { type Allowance, IamService } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
-import { cancelPendingInvitationsForUser } from "#/data/auth/invitation/update-invitation.js";
-import { deleteSessionsByUserId } from "#/data/auth/session/delete-session.js";
 import { getUsers } from "#/data/auth/user/get-user.js";
-import { banUser, unbanUser } from "#/data/auth/user/update-user.js";
 import type { AllowancePatch, Household } from "#/data/iam/household/types.js";
-import { setHouseholdSuspended, updateHouseholdAllowance } from "#/data/iam/household/update-household.js";
+import { updateHouseholdAllowance } from "#/data/iam/household/update-household.js";
 import { createHouseholdInvite } from "#/data/iam/household-invite/create-household-invite.js";
 import { getHouseholdInviteForUpdate, getOpenHouseholdInvites } from "#/data/iam/household-invite/get-household-invite.js";
 import { revokeHouseholdInvite, revokeUnusedHouseholdInvitesByEmail } from "#/data/iam/household-invite/update-household-invite.js";
@@ -169,16 +166,6 @@ export const module: ApiModule = {
       return { household: await householdWire(ctx.db, household) };
     });
 
-    router.rpc(IamService.method.setHouseholdSuspended, async (req, call) => {
-      await requireSuperAdmin(call, ctx);
-      const householdId = required(req.householdId, "household_id");
-      const household = await setHouseholdSuspended(ctx.db, householdId, req.suspended);
-      if (!household) {
-        throw new ConnectError("household not found", Code.NotFound);
-      }
-      return { household: await householdWire(ctx.db, household) };
-    });
-
     router.rpc(IamService.method.listUsers, async (req, call) => {
       await requireSuperAdmin(call, ctx);
       const query = req.query.trim() || undefined;
@@ -190,34 +177,5 @@ export const module: ApiModule = {
       return { users: rows.map(userToWire), nextPageToken };
     });
 
-    router.rpc(IamService.method.banUser, async (req, call) => {
-      const viewer = await requireSuperAdmin(call, ctx);
-      const userId = required(req.userId, "user_id");
-      if (userId === viewer.userId) {
-        throw new ConnectError("you cannot ban yourself", Code.FailedPrecondition);
-      }
-      const banned = await ctx.db.transaction(async (tx) => {
-        const u = await banUser(tx, userId, req.reason.trim());
-        if (!u) {
-          throw new ConnectError("user not found", Code.NotFound);
-        }
-        const email = u.email.toLowerCase();
-        await deleteSessionsByUserId(tx, u.id);
-        await revokeUnusedHouseholdInvitesByEmail(tx, email, new Date());
-        await cancelPendingInvitationsForUser(tx, { email, userId: u.id });
-        return u;
-      });
-      return { user: userToWire(banned) };
-    });
-
-    router.rpc(IamService.method.unbanUser, async (req, call) => {
-      await requireSuperAdmin(call, ctx);
-      const userId = required(req.userId, "user_id");
-      const u = await unbanUser(ctx.db, userId);
-      if (!u) {
-        throw new ConnectError("user not found", Code.NotFound);
-      }
-      return { user: userToWire(u) };
-    });
   },
 };

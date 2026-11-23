@@ -104,7 +104,7 @@ describe("the setup response", () => {
     const viewer = await iamClient(server.app, headers).getViewer({});
     expect(viewer.user).toMatchObject({ email: "root@example.com", isSuperAdmin: true });
     expect(viewer.role).toBe(Role.OWNER);
-    expect(viewer.household).toMatchObject({ name: "Home", ownerUserId: viewer.user?.id, suspended: false });
+    expect(viewer.household).toMatchObject({ name: "Home", ownerUserId: viewer.user?.id });
     expect(viewer.household?.allowance).toMatchObject({
       storageCapBytes: SETUP_STORAGE_CAP_BYTES,
       enabledApps: [App.PHOTOS, App.CINEMA, App.ARCADE],
@@ -184,10 +184,4 @@ describe("GetViewer", () => {
     expect(viewer.gracePeriod?.deleteAt?.seconds).toBe(BigInt(deleteAt.getTime() / 1000));
   });
 
-  it("still answers while the household is suspended", async () => {
-    await server.database.db.update(iamHouseholds).set({ suspended: true }).where(eq(iamHouseholds.householdId, householdId));
-    const viewer = await iamClient(server.app, adminHeaders).getViewer({});
-    expect(viewer.household?.suspended).toBe(true);
-    expect(viewer.role).toBe(Role.OWNER);
-  });
 });

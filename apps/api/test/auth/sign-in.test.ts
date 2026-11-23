@@ -1,13 +1,10 @@
-import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "#/server/app.js";
 import { requestContext } from "#/server/context.js";
-import { user } from "#/db/schemas/auth.js";
 import { createTestDatabase, pushAllSchemas, type TestDatabase } from "#test/support/db.js";
 import type { ModuleContext } from "#/server/modules.js";
 import { createTestContext, recordingEmail, rpcValues, signUp, TEST_APP_ORIGINS } from "#test/support/context.js";
-import { isBanned } from "#/auth/session-policy.js";
 
 const [PORTAL, PHOTOS, CINEMA, ARCADE] = TEST_APP_ORIGINS as [string, string, string, string];
 const PASSWORD = "correct horse battery";
@@ -100,22 +97,5 @@ describe("passkeys", () => {
     const body = (await res.json()) as { challenge?: string; rpId?: string };
     expect(body.challenge).toBeTruthy();
     expect(body.rpId).toBe("localhost");
-  });
-});
-
-describe("session policy", () => {
-  it("rejects a banned user on their very next request", async () => {
-    const banned = await signUp(ctx, "banned@example.com");
-    const values = () => rpcValues(banned.headers);
-    expect((await requestContext(values(), ctx)).viewer?.userId).toBe(banned.id);
-    await database.db.update(user).set({ banned: true }).where(eq(user.id, banned.id));
-    expect((await requestContext(values(), ctx)).viewer).toBeNull();
-  });
-
-  it("lets an expired ban lapse", () => {
-    const past = new Date(Date.now() - 1000);
-    expect(isBanned({ banned: true, banExpires: past })).toBe(false);
-    expect(isBanned({ banned: true, banExpires: null })).toBe(true);
-    expect(isBanned({ banned: false })).toBe(false);
   });
 });

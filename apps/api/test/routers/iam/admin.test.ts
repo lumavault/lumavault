@@ -4,11 +4,11 @@ import { App } from "@lumavault/sdk/gen/lumavault/iam/v1/iam_pb";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_MEMBER_ROLE, HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
+import { HOUSEHOLD_MEMBER_ROLE, HOUSEHOLD_OWNER_ROLE } from "#/auth/constants.js";
 import { createMember } from "#/data/auth/member/create-member.js";
 import { createOrganization } from "#/data/auth/organization/create-organization.js";
 import { createHousehold } from "#/data/iam/household/create-household.js";
-import { invitation, session } from "#/db/schemas/auth.js";
+import { invitation } from "#/db/schemas/auth.js";
 import { iamHouseholdInvites, iamHouseholds } from "#/db/schemas/iam.js";
 import { DEFAULT_MEMBER_LIMIT } from "#/iam/constants.js";
 import { MAX_PAGE_SIZE } from "#/lib/constants.js";
@@ -80,10 +80,7 @@ describe("Super-Admin access", () => {
     ["RevokeHouseholdInvite", (c) => c.revokeHouseholdInvite({ inviteId: randomUUID() })],
     ["ListHouseholds", (c) => c.listHouseholds({})],
     ["UpdateHouseholdAllowance", (c) => c.updateHouseholdAllowance({ householdId: "h", allowance })],
-    ["SetHouseholdSuspended", (c) => c.setHouseholdSuspended({ householdId: "h", suspended: true })],
     ["ListUsers", (c) => c.listUsers({})],
-    ["BanUser", (c) => c.banUser({ userId: "u" })],
-    ["UnbanUser", (c) => c.unbanUser({ userId: "u" })],
   ];
 
   it.each(calls)("%s needs a session", async (_name, call) => {
@@ -175,7 +172,7 @@ describe("households", () => {
     const { households } = await iamClient(app, adminHeaders).listHouseholds({});
     const smiths = households.find((h) => h.household?.id === householdId);
     expect(smiths).toMatchObject({
-      household: { name: "Smiths", ownerUserId: owner.id, suspended: false },
+      household: { name: "Smiths", ownerUserId: owner.id },
       owner: { id: owner.id, email: owner.email },
       usage: { usedBytes: 0n, reservedBytes: 0n, remainingBytes: allowance.storageCapBytes },
       memberCount: 1,
@@ -243,19 +240,6 @@ describe("households", () => {
     expect(await codeOf(client.updateHouseholdAllowance({ householdId: "missing", allowance }))).toBe(Code.NotFound);
   });
 
-  it("suspends a household's own routes but keeps GetViewer working", async () => {
-    const client = iamClient(app, adminHeaders);
-    const res = await client.setHouseholdSuspended({ householdId, suspended: true });
-    expect(res.household!.suspended).toBe(true);
-
-    const member = iamClient(app, owner.headers);
-    expect(await codeOf(member.prepareUpload({ app: App.ARCADE, sizeBytes: 1n }))).toBe(Code.PermissionDenied);
-    expect((await member.getViewer({})).household!.suspended).toBe(true);
-
-    await client.setHouseholdSuspended({ householdId, suspended: false });
-    expect((await member.getViewer({})).household!.suspended).toBe(false);
-    expect(await codeOf(client.setHouseholdSuspended({ householdId: "missing", suspended: true }))).toBe(Code.NotFound);
-  });
 });
 
 describe("users", () => {
@@ -282,55 +266,5 @@ describe("users", () => {
     const all = (await client.listUsers({ pageSize: MAX_PAGE_SIZE })).users.map((u) => u.id);
     expect(seen).toEqual(all);
     expect(new Set(seen).size).toBe(seen.length);
-  });
-});
-
-describe("banning", () => {
-  it("signs a banned user out at once and revokes their invites", async () => {
-    const { id: theirs, owner: target } = await makeHousehold("Target", "target@example.com");
-    const client = iamClient(app, adminHeaders);
-    await client.createHouseholdInvite({ email: "TARGET@example.com", allowance });
-    const inviteRow = (id: string) => ({
-      id,
-      organizationId: theirs,
-      role: HOUSEHOLD_ADMIN_ROLE,
-      status: "pending",
-      expiresAt: new Date(Date.now() + 3600_000),
-    });
-    const sentBy = randomUUID();
-    const sentTo = randomUUID();
-    const unrelated = randomUUID();
-    await ctx.db.insert(invitation).values([
-      { ...inviteRow(sentBy), email: "friend@example.com", inviterId: target.id },
-      { ...inviteRow(sentTo), organizationId: householdId, email: "Target@Example.com", inviterId: owner.id },
-      { ...inviteRow(unrelated), organizationId: householdId, email: "other@example.com", inviterId: owner.id },
-    ]);
-    expect((await iamClient(app, target.headers).getViewer({})).user!.id).toBe(target.id);
-
-    const res = await client.banUser({ userId: target.id, reason: " spam " });
-    expect(res.user).toMatchObject({ id: target.id, banned: true, banReason: "spam" });
-
-    expect(await codeOf(iamClient(app, target.headers).getViewer({}))).toBe(Code.Unauthenticated);
-    expect(await ctx.db.select().from(session).where(eq(session.userId, target.id))).toHaveLength(0);
-    expect((await client.listHouseholdInvites({})).invites.map((i) => i.email)).not.toContain("target@example.com");
-    const statuses = Object.fromEntries(
-      (await ctx.db.select({ id: invitation.id, status: invitation.status }).from(invitation)).map((r) => [r.id, r.status]),
-    );
-    expect(statuses[sentBy]).toBe("canceled");
-    expect(statuses[sentTo]).toBe("canceled");
-    expect(statuses[unrelated]).toBe("pending");
-
-    const unbanned = await client.unbanUser({ userId: target.id });
-    expect(unbanned.user).toMatchObject({ banned: false, banReason: "" });
-    const signIn = await ctx.auth.api.signInEmail({ body: { email: target.email, password: "correct horse battery" } });
-    expect(signIn.token).toBeTruthy();
-  });
-
-  it("refuses to ban yourself or someone unknown", async () => {
-    const client = iamClient(app, adminHeaders);
-    expect(await codeOf(client.banUser({ userId: adminId }))).toBe(Code.FailedPrecondition);
-    expect(await codeOf(client.banUser({ userId: "missing" }))).toBe(Code.NotFound);
-    expect(await codeOf(client.unbanUser({ userId: "missing" }))).toBe(Code.NotFound);
-    expect(await codeOf(client.banUser({ userId: " " }))).toBe(Code.InvalidArgument);
   });
 });

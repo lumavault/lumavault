@@ -37,10 +37,6 @@ async function codeOf(promise: Promise<unknown>): Promise<Code | "ok"> {
   }
 }
 
-async function setSuspended(id: string, suspended: boolean): Promise<void> {
-  await database.db.update(iamHouseholds).set({ suspended }).where(eq(iamHouseholds.householdId, id));
-}
-
 beforeAll(async () => {
   database = await createTestDatabase();
   await pushAllSchemas(database);
@@ -73,7 +69,7 @@ describe("requestContext", () => {
   it("reads the viewer and their one household from membership, not the session", async () => {
     const { viewer, household } = await requestContext(as(owner).values, ctx);
     expect(viewer).toMatchObject({ userId: owner.id, isSuperAdmin: false });
-    expect(household).toEqual({ householdId, role: "owner", suspended: false });
+    expect(household).toEqual({ householdId, role: "owner" });
     // Members never chose an active household on their session; they still resolve.
     expect((await requestContext(as(memberUser).values, ctx)).household?.role).toBe("member");
   });
@@ -124,19 +120,5 @@ describe("guards", () => {
     expect(await codeOf(requireHouseholdMember(as(leaver), ctx))).toBe("ok");
     await database.db.delete(member).where(eq(member.userId, leaver.id));
     expect(await codeOf(requireHouseholdMember(as(leaver), ctx))).toBe(Code.FailedPrecondition);
-  });
-});
-
-describe("suspended household", () => {
-  it("blocks its data routes but not viewer or Super-Admin routes", async () => {
-    await setSuspended(householdId, true);
-    try {
-      expect(await codeOf(requireHouseholdMember(as(memberUser), ctx))).toBe(Code.PermissionDenied);
-      expect(await codeOf(requireHouseholdAdmin(as(owner), ctx))).toBe(Code.PermissionDenied);
-      expect(await codeOf(requireSignedIn(as(memberUser), ctx))).toBe("ok");
-      expect(await codeOf(requireSuperAdmin(as(superAdmin), ctx))).toBe("ok");
-    } finally {
-      await setSuspended(householdId, false);
-    }
   });
 });

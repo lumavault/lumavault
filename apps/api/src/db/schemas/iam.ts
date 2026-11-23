@@ -1,5 +1,5 @@
 import { type SQL, sql } from "drizzle-orm";
-import { bigint, boolean, check, index, integer, type PgColumn, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, index, integer, type PgColumn, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { DEFAULT_MEMBER_LIMIT, IAM_APPS, INSTANCE_SETTINGS_ID, type IamApp, SECRET_HASH_PATTERN } from "#/iam/constants.js";
 import { organization, user } from "./auth.js";
 import { iamSchema } from "./namespaces.js";
@@ -43,7 +43,6 @@ export const iamHouseholds = iamSchema.table(
     memberLimit: integer("member_limit").notNull().default(DEFAULT_MEMBER_LIMIT),
     usedBytes: bigint("used_bytes", { mode: "bigint" }).notNull().default(sql`'0'`),
     reservedBytes: bigint("reserved_bytes", { mode: "bigint" }).notNull().default(sql`'0'`),
-    suspended: boolean("suspended").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

@@ -48,9 +48,3 @@ export async function updateHouseholdAllowance(db: DbOrTx, householdId: string, 
   const [row] = await db.update(iamHouseholds).set(patch).where(eq(iamHouseholds.householdId, householdId)).returning();
   return row ?? null;
 }
-
-/** Suspends or reactivates a household. Null when it does not exist. */
-export async function setHouseholdSuspended(db: DbOrTx, householdId: string, suspended: boolean): Promise<Household | null> {
-  const [row] = await db.update(iamHouseholds).set({ suspended }).where(eq(iamHouseholds.householdId, householdId)).returning();
-  return row ?? null;
-}

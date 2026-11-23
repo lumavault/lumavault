@@ -113,12 +113,10 @@ describe("reserve", () => {
     expect(await usage()).toEqual({ used: 0n, reserved: 1000n });
   });
 
-  it("refuses disabled apps and suspended households", async () => {
+  it("refuses disabled apps", async () => {
     expect(await codeOf(reserveUpload(ctx, { userId, app: "arcade", sizeBytes: 1n, billing: { kind: "household", householdId } }))).toBe(
       Code.FailedPrecondition,
     );
-    await database.db.update(iamHouseholds).set({ suspended: true }).where(eq(iamHouseholds.householdId, householdId));
-    expect(await codeOf(reserve(1n))).toBe(Code.PermissionDenied);
   });
 
   it("bills nothing for the shared Cinema library, and has none for Photos", async () => {

@@ -49,7 +49,7 @@ describe("getHouseholdByUserId", () => {
     await expect(
       database.db.transaction(async (tx) => {
         const householdId = await addHousehold(tx, "owner");
-        expect(await getHouseholdByUserId(tx, userId)).toEqual({ householdId, role: "owner", suspended: false });
+        expect(await getHouseholdByUserId(tx, userId)).toEqual({ householdId, role: "owner" });
         expect(await getHouseholdByUserId(database.db, userId)).toBeNull();
         throw new Error("rollback");
       }),
