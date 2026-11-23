@@ -47,7 +47,7 @@ describe("households", () => {
   it("gets a member limit of 4 and empty usage by default", async () => {
     const householdId = await newHousehold();
     const [row] = await database.db.insert(iamHouseholds).values({ householdId }).returning();
-    expect(row).toMatchObject({ memberLimit: DEFAULT_MEMBER_LIMIT, usedBytes: 0n, reservedBytes: 0n, suspended: false });
+    expect(row).toMatchObject({ memberLimit: DEFAULT_MEMBER_LIMIT, usedBytes: 0n, reservedBytes: 0n });
   });
 
   it("holds byte counts above 2^53 exactly", async () => {

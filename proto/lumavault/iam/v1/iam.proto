@@ -54,19 +54,10 @@ service IamService {
   // usage are allowed; they only block new uploads and invites.
   rpc UpdateHouseholdAllowance(UpdateHouseholdAllowanceRequest) returns (UpdateHouseholdAllowanceResponse);
 
-  // Suspends or reactivates a household. A suspended household keeps its data but blocks
-  // its own app routes.
-  rpc SetHouseholdSuspended(SetHouseholdSuspendedRequest) returns (SetHouseholdSuspendedResponse);
-
   // Lists accounts on the instance, optionally filtered by name or email.
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
-
-  // Bans a user permanently, revoking their sessions and pending invites at once.
-  rpc BanUser(BanUserRequest) returns (BanUserResponse);
-
-  rpc UnbanUser(UnbanUserRequest) returns (UnbanUserResponse);
 
   // Invites and joining a household.
 
@@ -164,9 +155,8 @@ message User {
   string email = 3;
   string image_url = 4;
   bool is_super_admin = 5;
-  bool banned = 6;
-  // Why the Super-Admin banned the user. Empty when not banned.
-  string ban_reason = 7;
+  reserved 6, 7;
+  reserved "banned", "ban_reason";
   google.protobuf.Timestamp created_at = 8;
 }
 
@@ -190,7 +180,8 @@ message Usage {
 message Household {
   string id = 1;
   string name = 2;
-  bool suspended = 3;
+  reserved 3;
+  reserved "suspended";
   Allowance allowance = 4;
   string owner_user_id = 5;
   google.protobuf.Timestamp created_at = 6;
@@ -301,15 +292,6 @@ message UpdateHouseholdAllowanceResponse {
   Household household = 1;
 }
 
-message SetHouseholdSuspendedRequest {
-  string household_id = 1;
-  bool suspended = 2;
-}
-
-message SetHouseholdSuspendedResponse {
-  Household household = 1;
-}
-
 message ListUsersRequest {
   // Matches name or email, case-insensitively. Empty lists everyone.
   string query = 1;
@@ -320,23 +302,6 @@ message ListUsersRequest {
 message ListUsersResponse {
   repeated User users = 1;
   string next_page_token = 2;
-}
-
-message BanUserRequest {
-  string user_id = 1;
-  string reason = 2;
-}
-
-message BanUserResponse {
-  User user = 1;
-}
-
-message UnbanUserRequest {
-  string user_id = 1;
-}
-
-message UnbanUserResponse {
-  User user = 1;
 }
 
 // InviteRef names an invite by what its link carries.

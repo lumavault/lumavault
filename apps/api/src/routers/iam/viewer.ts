@@ -9,8 +9,8 @@ import { requireSignedIn } from "#/guards.js";
 import type { ApiModule } from "#/server/modules.js";
 import { gracePeriodToWire, householdToWire, roleToWire, usageToWire, userToWire } from "./convert.js";
 
-// GetViewer uses requireSignedIn, not the household guards, so it keeps working while the
-// household is suspended and for people in a grace period with no household.
+// GetViewer uses requireSignedIn, not the household guards, so it keeps working for people
+// in a grace period with no household.
 export const module: ApiModule = {
   name: "iam-viewer",
   rpc(router, ctx) {

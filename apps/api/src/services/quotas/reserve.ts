@@ -37,9 +37,6 @@ export async function reserveUpload(ctx: Pick<ModuleContext, "db">, input: Reser
     if (!household) {
       throw new ConnectError("household has no allowance", Code.FailedPrecondition);
     }
-    if (household.suspended) {
-      throw new ConnectError("household is suspended", Code.PermissionDenied);
-    }
     if (!household.enabledApps.includes(input.app)) {
       throw new ConnectError(`${input.app} is not enabled for this household`, Code.FailedPrecondition);
     }

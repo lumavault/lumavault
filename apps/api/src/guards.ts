@@ -14,7 +14,7 @@ export interface HouseholdCaller {
   household: HouseholdMembership;
 }
 
-/** Any signed-in user, with or without a household. Reachable while a household is suspended. */
+/** Any signed-in user, with or without a household. */
 export async function requireSignedIn(input: GuardInput, ctx: ModuleContext): Promise<Viewer> {
   const { viewer } = await requestContext(input.values, ctx);
   if (!viewer) {
@@ -23,7 +23,7 @@ export async function requireSignedIn(input: GuardInput, ctx: ModuleContext): Pr
   return viewer;
 }
 
-/** The server owner. Reachable whatever household they are in, suspended or not. */
+/** The server owner, whatever household they are in. */
 export async function requireSuperAdmin(input: GuardInput, ctx: ModuleContext): Promise<Viewer> {
   const viewer = await requireSignedIn(input, ctx);
   if (!viewer.isSuperAdmin) {
@@ -32,15 +32,12 @@ export async function requireSuperAdmin(input: GuardInput, ctx: ModuleContext): 
   return viewer;
 }
 
-/** Any member of a household. A suspended household blocks its own data routes. */
+/** Any member of a household. */
 export async function requireHouseholdMember(input: GuardInput, ctx: ModuleContext): Promise<HouseholdCaller> {
   const viewer = await requireSignedIn(input, ctx);
   const { household } = await requestContext(input.values, ctx);
   if (!household) {
     throw new ConnectError("you are not in a household", Code.FailedPrecondition);
-  }
-  if (household.suspended) {
-    throw new ConnectError("household is suspended", Code.PermissionDenied);
   }
   return { viewer, household };
 }

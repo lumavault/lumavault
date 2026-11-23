@@ -86,8 +86,6 @@ export function userToWire(u: User): MessageInitShape<typeof UserSchema> {
     email: u.email,
     imageUrl: u.image ?? "",
     isSuperAdmin: hasUserRole(u.role, SUPER_ADMIN_ROLE),
-    banned: u.banned ?? false,
-    banReason: u.banned ? (u.banReason ?? "") : "",
     createdAt: timestampFromDate(u.createdAt),
   };
 }
@@ -97,7 +95,6 @@ export function householdToWire(org: Organization, h: Household, ownerUserId: st
   return {
     id: org.id,
     name: org.name,
-    suspended: h.suspended,
     allowance: {
       storageCapBytes: h.storageCapBytes,
       enabledApps: h.enabledApps.map(appToWire),
