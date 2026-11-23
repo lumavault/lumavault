@@ -35,7 +35,7 @@ describe("LumaVaultClient against a real gateway", () => {
 
     expect(events[0]?.phase).toBe("hashing");
     expect(events.at(-1)).toEqual({ phase: "uploading", loaded: 9 * MIB, total: 9 * MIB, percentage: 100 });
-  });
+  }, 30_000); // Hashing and moving 9 MiB can pass 5s on shared CI runners.
 
   it("re-uploading the same bytes sends no chunks and creates a new object", async () => {
     const bytes = patternBytes(7, 5 * MIB);
