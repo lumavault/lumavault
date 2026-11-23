@@ -36,6 +36,12 @@ export async function getPendingInvitationsByOrganizationId(db: DbOrTx, organiza
     .orderBy(asc(invitation.createdAt), asc(invitation.id));
 }
 
+/** A member invitation by ID. Null when it does not exist. */
+export async function getInvitationById(db: DbOrTx, invitationId: string): Promise<Invitation | null> {
+  const [row] = await db.select().from(invitation).where(eq(invitation.id, invitationId));
+  return row ?? null;
+}
+
 /** A member invitation, locked until the transaction ends. Null when it does not exist. */
 export async function getInvitationForUpdate(db: DbOrTx, invitationId: string): Promise<Invitation | null> {
   const [row] = await db.select().from(invitation).where(eq(invitation.id, invitationId)).for("update");
