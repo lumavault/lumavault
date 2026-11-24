@@ -83,11 +83,11 @@ flowchart TD
 
 1. **Three-Tier Identity & Granular RBAC (`auth` & `iam` Schemas):**
    - **Server Super-Admin (`better-auth` `admin()`):** Invites/approves users to create independent **Households** on the server and configures per-household **Allowances** (`max_storage_bytes` quota, enabled app namespaces, upload vs. view-only rights, max member seats, and cross-household sharing entitlements).
-   - **Household Tenancy (`better-auth` `organization()`):** Users belong to Households with scoped roles (`OWNER`, `ADMIN`, `MEMBER`, `KID`/`VIEWER`). Content is isolated per household by default, while personal state (`cinema.watch_progress`, `arcade.save_versions`) is isolated per `user_id`.
-   - **Cross-Household Resource Grants (`iam`):** Granular ACL shares (`VIEW`, `STREAM`, `DOWNLOAD`, `CONTRIBUTE`, `MANAGE`) let households selectively share Photo Albums/Assets, Movies/Series/Collections, or Console ROMs with another User or Household without exposing private timelines, watch progress, or game saves.
+   - **Household Tenancy (`better-auth` `organization()`):** Users belong to Households with scoped roles (`OWNER`, `ADMIN`, `MEMBER`). Content is isolated per household by default (while v1 Cinema uses one shared server library), and personal state (`cinema.watch_progress`, `arcade.save_versions`) is isolated per `user_id`.
+   - **Cross-Household Resource Grants (`iam`):** Granular ACL shares (`VIEW`, `DOWNLOAD`, `CONTRIBUTE`, `MANAGE`) let households selectively share Photo Albums/Assets or Console ROMs with another User or Household without exposing private timelines or game saves.
 2. **Stateless Signed Storage Tickets on `:8080`:**
    - **Upload Tickets (`Bearer`):** `apps/api` verifies session + upload role + remaining household byte quota and signs a short-lived ticket scoping `HasChunks`, `PUT /v1/chunks/{sha256}`, and `CommitObject` (`namespace`, `max_size_bytes`, `skip_dedup = true`).
-   - **Stream / Read Tickets (`?token=...` or `Bearer`):** `apps/api` verifies household ownership or a cross-household share grant and returns short-lived signed URLs/tokens for `GET /v1/stream/{object_id}` (`AVPlayer` / `<video>` `HTTP 206` compatible) and `GET /v1/chunks/{sha256}`.
+   - **Stream / Read Tickets (`?token=...` or `Bearer`):** `apps/api` verifies household ownership, a cross-household share grant, or enabled shared-library access (such as Cinema) and returns short-lived signed URLs/tokens for `GET /v1/stream/{object_id}` (`AVPlayer` / `<video>` `HTTP 206` compatible) and `GET /v1/chunks/{sha256}`.
    - **Internal Service Key:** Privileged `DeleteObject`, `ListObjects`, and `UpdateObjectMetadata` calls on `:8080` require `apps/api`'s server-to-server secret.
 3. **Cross-Household Physical Chunk Dedup Without Manifest Coupling:**
    - Multi-tenant commits pass `skip_dedup = true` to `StorageService.CommitObject` so every household owns an independent `ObjectMetadata` manifest (`object_id`)—preventing cross-household delete interference and existence side-channels—while `ChunkStore` still deduplicates **100% of identical `4–64 MiB` `SHA-256` chunks on disk** via `chunkRefs`. Intra-household duplicate prevention is enforced in PostgreSQL (`UNIQUE (household_id, sha256_digest)`).
@@ -126,11 +126,11 @@ The SDKs let apps upload, download, and stream files through the Storage Gateway
 
 ## 4. The Four Web SPAs & Three Media Applications
 
-All web frontends are **pure client-side Vite + React 19 + `@tanstack/react-router` + `@tanstack/react-query` (`@connectrpc/connect-query`) + Tailwind v4 SPAs** talking to `apps/api` (`:4000`) and `core/internal/gateway` (`:8080`), paired with native **SwiftUI** apps:
+All web frontends are **pure client-side Vite + React 19 + `@tanstack/react-router` + `@tanstack/react-query` (`@connectrpc/connect-query`) + Tailwind v4 SPAs** talking to `apps/api` (`:4000`) and `core/internal/gateway` (`:8080`), paired with native **SwiftUI** apps. App UIs look the same for every role; elevated actions live in the Portal's Super-Admin area.
 
 ### Platform Portal: LumaVault Portal (`apps/portal` — `:3000`)
 
-- Central SSO login/registration, Household switcher, member/role invitations, unified Cross-Household Share management, and the **Server Super-Admin Console** (provisioning new households, storage quotas, and app/sharing allowances).
+- Central SSO login/registration, Household switcher, member/role invitations, unified Cross-Household Share management, and the **Server Super-Admin Console** (provisioning new households, storage quotas, app/sharing allowances, and shared library management such as the Cinema library).
 
 ### App 1: LumaVault Photos (`NAMESPACE_PHOTOS` — `:3001` & SwiftUI)
 
@@ -139,8 +139,8 @@ All web frontends are **pure client-side Vite + React 19 + `@tanstack/react-rout
 
 ### App 2: LumaVault Cinema (`NAMESPACE_CINEMA` — `:3002` & SwiftUI incl. `tvOS`)
 
-- **Design Identity:** Deep dark, full-bleed **modern Netflix** theatrical experience with hero billboards and horizontal carousels.
-- **Capabilities:** Instant 4K HDR scrubbing over `64MB` chunks (`HTTP 206`), server-side TMDB metadata/artwork enrichment, `Series -> Season -> Episode` hierarchy, cross-household Movie/Series/Collection sharing (`STREAM` + `KID` rating filters), and per-user `playback_position_ms` Continue Watching sync.
+- **Design Identity:** Deep dark, full-bleed **modern Netflix** theatrical experience with hero billboards and horizontal carousels. The app looks the same for every role; library management (uploads, TMDB matches, and deletes) lives in the Portal's Super-Admin area.
+- **Capabilities:** One shared server library filled by the Super-Admin and watched by every household with Cinema turned on, instant 4K HDR scrubbing over 64 MiB chunks (`HTTP 206`), server-side TMDB matching with posters, backdrops, and episode stills copied into LumaVault storage, `Series -> Season -> Episode` hierarchy, and per-user Continue Watching and watch progress sync across devices.
 
 ### App 3: LumaVault Arcade (`NAMESPACE_GAMES` — `:3003` & SwiftUI)
 
