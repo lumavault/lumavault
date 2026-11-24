@@ -11,8 +11,8 @@ import "google/protobuf/timestamp.proto";
 service CinemaService {
   // Browse. Require a signed-in user in a household with Cinema enabled, or a Super-Admin.
 
-  // Returns the Cinema home screen: one hero title and horizontal rows for Continue Watching,
-  // Recently Added, Movies, and Series. Hero is unset when the library is empty.
+  // Returns the Cinema home screen: featured hero titles and horizontal rows for Continue
+  // Watching, Recently Added, Movies, and Series. Heroes is empty when the library is empty.
   rpc GetHome(GetHomeRequest) returns (GetHomeResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
@@ -216,8 +216,8 @@ message ContinueWatchingItem {
 message GetHomeRequest {}
 
 message GetHomeResponse {
-  // Unset when the library has no matched titles with playable files.
-  CatalogItem hero = 1;
+  // Featured titles for the hero carousel. Empty when the library has no playable titles.
+  repeated CatalogItem heroes = 1;
   repeated ContinueWatchingItem continue_watching = 2;
   repeated CatalogItem recently_added = 3;
   repeated Movie movies = 4;
