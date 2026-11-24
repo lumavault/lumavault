@@ -9,6 +9,7 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
 **Linear is the single source of truth for scoping and design docs.** Draft and revise them directly in Linear (`save_document`) under the target project. Do not keep local copies. Only long-lived architecture that the user approves gets copied into `docs/` (for example `docs/BLUEPRINT.md`).
 
 **Doc workflow** (scoping docs, design docs, CUJ specs):
+
 1. Draft the doc in Linear. A scoping doc lists the proposed issues with title, goal, owned paths, dependencies, and acceptance criteria.
 2. Run review subagents on it (for example `/ponytail-audit`). Post one `[AGENT]` comment per finding on the doc, quoting the line it refers to and the proposed change.
 3. The user reviews the draft and the findings in one pass, leaving inline comments.
@@ -16,6 +17,7 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
 5. For scoping docs, create the issues (`save_issue`) only after approval. Never create issues before that, except idea issues (below).
 
 **Ideas and future features:** record any feature that is not ready for scoping as an idea issue, so it is not forgotten. Linear is the only place ideas live, not `docs/`, TODO comments, or chat.
+
 - Create it in the matching project's Backlog with the `idea` label. Check `list_issues` first to avoid duplicates.
 - A title and one or two sentences are enough. Skip the issue template.
 - When a milestone finishes, review that project's idea issues with the user: promote, keep, or cancel each one.
@@ -27,15 +29,15 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
 
 **Contracts are the boundary:** `proto/lumavault/v1/`, `core/internal/metadata/store.go` (`MetadataStore`), and `core/internal/chunkstore/store.go` (`ChunkStore`) are shared contracts. Do not break their signatures without updating all callers and running `make proto`. Generated stubs (`core/gen/go/`, `sdk/web/src/gen/`, `sdk/swift/Sources/LumaVaultSDK/Gen/`) are gitignored.
 
-| Execution Order & Project | Linear ID | Owned Paths |
-| :--- | :--- | :--- |
-| **`1. Core Backend, Contracts & Basic Data Layer`** | `P-LUM-1` | `proto/lumavault/v1/storage.proto`, `buf.*`, `Makefile`, `docker-compose.yml`, `.gitignore`, `go.work`, `core/go.*`, `Package.swift`, `sdk/web/package.json`, `sdk/web/tsconfig.json`, `sdk/web/tsconfig.build.json`, `core/internal/constants/`, `core/internal/validate/`, `core/internal/metadata/`, `core/internal/chunkstore/`, `core/internal/ticket/`, `core/internal/gateway/`, `core/cmd/lumavault/` |
-| **`2. Client SDKs (Web/TypeScript & Swift)`** | `P-LUM-2` | `sdk/web/`, `sdk/swift/`, `sdk/testdata/`, `Package.swift`, `Makefile` (SDK test targets) |
-| **`3. App Platform, Auth & Multi-Tenant RBAC`** | `P-LUM-7` | `pnpm-workspace.yaml`, `proto/lumavault/iam/v1/iam.proto`, `packages/ui/`, `apps/portal/`, `apps/api/` *(excluding per-app `schemas/{photos,cinema,arcade}.ts`, `routers/{photos,cinema,arcade}.ts`, and `workers/photos*.ts`, plus their mirrored tests in `apps/api/test/`)* |
-| **`4. LumaVault Photos`** | `P-LUM-3` | `proto/lumavault/photos/v1/photos.proto`, `apps/api/src/db/schemas/photos.ts`, `apps/api/src/routers/photos.ts`, `apps/api/src/workers/photos*.ts`, their mirrored tests in `apps/api/test/`, `apps/photos/` |
-| **`5. LumaVault Cinema`** | `P-LUM-4` | `proto/lumavault/cinema/v1/cinema.proto`, `apps/api/src/db/schemas/cinema.ts`, `apps/api/src/routers/cinema.ts`, their mirrored tests in `apps/api/test/`, `apps/cinema/` |
-| **`6. LumaVault Arcade`** | `P-LUM-5` | `proto/lumavault/arcade/v1/arcade.proto`, `apps/api/src/db/schemas/arcade.ts`, `apps/api/src/routers/arcade.ts`, their mirrored tests in `apps/api/test/`, `apps/arcade/` |
-| **`7. Distributed Systems Upgrades (Paxos & Chunkservers)`** | `P-LUM-6` | `proto/lumavault/v1/paxos.proto`, `proto/lumavault/v1/chunk.proto`, `core/internal/consensus/`, `core/internal/chunkserver/` |
+| Execution Order & Project                                    | Linear ID | Owned Paths                                                                                                                                                                                                                                                                                                                                                                                                   |
+| :----------------------------------------------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`1. Core Backend, Contracts & Basic Data Layer`**          | `P-LUM-1` | `proto/lumavault/v1/storage.proto`, `buf.*`, `Makefile`, `docker-compose.yml`, `.gitignore`, `go.work`, `core/go.*`, `Package.swift`, `sdk/web/package.json`, `sdk/web/tsconfig.json`, `sdk/web/tsconfig.build.json`, `core/internal/constants/`, `core/internal/validate/`, `core/internal/metadata/`, `core/internal/chunkstore/`, `core/internal/ticket/`, `core/internal/gateway/`, `core/cmd/lumavault/` |
+| **`2. Client SDKs (Web/TypeScript & Swift)`**                | `P-LUM-2` | `sdk/web/`, `sdk/swift/`, `sdk/testdata/`, `Package.swift`, `Makefile` (SDK test targets)                                                                                                                                                                                                                                                                                                                     |
+| **`3. App Platform, Auth & Multi-Tenant RBAC`**              | `P-LUM-7` | `pnpm-workspace.yaml`, `proto/lumavault/iam/v1/iam.proto`, `packages/ui/`, `apps/portal/`, `apps/api/` _(excluding per-app `schemas/{photos,cinema,arcade}.ts`, `routers/{photos,cinema,arcade}.ts`, and `workers/photos*.ts`, plus their mirrored tests in `apps/api/test/`)_                                                                                                                                |
+| **`4. LumaVault Photos`**                                    | `P-LUM-3` | `proto/lumavault/photos/v1/photos.proto`, `apps/api/src/db/schemas/photos.ts`, `apps/api/src/routers/photos.ts`, `apps/api/src/workers/photos*.ts`, their mirrored tests in `apps/api/test/`, `apps/photos/`                                                                                                                                                                                                  |
+| **`5. LumaVault Cinema`**                                    | `P-LUM-4` | `proto/lumavault/cinema/v1/cinema.proto`, `apps/api/src/db/schemas/cinema.ts`, `apps/api/src/routers/cinema.ts`, their mirrored tests in `apps/api/test/`, `apps/cinema/`                                                                                                                                                                                                                                     |
+| **`6. LumaVault Arcade`**                                    | `P-LUM-5` | `proto/lumavault/arcade/v1/arcade.proto`, `apps/api/src/db/schemas/arcade.ts`, `apps/api/src/routers/arcade.ts`, their mirrored tests in `apps/api/test/`, `apps/arcade/`                                                                                                                                                                                                                                     |
+| **`7. Distributed Systems Upgrades (Paxos & Chunkservers)`** | `P-LUM-6` | `proto/lumavault/v1/paxos.proto`, `proto/lumavault/v1/chunk.proto`, `core/internal/consensus/`, `core/internal/chunkserver/`                                                                                                                                                                                                                                                                                  |
 
 ## 2. Core Architectural Invariants
 
@@ -70,6 +72,7 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
 Write so a reader new to the area understands it on the first read. Simple beats complete; the reader can always ask.
 
 **Docs and issues**
+
 - Open with one or two sentences: what this is and why it matters.
 - Use short, plain sentences. One idea per bullet.
 - Describe behavior and outcomes, not implementation. Leave function names, option names, and internal file layout to whoever builds it, unless they are a shared contract.
@@ -95,19 +98,23 @@ Done when:
 ```
 
 **Linear and PR comments**
+
 - One point per comment, in two to four sentences: what is wrong, why it matters, what to change.
 - No headers, tables, or nested bullets in a comment.
 
 **Code comments**
+
 - Explain why, not what. If the code already says it, skip the comment.
 - Keep it to one line when possible, and follow the no-Markdown rule in section 3.
 
 **Example**
 
 Too dense:
+
 > **Streaming Chunker & SHA-256 Hasher (`src/chunker.ts`)**: Implement `prepareChunkPlan(input, options)` for `Blob`/`File` and `Uint8Array`, returning `{ sizeBytes, chunkSizeBytes, sha256Digest, chunks }` with lazy zero-copy chunk views...
 
 Better:
+
 > Split a file into fixed-size chunks and hash each one, without loading the whole file into memory. Large videos (50 GB+) must work in a browser tab.
 
 ## 5. Standard Commands

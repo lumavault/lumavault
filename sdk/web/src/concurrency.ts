@@ -4,18 +4,20 @@ export async function forEachConcurrent<T>(
   limit: number,
   worker: (item: T) => Promise<void>,
 ): Promise<void> {
-  let next = 0;
-  let failed = false;
+  let next = 0
+  let failed = false
   const lane = async () => {
     while (!failed && next < items.length) {
-      const item = items[next++] as T;
+      const item = items[next++] as T
       try {
-        await worker(item);
+        await worker(item)
       } catch (err) {
-        failed = true;
-        throw err;
+        failed = true
+        throw err
       }
     }
-  };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, lane));
+  }
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, lane),
+  )
 }

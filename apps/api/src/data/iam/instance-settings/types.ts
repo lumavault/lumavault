@@ -1,4 +1,4 @@
-import type { iamInstanceSettings } from "#/db/schemas/iam.js";
+import type { iamInstanceSettings } from '#/db/schemas/iam.js'
 
 /** The single instance settings row. */
-export type InstanceSettings = typeof iamInstanceSettings.$inferSelect;
+export type InstanceSettings = typeof iamInstanceSettings.$inferSelect

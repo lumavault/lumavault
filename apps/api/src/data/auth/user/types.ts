@@ -1,7 +1,10 @@
-import type { user } from "#/db/schemas/auth.js";
+import type { user } from '#/db/schemas/auth.js'
 
 /** A Better Auth user row. */
-export type User = typeof user.$inferSelect;
+export type User = typeof user.$inferSelect
 
 /** What it takes to create an account outside Better Auth's own sign-up. */
-export type NewUser = Pick<typeof user.$inferInsert, "name" | "email" | "role" | "emailVerified">;
+export type NewUser = Pick<
+  typeof user.$inferInsert,
+  'name' | 'email' | 'role' | 'emailVerified'
+>

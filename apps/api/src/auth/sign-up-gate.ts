@@ -1,15 +1,15 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-import { getPendingInvitationByEmail } from "#/data/auth/invitation/get-invitation.js";
-import { markInvitationAccepted } from "#/data/auth/invitation/update-invitation.js";
-import { createMember } from "#/data/auth/member/create-member.js";
-import { getOpenHouseholdInviteByEmail } from "#/data/iam/household-invite/get-household-invite.js";
-import type { Db } from "#/db/index.js";
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { getPendingInvitationByEmail } from '#/data/auth/invitation/get-invitation.js'
+import { markInvitationAccepted } from '#/data/auth/invitation/update-invitation.js'
+import { createMember } from '#/data/auth/member/create-member.js'
+import { getOpenHouseholdInviteByEmail } from '#/data/iam/household-invite/get-household-invite.js'
+import type { Db } from '#/db/index.js'
 
-const serverSignUp = new AsyncLocalStorage<true>();
+const serverSignUp = new AsyncLocalStorage<true>()
 
 /** Runs fn with the sign-up gate open. Only server code, such as first-run setup, uses this. */
 export function allowSignUp<T>(fn: () => Promise<T>): Promise<T> {
-  return serverSignUp.run(true, fn);
+  return serverSignUp.run(true, fn)
 }
 
 /**
@@ -21,34 +21,41 @@ export async function signUpReason(
   db: Db,
   email: string,
   now: Date = new Date(),
-): Promise<"server" | "household-invite" | "member-invite" | null> {
+): Promise<'server' | 'household-invite' | 'member-invite' | null> {
   if (serverSignUp.getStore()) {
-    return "server";
+    return 'server'
   }
-  const lower = email.toLowerCase();
-  const householdInvite = await getOpenHouseholdInviteByEmail(db, lower, now);
+  const lower = email.toLowerCase()
+  const householdInvite = await getOpenHouseholdInviteByEmail(db, lower, now)
   if (householdInvite) {
-    return "household-invite";
+    return 'household-invite'
   }
-  return (await getPendingInvitationByEmail(db, lower, now)) ? "member-invite" : null;
+  return (await getPendingInvitationByEmail(db, lower, now))
+    ? 'member-invite'
+    : null
 }
 
 /**
  * Someone signing up from a member invite joins that household straight away, so the link
  * is all they need. With several pending invites the newest wins; the rest stay usable later.
  */
-export async function joinFromMemberInvite(db: Db, userId: string, email: string, now: Date = new Date()): Promise<void> {
-  const invite = await getPendingInvitationByEmail(db, email.toLowerCase(), now);
+export async function joinFromMemberInvite(
+  db: Db,
+  userId: string,
+  email: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const invite = await getPendingInvitationByEmail(db, email.toLowerCase(), now)
   if (!invite) {
-    return;
+    return
   }
   await db.transaction(async (tx) => {
     await createMember(tx, {
       organizationId: invite.organizationId,
       userId,
-      role: invite.role ?? "member",
+      role: invite.role ?? 'member',
       createdAt: now,
-    });
-    await markInvitationAccepted(tx, invite.id);
-  });
+    })
+    await markInvitationAccepted(tx, invite.id)
+  })
 }
