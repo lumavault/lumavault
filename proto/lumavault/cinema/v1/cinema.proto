@@ -123,28 +123,17 @@ message WatchProgress {
 
 // Browse models.
 
-message MovieSummary {
-  string id = 1;
-  string title = 2;
-  string overview = 3;
-  uint32 release_year = 4;
-  // Runtime in minutes from metadata, or zero when unknown.
-  uint32 runtime_minutes = 5;
-  // Signed Gateway URL for the stored poster, or empty while art is unavailable.
-  string poster_url = 6;
-  // Signed Gateway URL for the stored backdrop, or empty while art is unavailable.
-  string backdrop_url = 7;
-  google.protobuf.Timestamp added_at = 8;
-}
-
 message Movie {
   string id = 1;
   int32 tmdb_id = 2;
   string title = 3;
   string overview = 4;
   uint32 release_year = 5;
+  // Runtime in minutes from metadata, or zero when unknown.
   uint32 runtime_minutes = 6;
+  // Signed Gateway URL for the stored poster, or empty while art is unavailable.
   string poster_url = 7;
+  // Signed Gateway URL for the stored backdrop, or empty while art is unavailable.
   string backdrop_url = 8;
   // Unset when the caller has no recorded progress for this movie.
   WatchProgress progress = 9;
@@ -153,14 +142,15 @@ message Movie {
 
 message SeriesSummary {
   string id = 1;
-  string title = 2;
-  string overview = 3;
-  uint32 first_air_year = 4;
-  string poster_url = 5;
-  string backdrop_url = 6;
-  uint32 watched_episode_count = 7;
-  uint32 total_episode_count = 8;
-  google.protobuf.Timestamp added_at = 9;
+  int32 tmdb_id = 2;
+  string title = 3;
+  string overview = 4;
+  uint32 first_air_year = 5;
+  string poster_url = 6;
+  string backdrop_url = 7;
+  uint32 watched_episode_count = 8;
+  uint32 total_episode_count = 9;
+  google.protobuf.Timestamp added_at = 10;
 }
 
 message Episode {
@@ -202,19 +192,9 @@ message Series {
 
 message CatalogItem {
   oneof item {
-    MovieSummary movie = 1;
+    Movie movie = 1;
     SeriesSummary series = 2;
   }
-}
-
-message HeroItem {
-  oneof item {
-    MovieSummary movie = 1;
-    SeriesSummary series = 2;
-  }
-  // Target to open when the viewer clicks Play on the hero banner. For a series, this is the
-  // caller's resume or next episode, or the first available episode.
-  PlayableRef play_target = 3;
 }
 
 message ContinueWatchingEpisode {
@@ -227,7 +207,7 @@ message ContinueWatchingEpisode {
 
 message ContinueWatchingItem {
   oneof item {
-    MovieSummary movie = 1;
+    Movie movie = 1;
     ContinueWatchingEpisode episode = 2;
   }
   WatchProgress progress = 3;
@@ -237,10 +217,10 @@ message GetHomeRequest {}
 
 message GetHomeResponse {
   // Unset when the library has no matched titles with playable files.
-  HeroItem hero = 1;
+  CatalogItem hero = 1;
   repeated ContinueWatchingItem continue_watching = 2;
   repeated CatalogItem recently_added = 3;
-  repeated MovieSummary movies = 4;
+  repeated Movie movies = 4;
   repeated SeriesSummary series = 5;
 }
 
@@ -252,7 +232,7 @@ message ListMoviesRequest {
 }
 
 message ListMoviesResponse {
-  repeated MovieSummary movies = 1;
+  repeated Movie movies = 1;
   string next_page_token = 2;
 }
 
@@ -302,7 +282,8 @@ message PlaybackCapabilities {
 // PlaybackSource is one playable stream with room for future resolution, bitrate, or
 // playlist fields when transcoding is added.
 message PlaybackSource {
-  // Signed Storage Gateway stream URL supporting HTTP 206 byte-range requests.
+  // Storage Gateway stream URL supporting HTTP 206 byte-range requests, with a short-lived
+  // read ticket minted by CinemaService embedded in the token query parameter.
   string url = 1;
   // MIME type of the stream, for example "video/mp4" or "video/quicktime".
   string mime_type = 2;
@@ -327,7 +308,8 @@ message GetDownloadRequest {
 }
 
 message GetDownloadResponse {
-  // Signed Storage Gateway stream URL configured for file download.
+  // Storage Gateway stream URL configured for file download, with a short-lived read ticket
+  // minted by CinemaService embedded in the token query parameter.
   string url = 1;
   string filename = 2;
   uint64 size_bytes = 3;
