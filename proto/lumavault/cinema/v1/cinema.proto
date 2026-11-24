@@ -1,0 +1,531 @@
+syntax = "proto3";
+
+package lumavault.cinema.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// CinemaService serves the shared movie and TV library, playback and download URLs,
+// per-user watch progress, and library management. Read-only calls are marked
+// side-effect-free so browsers can send them as GET. All art, stream, and download URLs
+// are short-lived signed Storage Gateway URLs, never third-party metadata URLs.
+service CinemaService {
+  // Browse. Require a signed-in user in a household with Cinema enabled, or a Super-Admin.
+
+  // Returns the Cinema home screen: featured hero titles and horizontal rows for Continue
+  // Watching, Recently Added, Movies, and Series. Heroes is empty when the library is empty.
+  rpc GetHome(GetHomeRequest) returns (GetHomeResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Lists matched movies that have at least one playable file, with cursor pagination and
+  // optional title search.
+  rpc ListMovies(ListMoviesRequest) returns (ListMoviesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Lists matched series that have at least one playable episode, with cursor pagination and
+  // optional title search.
+  rpc ListSeries(ListSeriesRequest) returns (ListSeriesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Returns full details and the caller's watch progress for one movie.
+  rpc GetMovie(GetMovieRequest) returns (GetMovieResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Returns full details for one series along with its seasons, episodes, and the caller's
+  // watch progress on each episode.
+  rpc GetSeries(GetSeriesRequest) returns (GetSeriesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Playback and download. Require Cinema access.
+
+  // Returns signed playback sources and the caller's resume position for a movie or episode.
+  // Clients send what they can decode; v1 ignores capabilities and returns the original file.
+  // Fails with FAILED_PRECONDITION and NoPlayableSourceError when no playable source exists.
+  rpc GetPlayback(GetPlaybackRequest) returns (GetPlaybackResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Returns a signed download URL for the original file of a movie or episode.
+  rpc GetDownload(GetDownloadRequest) returns (GetDownloadResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Watch progress. Per-person state that follows the caller across sessions and devices.
+
+  // Records playback position and duration for a movie or episode. Latest report wins.
+  // Reaching 95 percent or more marks the item finished and increments its watch count.
+  rpc ReportProgress(ReportProgressRequest) returns (ReportProgressResponse);
+
+  // Manually marks a movie or episode as watched or unwatched.
+  rpc SetWatched(SetWatchedRequest) returns (SetWatchedResponse);
+
+  // Library management. Restricted to library managers (Super-Admin in v1).
+
+  // Finishes a shared-library Cinema upload reservation, verifies the object is MP4 or MOV,
+  // and registers it as an unmatched original media file. Rejects unsupported formats with
+  // INVALID_ARGUMENT and UnsupportedMediaFormatError after deleting the object.
+  rpc AddMediaFile(AddMediaFileRequest) returns (AddMediaFileResponse);
+
+  // Lists library media files with an optional match-status filter and cursor pagination.
+  rpc ListMediaFiles(ListMediaFilesRequest) returns (ListMediaFilesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Searches the external metadata catalog (TMDB in v1) for movies, TV series, or both.
+  // Returns metadata only, never external image URLs. Fails with CatalogError detail if the
+  // metadata source is unconfigured, rate-limited, or unavailable.
+  rpc SearchCatalog(SearchCatalogRequest) returns (SearchCatalogResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Returns season summaries for a catalog TV series so a library manager can pick a season.
+  rpc GetCatalogSeries(GetCatalogSeriesRequest) returns (GetCatalogSeriesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Returns episode titles and numbers for one season of a catalog TV series.
+  rpc GetCatalogSeason(GetCatalogSeasonRequest) returns (GetCatalogSeasonResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Matches a media file to a catalog movie or TV episode, fetching and storing its metadata.
+  // If that movie or episode already has an original file, the old file is replaced and freed.
+  rpc MatchMediaFile(MatchMediaFileRequest) returns (MatchMediaFileResponse);
+
+  // Deletes a media file and releases its stored object. Deleting an already-deleted file
+  // succeeds. Titles with no remaining files disappear from browse while keeping progress.
+  rpc DeleteMediaFile(DeleteMediaFileRequest) returns (DeleteMediaFileResponse);
+}
+
+// Shared references and progress.
+
+// PlayableRef identifies either a movie or an episode.
+message PlayableRef {
+  oneof target {
+    string movie_id = 1;
+    string episode_id = 2;
+  }
+}
+
+// WatchProgress holds one person's playback state for a single movie or episode.
+message WatchProgress {
+  uint64 position_ms = 1;
+  uint64 duration_ms = 2;
+  bool finished = 3;
+  // Number of completed watches of this movie or episode.
+  uint32 watch_count = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+// Browse models.
+
+message Movie {
+  string id = 1;
+  int32 tmdb_id = 2;
+  string title = 3;
+  string overview = 4;
+  uint32 release_year = 5;
+  // Runtime in minutes from metadata, or zero when unknown.
+  uint32 runtime_minutes = 6;
+  // Signed Gateway URL for the stored poster, or empty while art is unavailable.
+  string poster_url = 7;
+  // Signed Gateway URL for the stored backdrop, or empty while art is unavailable.
+  string backdrop_url = 8;
+  // Unset when the caller has no recorded progress for this movie.
+  WatchProgress progress = 9;
+  google.protobuf.Timestamp added_at = 10;
+}
+
+message SeriesSummary {
+  string id = 1;
+  int32 tmdb_id = 2;
+  string title = 3;
+  string overview = 4;
+  uint32 first_air_year = 5;
+  string poster_url = 6;
+  string backdrop_url = 7;
+  uint32 watched_episode_count = 8;
+  uint32 total_episode_count = 9;
+  google.protobuf.Timestamp added_at = 10;
+}
+
+message Episode {
+  string id = 1;
+  int32 tmdb_id = 2;
+  uint32 season_number = 3;
+  uint32 episode_number = 4;
+  string title = 5;
+  string overview = 6;
+  uint32 runtime_minutes = 7;
+  // Signed Gateway URL for the stored episode still, or empty while art is unavailable.
+  string still_url = 8;
+  // ISO-8601 date (YYYY-MM-DD), or empty when unknown.
+  string air_date = 9;
+  // Unset when the caller has no recorded progress for this episode.
+  WatchProgress progress = 10;
+  google.protobuf.Timestamp added_at = 11;
+}
+
+// Season groups a series's available episodes by season number.
+message Season {
+  uint32 season_number = 1;
+  repeated Episode episodes = 2;
+}
+
+message Series {
+  string id = 1;
+  int32 tmdb_id = 2;
+  string title = 3;
+  string overview = 4;
+  uint32 first_air_year = 5;
+  string poster_url = 6;
+  string backdrop_url = 7;
+  uint32 watched_episode_count = 8;
+  uint32 total_episode_count = 9;
+  repeated Season seasons = 10;
+  google.protobuf.Timestamp added_at = 11;
+}
+
+message CatalogItem {
+  oneof item {
+    Movie movie = 1;
+    SeriesSummary series = 2;
+  }
+}
+
+message ContinueWatchingEpisode {
+  string series_id = 1;
+  string series_title = 2;
+  string series_poster_url = 3;
+  string series_backdrop_url = 4;
+  Episode episode = 5;
+}
+
+message ContinueWatchingItem {
+  oneof item {
+    Movie movie = 1;
+    ContinueWatchingEpisode episode = 2;
+  }
+  WatchProgress progress = 3;
+}
+
+message GetHomeRequest {}
+
+message GetHomeResponse {
+  // Featured titles for the hero carousel. Empty when the library has no playable titles.
+  repeated CatalogItem heroes = 1;
+  repeated ContinueWatchingItem continue_watching = 2;
+  repeated CatalogItem recently_added = 3;
+  repeated Movie movies = 4;
+  repeated SeriesSummary series = 5;
+}
+
+message ListMoviesRequest {
+  // Matches movie title case-insensitively. Empty lists all movies.
+  string query = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListMoviesResponse {
+  repeated Movie movies = 1;
+  string next_page_token = 2;
+}
+
+message ListSeriesRequest {
+  // Matches series title case-insensitively. Empty lists all series.
+  string query = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListSeriesResponse {
+  repeated SeriesSummary series = 1;
+  string next_page_token = 2;
+}
+
+message GetMovieRequest {
+  string movie_id = 1;
+}
+
+message GetMovieResponse {
+  Movie movie = 1;
+}
+
+message GetSeriesRequest {
+  string series_id = 1;
+}
+
+message GetSeriesResponse {
+  Series series = 1;
+}
+
+// Playback and download messages.
+
+// PlaybackCapabilities describes what the client player can decode. v1 ignores these fields
+// and always returns the original file; transcoding uses them later without contract changes.
+message PlaybackCapabilities {
+  // Supported video codec names, for example "h264", "hevc", "av1".
+  repeated string video_codecs = 1;
+  // Supported audio codec names, for example "aac", "opus", "ac3".
+  repeated string audio_codecs = 2;
+  // Supported container formats, for example "mp4", "mov", "hls".
+  repeated string containers = 3;
+  // Largest video height in pixels the client wants, for example 2160. Zero means no cap.
+  uint32 max_height = 4;
+}
+
+// PlaybackSource is one playable stream with room for future resolution, bitrate, or
+// playlist fields when transcoding is added.
+message PlaybackSource {
+  // Storage Gateway stream URL supporting HTTP 206 byte-range requests, with a short-lived
+  // read ticket minted by CinemaService embedded in the token query parameter.
+  string url = 1;
+  // MIME type of the stream, for example "video/mp4" or "video/quicktime".
+  string mime_type = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message GetPlaybackRequest {
+  PlayableRef target = 1;
+  PlaybackCapabilities capabilities = 2;
+}
+
+message GetPlaybackResponse {
+  repeated PlaybackSource sources = 1;
+  // Saved resume position in milliseconds, or zero when starting from the beginning.
+  uint64 resume_position_ms = 2;
+  // Last reported duration in milliseconds, or zero when unknown.
+  uint64 duration_ms = 3;
+}
+
+message GetDownloadRequest {
+  PlayableRef target = 1;
+}
+
+message GetDownloadResponse {
+  // Storage Gateway stream URL configured for file download, with a short-lived read ticket
+  // minted by CinemaService embedded in the token query parameter.
+  string url = 1;
+  string filename = 2;
+  uint64 size_bytes = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+// Watch progress messages.
+
+message ReportProgressRequest {
+  PlayableRef target = 1;
+  uint64 position_ms = 2;
+  uint64 duration_ms = 3;
+}
+
+message ReportProgressResponse {
+  WatchProgress progress = 1;
+}
+
+message SetWatchedRequest {
+  PlayableRef target = 1;
+  bool watched = 2;
+}
+
+message SetWatchedResponse {
+  WatchProgress progress = 1;
+}
+
+// Library management and catalog lookup messages.
+
+enum MediaContainer {
+  MEDIA_CONTAINER_UNSPECIFIED = 0;
+  MEDIA_CONTAINER_MP4 = 1;
+  MEDIA_CONTAINER_MOV = 2;
+}
+
+enum MediaFileKind {
+  MEDIA_FILE_KIND_UNSPECIFIED = 0;
+  MEDIA_FILE_KIND_ORIGINAL = 1;
+}
+
+enum MediaFileFilter {
+  MEDIA_FILE_FILTER_UNSPECIFIED = 0;
+  MEDIA_FILE_FILTER_ALL = 1;
+  MEDIA_FILE_FILTER_UNMATCHED = 2;
+  MEDIA_FILE_FILTER_MATCHED = 3;
+}
+
+message MatchedMovie {
+  string movie_id = 1;
+  int32 tmdb_id = 2;
+  string title = 3;
+  uint32 release_year = 4;
+}
+
+message MatchedEpisode {
+  string series_id = 1;
+  string episode_id = 2;
+  int32 tmdb_series_id = 3;
+  string series_title = 4;
+  uint32 season_number = 5;
+  uint32 episode_number = 6;
+  string episode_title = 7;
+}
+
+message MediaFile {
+  string id = 1;
+  string object_id = 2;
+  string filename = 3;
+  uint64 size_bytes = 4;
+  MediaFileKind kind = 5;
+  MediaContainer container = 6;
+  // Unset while the file is unmatched.
+  oneof match {
+    MatchedMovie movie = 7;
+    MatchedEpisode episode = 8;
+  }
+  google.protobuf.Timestamp added_at = 9;
+}
+
+message AddMediaFileRequest {
+  // Reservation ID from IamService.PrepareUpload with shared_library set to true.
+  string reservation_id = 1;
+  // Object ID returned by StorageService.CommitObject.
+  string object_id = 2;
+}
+
+message AddMediaFileResponse {
+  MediaFile file = 1;
+}
+
+message ListMediaFilesRequest {
+  // Defaults to all files when unspecified.
+  MediaFileFilter filter = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListMediaFilesResponse {
+  repeated MediaFile files = 1;
+  string next_page_token = 2;
+}
+
+enum CatalogKind {
+  CATALOG_KIND_UNSPECIFIED = 0;
+  CATALOG_KIND_MOVIE = 1;
+  CATALOG_KIND_SERIES = 2;
+}
+
+message CatalogSearchResult {
+  int32 tmdb_id = 1;
+  CatalogKind kind = 2;
+  string title = 3;
+  string overview = 4;
+  // Release year for movies, or first air year for series. Zero when unknown.
+  uint32 release_year = 5;
+}
+
+message SearchCatalogRequest {
+  string query = 1;
+  // Searches both movies and series when unspecified.
+  CatalogKind kind = 2;
+}
+
+message SearchCatalogResponse {
+  repeated CatalogSearchResult results = 1;
+}
+
+message CatalogSeasonSummary {
+  uint32 season_number = 1;
+  string name = 2;
+  uint32 episode_count = 3;
+  // ISO-8601 date (YYYY-MM-DD), or empty when unknown.
+  string air_date = 4;
+}
+
+message GetCatalogSeriesRequest {
+  int32 tmdb_series_id = 1;
+}
+
+message GetCatalogSeriesResponse {
+  int32 tmdb_series_id = 1;
+  string title = 2;
+  uint32 first_air_year = 3;
+  repeated CatalogSeasonSummary seasons = 4;
+}
+
+message CatalogEpisodeSummary {
+  uint32 episode_number = 1;
+  string title = 2;
+  string overview = 3;
+  // ISO-8601 date (YYYY-MM-DD), or empty when unknown.
+  string air_date = 4;
+}
+
+message GetCatalogSeasonRequest {
+  int32 tmdb_series_id = 1;
+  uint32 season_number = 2;
+}
+
+message GetCatalogSeasonResponse {
+  int32 tmdb_series_id = 1;
+  uint32 season_number = 2;
+  repeated CatalogEpisodeSummary episodes = 3;
+}
+
+message CatalogEpisodeRef {
+  int32 tmdb_series_id = 1;
+  uint32 season_number = 2;
+  uint32 episode_number = 3;
+}
+
+message MatchMediaFileRequest {
+  string media_file_id = 1;
+  oneof target {
+    int32 tmdb_movie_id = 2;
+    CatalogEpisodeRef episode = 3;
+  }
+}
+
+message MatchMediaFileResponse {
+  MediaFile file = 1;
+  // True when matching this file replaced an existing original file on the target.
+  bool replaced_existing = 2;
+}
+
+message DeleteMediaFileRequest {
+  string media_file_id = 1;
+}
+
+message DeleteMediaFileResponse {}
+
+// Typed Connect error detail messages.
+
+// Attached to INVALID_ARGUMENT when an uploaded file is not MP4 or MOV.
+message UnsupportedMediaFormatError {
+  // Best-effort detected format or MIME type, empty if unrecognized.
+  string detected_format = 1;
+  repeated MediaContainer supported_containers = 2;
+}
+
+enum CatalogErrorReason {
+  CATALOG_ERROR_REASON_UNSPECIFIED = 0;
+  // Server has no metadata catalog API key configured (FAILED_PRECONDITION).
+  CATALOG_ERROR_REASON_NOT_CONFIGURED = 1;
+  // Metadata catalog rate-limited the request after retries (RESOURCE_EXHAUSTED).
+  CATALOG_ERROR_REASON_RATE_LIMITED = 2;
+  // Metadata catalog could not be reached or returned an upstream error (UNAVAILABLE).
+  CATALOG_ERROR_REASON_UNAVAILABLE = 3;
+}
+
+// Attached to errors from catalog-backed library management RPCs.
+message CatalogError {
+  CatalogErrorReason reason = 1;
+}
+
+// Attached to FAILED_PRECONDITION when GetPlayback finds no playable source for a target.
+message NoPlayableSourceError {
+  PlayableRef target = 1;
+}
