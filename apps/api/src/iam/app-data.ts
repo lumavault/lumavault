@@ -1,4 +1,4 @@
-import type { IamApp } from "./constants.js";
+import type { IamApp } from './constants.js'
 
 /**
  * What a media app tells IAM about its data, so IAM can act across apps without knowing app
@@ -6,5 +6,5 @@ import type { IamApp } from "./constants.js";
  * when a platform flow needs one.
  */
 export interface AppDataHooks {
-  app: IamApp;
+  app: IamApp
 }

@@ -1,22 +1,29 @@
 // Server entry: reads config, loads modules, serves on PORT, and shuts down cleanly.
-import { serve } from "@hono/node-server";
-import { createApp } from "#/server/app.js";
-import { createAuth } from "#/auth/auth.js";
-import { loadConfig } from "./config.js";
-import { SHUTDOWN_TIMEOUT_MS } from "./constants.js";
-import { createDatabase, ensureSchemas } from "#/db/index.js";
-import * as authTables from "#/db/schemas/auth.js";
-import { createEmailService } from "#/email/emails.js";
-import { createMailer } from "#/email/mailer.js";
-import { createStorageGateway } from "#/lib/storage-gateway.js";
-import { appDataHooks, loadModules, type ModuleContext, startModules, stopModules } from "#/server/modules.js";
+import { serve } from '@hono/node-server'
+import { createAuth } from '#/auth/auth.js'
+import { createDatabase, ensureSchemas } from '#/db/index.js'
+import * as authTables from '#/db/schemas/auth.js'
+import { createEmailService } from '#/email/emails.js'
+import { createMailer } from '#/email/mailer.js'
+import { createStorageGateway } from '#/lib/storage-gateway.js'
+import { createApp } from '#/server/app.js'
+import {
+  appDataHooks,
+  loadModules,
+  startModules,
+  stopModules,
+  type ModuleContext,
+} from '#/server/modules.js'
 
-const config = loadConfig(process.env);
-const database = createDatabase(config.databaseUrl);
-await ensureSchemas(database.db);
+import { loadConfig } from './config.js'
+import { SHUTDOWN_TIMEOUT_MS } from './constants.js'
 
-const mailer = createMailer({ smtpUrl: config.smtpUrl, from: config.mailFrom });
-const email = createEmailService(mailer);
+const config = loadConfig(process.env)
+const database = createDatabase(config.databaseUrl)
+await ensureSchemas(database.db)
+
+const mailer = createMailer({ smtpUrl: config.smtpUrl, from: config.mailFrom })
+const email = createEmailService(mailer)
 
 const auth = createAuth({
   db: database.db,
@@ -27,41 +34,53 @@ const auth = createAuth({
   passkeyRpID: new URL(config.portalUrl).hostname,
   sendMagicLink: ({ email: to, url }) => email.sendMagicLink(to, { url }),
   cookieDomain: config.cookieDomain,
-});
+})
 
-const gateway = createStorageGateway({ baseUrl: config.gatewayUrl, serviceKey: config.serviceKey });
-const modules = await loadModules();
-const ctx: ModuleContext = { config, db: database.db, auth, email, gateway, apps: appDataHooks(modules) };
-const app = createApp(ctx, modules);
-await startModules(modules, ctx);
+const gateway = createStorageGateway({
+  baseUrl: config.gatewayUrl,
+  serviceKey: config.serviceKey,
+})
+const modules = await loadModules()
+const ctx: ModuleContext = {
+  config,
+  db: database.db,
+  auth,
+  email,
+  gateway,
+  apps: appDataHooks(modules),
+}
+const app = createApp(ctx, modules)
+await startModules(modules, ctx)
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-  console.info(`api listening on port ${info.port} with ${modules.length} modules`);
-});
+  console.info(
+    `api listening on port ${info.port} with ${modules.length} modules`,
+  )
+})
 
-let shuttingDown = false;
+let shuttingDown = false
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) {
-    return;
+    return
   }
-  shuttingDown = true;
-  console.info(`${signal} received, shutting down`);
+  shuttingDown = true
+  console.info(`${signal} received, shutting down`)
   const forceExit = setTimeout(() => {
-    console.error("shutdown timed out");
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT_MS);
-  forceExit.unref();
+    console.error('shutdown timed out')
+    process.exit(1)
+  }, SHUTDOWN_TIMEOUT_MS)
+  forceExit.unref()
   try {
-    await stopModules(modules);
+    await stopModules(modules)
   } catch (err) {
-    console.error(err);
+    console.error(err)
   }
   // close waits for open requests to finish before the pool goes away.
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-  await mailer.close();
-  await database.close();
-  process.exit(0);
+  await new Promise<void>((resolve) => server.close(() => resolve()))
+  await mailer.close()
+  await database.close()
+  process.exit(0)
 }
 
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
+process.on('SIGINT', () => void shutdown('SIGINT'))

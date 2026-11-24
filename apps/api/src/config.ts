@@ -1,6 +1,7 @@
-import { z } from "zod";
-import { DEFAULT_PORT, MIN_SECRET_BYTES } from "./constants.js";
-import { DEFAULT_MAIL_FROM } from "./email/constants.js";
+import { z } from 'zod'
+
+import { DEFAULT_PORT, MIN_SECRET_BYTES } from './constants.js'
+import { DEFAULT_MAIL_FROM } from './email/constants.js'
 
 const secret = (isTest: boolean) =>
   z
@@ -8,18 +9,23 @@ const secret = (isTest: boolean) =>
     .min(1)
     .refine((s) => isTest || Buffer.byteLength(s) >= MIN_SECRET_BYTES, {
       message: `must be at least ${MIN_SECRET_BYTES} bytes`,
-    });
+    })
 
 const originList = z
   .string()
   .min(1)
-  .transform((s) => s.split(",").map((o) => o.trim()).filter(Boolean))
-  .pipe(z.array(z.url().transform((u) => new URL(u).origin)).min(1));
+  .transform((s) =>
+    s
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
+  )
+  .pipe(z.array(z.url().transform((u) => new URL(u).origin)).min(1))
 
 const optional = z
   .string()
   .optional()
-  .transform((s) => (s?.trim() ? s.trim() : undefined));
+  .transform((s) => (s?.trim() ? s.trim() : undefined))
 
 function schema(isTest: boolean) {
   return z.object({
@@ -36,40 +42,42 @@ function schema(isTest: boolean) {
     LUMAVAULT_COOKIE_DOMAIN: optional,
     SMTP_URL: optional,
     LUMAVAULT_MAIL_FROM: optional,
-    LUMAVAULT_TRUST_PROXY: z.enum(["true", "false"]).default("false"),
-  });
+    LUMAVAULT_TRUST_PROXY: z.enum(['true', 'false']).default('false'),
+  })
 }
 
 export interface Config {
-  port: number;
-  databaseUrl: string;
-  gatewayUrl: string;
-  ticketSecret: string;
-  serviceKey: string;
-  authSecret: string;
+  port: number
+  databaseUrl: string
+  gatewayUrl: string
+  ticketSecret: string
+  serviceKey: string
+  authSecret: string
   /** Public origin of this server, used for Better Auth callbacks. */
-  apiUrl: string;
+  apiUrl: string
   /** Web app origins allowed to call the API with cookies. */
-  webOrigins: string[];
-  portalUrl: string;
-  adminEmail?: string;
-  cookieDomain?: string;
-  smtpUrl?: string;
+  webOrigins: string[]
+  portalUrl: string
+  adminEmail?: string
+  cookieDomain?: string
+  smtpUrl?: string
   /** Sender for every email, for example "LumaVault <no-reply@example.com>". */
-  mailFrom: string;
+  mailFrom: string
   /** Read the client address from the last X-Forwarded-For entry, which a reverse proxy adds. */
-  trustProxy: boolean;
+  trustProxy: boolean
 }
 
 /** Reads and checks config from the environment. Throws one error listing every problem. */
 export function loadConfig(env: Record<string, string | undefined>): Config {
-  const isTest = env.NODE_ENV === "test";
-  const parsed = schema(isTest).safeParse(env);
+  const isTest = env.NODE_ENV === 'test'
+  const parsed = schema(isTest).safeParse(env)
   if (!parsed.success) {
-    const problems = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
-    throw new Error(`invalid config:\n  ${problems.join("\n  ")}`);
+    const problems = parsed.error.issues.map(
+      (i) => `${i.path.join('.')}: ${i.message}`,
+    )
+    throw new Error(`invalid config:\n  ${problems.join('\n  ')}`)
   }
-  const e = parsed.data;
+  const e = parsed.data
   return {
     port: e.PORT,
     databaseUrl: e.DATABASE_URL,
@@ -84,6 +92,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     cookieDomain: e.LUMAVAULT_COOKIE_DOMAIN,
     smtpUrl: e.SMTP_URL,
     mailFrom: e.LUMAVAULT_MAIL_FROM ?? DEFAULT_MAIL_FROM,
-    trustProxy: e.LUMAVAULT_TRUST_PROXY === "true",
-  };
+    trustProxy: e.LUMAVAULT_TRUST_PROXY === 'true',
+  }
 }

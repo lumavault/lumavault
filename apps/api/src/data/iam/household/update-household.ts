@@ -1,27 +1,56 @@
-import { eq } from "drizzle-orm";
-import type { DbOrTx } from "#/db/index.js";
-import { iamHouseholds } from "#/db/schemas/iam.js";
-import { minusFloor, plus } from "#/data/sql.js";
-import type { AllowancePatch, Household } from "./types.js";
+import { minusFloor, plus } from '#/data/sql.js'
+import type { DbOrTx } from '#/db/index.js'
+import { iamHouseholds } from '#/db/schemas/iam.js'
+import { eq } from 'drizzle-orm'
+
+import type { AllowancePatch, Household } from './types.js'
 
 /** Holds more bytes against the household's cap. */
-export async function addReservedBytes(db: DbOrTx, householdId: string, bytes: bigint): Promise<void> {
-  await db.update(iamHouseholds).set({ reservedBytes: plus(iamHouseholds.reservedBytes, bytes) }).where(eq(iamHouseholds.householdId, householdId));
+export async function addReservedBytes(
+  db: DbOrTx,
+  householdId: string,
+  bytes: bigint,
+): Promise<void> {
+  await db
+    .update(iamHouseholds)
+    .set({ reservedBytes: plus(iamHouseholds.reservedBytes, bytes) })
+    .where(eq(iamHouseholds.householdId, householdId))
 }
 
 /** Gives back held bytes, never going below zero. */
-export async function subtractReservedBytes(db: DbOrTx, householdId: string, bytes: bigint): Promise<void> {
-  await db.update(iamHouseholds).set({ reservedBytes: minusFloor(iamHouseholds.reservedBytes, bytes) }).where(eq(iamHouseholds.householdId, householdId));
+export async function subtractReservedBytes(
+  db: DbOrTx,
+  householdId: string,
+  bytes: bigint,
+): Promise<void> {
+  await db
+    .update(iamHouseholds)
+    .set({ reservedBytes: minusFloor(iamHouseholds.reservedBytes, bytes) })
+    .where(eq(iamHouseholds.householdId, householdId))
 }
 
 /** Bills more bytes to the household. */
-export async function addUsedBytes(db: DbOrTx, householdId: string, bytes: bigint): Promise<void> {
-  await db.update(iamHouseholds).set({ usedBytes: plus(iamHouseholds.usedBytes, bytes) }).where(eq(iamHouseholds.householdId, householdId));
+export async function addUsedBytes(
+  db: DbOrTx,
+  householdId: string,
+  bytes: bigint,
+): Promise<void> {
+  await db
+    .update(iamHouseholds)
+    .set({ usedBytes: plus(iamHouseholds.usedBytes, bytes) })
+    .where(eq(iamHouseholds.householdId, householdId))
 }
 
 /** Refunds billed bytes, never going below zero. */
-export async function subtractUsedBytes(db: DbOrTx, householdId: string, bytes: bigint): Promise<void> {
-  await db.update(iamHouseholds).set({ usedBytes: minusFloor(iamHouseholds.usedBytes, bytes) }).where(eq(iamHouseholds.householdId, householdId));
+export async function subtractUsedBytes(
+  db: DbOrTx,
+  householdId: string,
+  bytes: bigint,
+): Promise<void> {
+  await db
+    .update(iamHouseholds)
+    .set({ usedBytes: minusFloor(iamHouseholds.usedBytes, bytes) })
+    .where(eq(iamHouseholds.householdId, householdId))
 }
 
 /**
@@ -40,11 +69,19 @@ export async function settleReservedBytes(
       reservedBytes: minusFloor(iamHouseholds.reservedBytes, input.heldBytes),
       usedBytes: plus(iamHouseholds.usedBytes, input.billedBytes),
     })
-    .where(eq(iamHouseholds.householdId, householdId));
+    .where(eq(iamHouseholds.householdId, householdId))
 }
 
 /** Changes the given allowance fields. Null when the household does not exist. */
-export async function updateHouseholdAllowance(db: DbOrTx, householdId: string, patch: AllowancePatch): Promise<Household | null> {
-  const [row] = await db.update(iamHouseholds).set(patch).where(eq(iamHouseholds.householdId, householdId)).returning();
-  return row ?? null;
+export async function updateHouseholdAllowance(
+  db: DbOrTx,
+  householdId: string,
+  patch: AllowancePatch,
+): Promise<Household | null> {
+  const [row] = await db
+    .update(iamHouseholds)
+    .set(patch)
+    .where(eq(iamHouseholds.householdId, householdId))
+    .returning()
+  return row ?? null
 }
