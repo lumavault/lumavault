@@ -2,6 +2,7 @@ import {
   Code,
   ConnectError,
   LumaVaultClient,
+  type Namespace,
   type ObjectMetadata,
 } from '@lumavault/sdk'
 
@@ -18,9 +19,18 @@ export interface StoredObject {
   filename: string
 }
 
+/** Input for uploading a small server-held file as one Gateway object. */
+export interface UploadObjectInput {
+  bytes: Uint8Array
+  /** Storage Namespace enum value. */
+  namespace: number
+  filename: string
+  mimeType: string
+}
+
 /**
  * The API's server-to-server view of the Storage Gateway. Every call carries the internal
- * service key, so it can read, update, and delete any object.
+ * service key, so it can read, write, update, and delete any object.
  */
 export interface StorageGateway {
   /** The object, or null when the Gateway has no such object. */
@@ -30,6 +40,8 @@ export interface StorageGateway {
    * is empty. Null when the Gateway has no such object. The bytes are not hash-checked.
    */
   readHead(objectId: string, maxBytes: number): Promise<Uint8Array | null>
+  /** Uploads a byte buffer as a new object with the service key. */
+  upload(input: UploadObjectInput): Promise<StoredObject>
   /** Deletes an object's manifest. Deleting an object that is already gone succeeds. */
   delete(objectId: string): Promise<void>
   /** Points an object at a thumbnail chunk that is already uploaded. */
@@ -69,6 +81,28 @@ export function createStorageGateway(options: {
             throw err
         }
       }
+    },
+    async upload(input) {
+      const filename = input.filename.trim()
+      const mimeType = input.mimeType.trim()
+      if (input.bytes.byteLength === 0) {
+        throw new ConnectError(
+          'empty files cannot be uploaded',
+          Code.InvalidArgument,
+        )
+      }
+      if (!filename) {
+        throw new ConnectError('filename is required', Code.InvalidArgument)
+      }
+      if (!mimeType) {
+        throw new ConnectError('mimeType is required', Code.InvalidArgument)
+      }
+      const object = await client.upload(input.bytes, {
+        namespace: input.namespace as Namespace,
+        filename,
+        mimeType,
+      })
+      return toStored(object)
     },
     async delete(objectId) {
       try {
