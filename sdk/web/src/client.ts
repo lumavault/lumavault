@@ -27,7 +27,7 @@ import type {
   UploadResult,
 } from './types.js'
 import { upload } from './upload.js'
-import { chunkUrl, streamUrl } from './urls.js'
+import { chunkUrl, streamUrl, type StreamUrlOptions } from './urls.js'
 
 // Maps update() keys to the proto field paths the gateway's FieldMask expects.
 const UPDATE_MASK_PATHS: Record<keyof UpdateFields, string> = {
@@ -81,9 +81,9 @@ export class LumaVaultClient {
     return verifiedStream(this.get(id, options), fetcher, options.signal)
   }
 
-  /** A URL for video players and other byte-range readers. Not hash-checked. */
-  streamUrl(id: string, ticket?: string): string {
-    return streamUrl(this.#baseUrl, id, ticket)
+  /** A URL for video players, byte-range readers, and browser downloads. Not hash-checked. */
+  streamUrl(id: string, ticketOrOptions?: string | StreamUrlOptions): string {
+    return streamUrl(this.#baseUrl, id, ticketOrOptions)
   }
 
   /**
