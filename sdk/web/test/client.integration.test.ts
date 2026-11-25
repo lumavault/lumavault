@@ -6,6 +6,7 @@ import {
   type UploadProgress,
 } from '#/index.js'
 import { startGateway, type TestGateway } from '#test/support/gateway.js'
+import { mintTicket, TICKET_ENV } from '#test/support/tickets.js'
 import { patternBytes } from '#test/support/vectors.js'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -144,4 +145,61 @@ describe('LumaVaultClient against a real gateway', () => {
     const err = await client.get(ids[1]!).catch((e: unknown) => e)
     expect((err as ConnectError).code).toBe(Code.NotFound)
   })
+
+  it('adds Content-Disposition attachment only when streamUrl has download enabled', async () => {
+    const bytes = patternBytes(21, 1024)
+    const obj = await client.upload(
+      new File([bytes], 'clip.mp4', { type: 'video/mp4' }),
+      { namespace: Namespace.CINEMA },
+    )
+
+    const inline = await fetch(client.streamUrl(obj.id))
+    expect(inline.status).toBe(200)
+    expect(inline.headers.get('content-disposition')).toBeNull()
+
+    const attachment = await fetch(client.streamUrl(obj.id, { download: true }))
+    expect(attachment.status).toBe(200)
+    expect(attachment.headers.get('content-disposition')).toBe(
+      'attachment; filename=clip.mp4',
+    )
+    expect(new Uint8Array(await attachment.arrayBuffer())).toEqual(bytes)
+  })
+
+  it('triggers an attachment download with a signed download URL', async () => {
+    const signedGateway = await startGateway(TICKET_ENV)
+    try {
+      const signedClient = new LumaVaultClient({
+        baseUrl: signedGateway.baseUrl,
+      })
+      const bytes = patternBytes(34, 1024)
+      const obj = await signedClient.upload(
+        new File([bytes], 'movie.mp4', { type: 'video/mp4' }),
+        {
+          namespace: Namespace.CINEMA,
+          ticket: mintTicket({
+            k: 'up',
+            ns: Namespace.CINEMA,
+            max: bytes.length,
+          }),
+        },
+      )
+
+      const unauth = await fetch(
+        signedClient.streamUrl(obj.id, { download: true }),
+      )
+      expect(unauth.status).toBe(401)
+
+      const read = mintTicket({ k: 'rd', obj: obj.id })
+      const res = await fetch(
+        signedClient.streamUrl(obj.id, { ticket: read, download: true }),
+      )
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-disposition')).toBe(
+        'attachment; filename=movie.mp4',
+      )
+      expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes)
+    } finally {
+      signedGateway.stop()
+    }
+  }, 120_000)
 })
