@@ -7,12 +7,18 @@
     "./globals.css": "./src/styles/globals.css",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
-    "./lib/*": "./src/lib/*.ts"
+    "./lib/*": "./src/lib/*.ts",
+    "./rpc": "./src/rpc/index.ts",
+    "./household": "./src/household/index.ts"
   },
   "imports": {
     "#components/*": "./src/components/*.tsx",
     "#hooks/*": "./src/hooks/*.ts",
     "#lib/*": "./src/lib/*.ts",
+    "#rpc": "./src/rpc/index.ts",
+    "#rpc/*": "./src/rpc/*.ts",
+    "#household": "./src/household/index.ts",
+    "#household/*": "./src/household/*.ts",
     "#test/*": "./test/*"
   },
   "scripts": {
@@ -26,7 +32,13 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@bufbuild/protobuf": "^2.17.0",
+    "@connectrpc/connect": "^2.3.0",
+    "@connectrpc/connect-query": "^2.3.1",
+    "@connectrpc/connect-web": "^2.3.0",
     "@fontsource-variable/inter": "^5.3.0",
+    "@lumavault/sdk": "workspace:*",
+    "@tanstack/react-query": "^5.108.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.66.0",
