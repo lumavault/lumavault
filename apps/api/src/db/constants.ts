@@ -15,3 +15,6 @@ export const TEST_DATABASE_PREFIX = 'lv_test_'
 
 // Drizzle table files live under this folder, in any subfolder.
 export const SCHEMAS_DIR_NAME = 'schemas'
+
+// Largest signed 64-bit integer a Postgres bigint column holds.
+export const MAX_PG_BIGINT = 2n ** 63n - 1n
