@@ -151,7 +151,7 @@ function HomePage() {
               variant="outline"
               size="sm"
               nativeButton={false}
-              render={<Link to={'/household' as never} />}
+              render={<Link to="/household" />}
             >
               Manage household
             </Button>
