@@ -70,6 +70,7 @@ Each agent conversation works in its own git worktree, mapped to one Linear issu
    - Types shared by a table's functions live in a `types.ts` in the same folder.
    - Every function, not every file, takes `db: DbOrTx` as its first parameter, with no default. Callers pass the pool, or the `tx` inside `db.transaction(async (tx) => ...)`, so several queries can commit together.
    - Keep Drizzle queries simple, flat, and idiomatic. Factor out a varying table or column rather than duplicating a query across branches, and prefer plain Drizzle reads and writes inside a transaction over raw SQL expressions (such as `CASE WHEN` business logic inside `onConflictDoUpdate`).
+   - For joined queries, always prefer Drizzle nested table selection (for example `.select({ organization, household: iamHouseholds })` or nested partial column maps) over flat column maps and manual null-narrowing helpers. Drizzle namespaces columns and types left-joined tables as `Row | null` automatically.
 4. **The user makes design decisions, not the agent.** Whenever work reaches a fork (API shape, error model, wire contract, file/module layout, dependency choice, default values, naming of public symbols, behavior the spec does not pin down), stop and ask a clarifying question with the concrete options and their trade-offs before writing code. Do not pick a default silently and move on, and do not invent wire contracts (HTTP response bodies, headers, error strings) that the Gateway or `proto/` does not already define.
 
 ## 4. Writing Style (Docs, Issues, Comments)
