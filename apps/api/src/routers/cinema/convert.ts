@@ -75,36 +75,37 @@ export function unsupportedMediaFormatError(
 
 /** A library media file with its size and optional movie or episode match as a wire MediaFile. */
 export function mediaFileToWire(
-  file: MediaFileDetails,
+  details: MediaFileDetails,
 ): MessageInitShape<typeof MediaFileSchema> {
+  const { file, sizeBytes, movie, episode, series } = details
   return {
     id: file.id,
     objectId: file.objectId,
     filename: file.filename,
-    sizeBytes: file.sizeBytes,
+    sizeBytes,
     kind: mediaFileKindToWire(file.kind),
     container: mediaContainerToWire(file.container),
-    match: file.movie
+    match: movie
       ? {
           case: 'movie',
           value: {
-            movieId: file.movie.movieId,
-            tmdbId: file.movie.tmdbId,
-            title: file.movie.title,
-            releaseYear: file.movie.releaseYear ?? 0,
+            movieId: movie.id,
+            tmdbId: movie.tmdbId,
+            title: movie.title,
+            releaseYear: movie.releaseYear ?? 0,
           },
         }
-      : file.episode
+      : episode && series
         ? {
             case: 'episode',
             value: {
-              seriesId: file.episode.seriesId,
-              episodeId: file.episode.episodeId,
-              tmdbSeriesId: file.episode.tmdbSeriesId,
-              seriesTitle: file.episode.seriesTitle,
-              seasonNumber: file.episode.seasonNumber,
-              episodeNumber: file.episode.episodeNumber,
-              episodeTitle: file.episode.episodeTitle,
+              seriesId: episode.seriesId,
+              episodeId: episode.id,
+              tmdbSeriesId: series.tmdbId,
+              seriesTitle: series.title,
+              seasonNumber: episode.seasonNumber,
+              episodeNumber: episode.episodeNumber,
+              episodeTitle: episode.title,
             },
           }
         : { case: undefined },

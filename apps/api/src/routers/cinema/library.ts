@@ -102,15 +102,11 @@ export const module: ApiModule = {
 
       return {
         file: mediaFileToWire({
-          id: row.id,
-          objectId: row.objectId,
-          filename: row.filename,
+          file: row,
           sizeBytes: finished.bytes,
-          kind: row.kind,
-          container: row.container,
-          addedAt: row.addedAt,
           movie: null,
           episode: null,
+          series: null,
         }),
       }
     })
@@ -126,7 +122,7 @@ export const module: ApiModule = {
           }
           return getMediaFilePage(ctx.db, { filter, after, limit })
         },
-        (f) => ({ createdAt: f.addedAt, id: f.id }),
+        (d) => ({ createdAt: d.file.addedAt, id: d.file.id }),
       )
       return {
         files: rows.map(mediaFileToWire),

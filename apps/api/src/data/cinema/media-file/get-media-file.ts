@@ -17,30 +17,15 @@ import { and, eq, isNotNull, isNull, or, type SQL } from 'drizzle-orm'
 
 import type { MediaFileDetails, MediaFileFilterMode } from './types.js'
 
-const mediaFileSelection = {
-  id: cinemaMediaFiles.id,
-  objectId: cinemaMediaFiles.objectId,
-  filename: cinemaMediaFiles.filename,
-  sizeBytes: iamObjectClaims.bytes,
-  kind: cinemaMediaFiles.kind,
-  container: cinemaMediaFiles.container,
-  addedAt: cinemaMediaFiles.addedAt,
-  movieId: cinemaMovies.id,
-  movieTmdbId: cinemaMovies.tmdbId,
-  movieTitle: cinemaMovies.title,
-  movieReleaseYear: cinemaMovies.releaseYear,
-  episodeId: cinemaEpisodes.id,
-  episodeSeriesId: cinemaEpisodes.seriesId,
-  episodeSeasonNumber: cinemaEpisodes.seasonNumber,
-  episodeNumber: cinemaEpisodes.episodeNumber,
-  episodeTitle: cinemaEpisodes.title,
-  seriesTmdbId: cinemaSeries.tmdbId,
-  seriesTitle: cinemaSeries.title,
-}
-
 function selectMediaFiles(db: DbOrTx) {
   return db
-    .select(mediaFileSelection)
+    .select({
+      file: cinemaMediaFiles,
+      sizeBytes: iamObjectClaims.bytes,
+      movie: cinemaMovies,
+      episode: cinemaEpisodes,
+      series: cinemaSeries,
+    })
     .from(cinemaMediaFiles)
     .innerJoin(
       iamObjectClaims,
@@ -49,49 +34,6 @@ function selectMediaFiles(db: DbOrTx) {
     .leftJoin(cinemaMovies, eq(cinemaMovies.id, cinemaMediaFiles.movieId))
     .leftJoin(cinemaEpisodes, eq(cinemaEpisodes.id, cinemaMediaFiles.episodeId))
     .leftJoin(cinemaSeries, eq(cinemaSeries.id, cinemaEpisodes.seriesId))
-}
-
-type SelectedMediaFileRow = Awaited<ReturnType<typeof selectMediaFiles>>[number]
-
-function toDetails(row: SelectedMediaFileRow): MediaFileDetails {
-  const movie =
-    row.movieId !== null && row.movieTmdbId !== null && row.movieTitle !== null
-      ? {
-          movieId: row.movieId,
-          tmdbId: row.movieTmdbId,
-          title: row.movieTitle,
-          releaseYear: row.movieReleaseYear,
-        }
-      : null
-  const episode =
-    row.episodeId !== null &&
-    row.episodeSeriesId !== null &&
-    row.seriesTmdbId !== null &&
-    row.seriesTitle !== null &&
-    row.episodeSeasonNumber !== null &&
-    row.episodeNumber !== null &&
-    row.episodeTitle !== null
-      ? {
-          seriesId: row.episodeSeriesId,
-          episodeId: row.episodeId,
-          tmdbSeriesId: row.seriesTmdbId,
-          seriesTitle: row.seriesTitle,
-          seasonNumber: row.episodeSeasonNumber,
-          episodeNumber: row.episodeNumber,
-          episodeTitle: row.episodeTitle,
-        }
-      : null
-  return {
-    id: row.id,
-    objectId: row.objectId,
-    filename: row.filename,
-    sizeBytes: row.sizeBytes,
-    kind: row.kind,
-    container: row.container,
-    addedAt: row.addedAt,
-    movie,
-    episode,
-  }
 }
 
 function filterCondition(filter: MediaFileFilterMode): SQL | undefined {
@@ -119,7 +61,7 @@ export async function getMediaFileById(
   const [row] = await selectMediaFiles(db)
     .where(eq(cinemaMediaFiles.id, uuid(mediaFileId)))
     .catch(noRowsOnBadUuid)
-  return row ? toDetails(row) : null
+  return row ?? null
 }
 
 /** A media file by its Storage Gateway object ID, with size and match details. */
@@ -130,7 +72,7 @@ export async function getMediaFileByObjectId(
   const [row] = await selectMediaFiles(db).where(
     eq(cinemaMediaFiles.objectId, objectId),
   )
-  return row ? toDetails(row) : null
+  return row ?? null
 }
 
 /** A page of library media files ordered by added_at then ID, optionally filtered by match status. */
@@ -142,7 +84,7 @@ export async function getMediaFilePage(
     limit: number
   },
 ): Promise<MediaFileDetails[]> {
-  const rows = await selectMediaFiles(db)
+  return selectMediaFiles(db)
     .where(
       and(
         filterCondition(page.filter),
@@ -157,5 +99,4 @@ export async function getMediaFilePage(
     )
     .orderBy(...keysetOrder(cinemaMediaFiles.addedAt, cinemaMediaFiles.id))
     .limit(page.limit)
-  return rows.map(toDetails)
 }

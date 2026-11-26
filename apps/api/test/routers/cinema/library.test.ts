@@ -356,7 +356,7 @@ describe('AddMediaFile', () => {
     ])
 
     const byId = await getMediaFileById(database.db, mp4Res.file!.id)
-    expect(byId?.filename).toBe('Dune.Part.Two.2024.mp4')
+    expect(byId?.file.filename).toBe('Dune.Part.Two.2024.mp4')
     expect(await getMediaFileById(database.db, 'not-a-uuid')).toBeNull()
   })
 

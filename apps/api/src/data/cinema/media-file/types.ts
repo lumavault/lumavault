@@ -1,4 +1,9 @@
-import type { cinemaMediaFiles } from '#/db/schemas/cinema.js'
+import type {
+  cinemaEpisodes,
+  cinemaMediaFiles,
+  cinemaMovies,
+  cinemaSeries,
+} from '#/db/schemas/cinema.js'
 
 /** A media file row in cinema.media_files. */
 export type MediaFileRow = typeof cinemaMediaFiles.$inferSelect
@@ -15,34 +20,11 @@ export type NewMediaFile = Pick<
 /** Match filter for listing library media files. */
 export type MediaFileFilterMode = 'all' | 'unmatched' | 'matched'
 
-/** Movie summary attached to a matched media file. */
-export interface MediaFileMovieMatch {
-  movieId: string
-  tmdbId: number
-  title: string
-  releaseYear: number | null
-}
-
-/** Episode summary attached to a matched media file. */
-export interface MediaFileEpisodeMatch {
-  seriesId: string
-  episodeId: string
-  tmdbSeriesId: number
-  seriesTitle: string
-  seasonNumber: number
-  episodeNumber: number
-  episodeTitle: string
-}
-
 /** A media file joined with its object claim size and optional movie or episode match. */
 export interface MediaFileDetails {
-  id: string
-  objectId: string
-  filename: string
+  file: MediaFileRow
   sizeBytes: bigint
-  kind: MediaFileKindValue
-  container: MediaContainerValue
-  addedAt: Date
-  movie: MediaFileMovieMatch | null
-  episode: MediaFileEpisodeMatch | null
+  movie: typeof cinemaMovies.$inferSelect | null
+  episode: typeof cinemaEpisodes.$inferSelect | null
+  series: typeof cinemaSeries.$inferSelect | null
 }
