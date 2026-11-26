@@ -9,3 +9,9 @@ export function hashSecret(secret: string): string {
 export function newSecret(bytes = 32): string {
   return randomBytes(bytes).toString('base64url')
 }
+
+/** Reports whether token has the three non-empty dot-separated segments of a JWT bearer token. */
+export function isBearerToken(token: string): boolean {
+  const parts = token.split('.')
+  return parts.length === 3 && parts.every((part) => part.length > 0)
+}
