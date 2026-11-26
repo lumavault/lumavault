@@ -10,7 +10,7 @@ import {
   createTmdbClient,
   TmdbError,
   type TmdbErrorReason,
-} from '#/lib/tmdb.js'
+} from '#/lib/tmdb/index.js'
 import { TEST_ENV } from '#test/support/context.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
