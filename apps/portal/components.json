@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-mira",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "rtl": false,
+  "aliases": {
+    "components": "#/components",
+    "utils": "@lumavault/ui/lib/utils",
+    "ui": "@lumavault/ui/components/ui",
+    "lib": "@lumavault/ui/lib",
+    "hooks": "@lumavault/ui/hooks"
+  }
+}
