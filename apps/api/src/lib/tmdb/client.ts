@@ -1,4 +1,5 @@
 import { retryHttp } from '#/lib/retry.js'
+import { isBearerToken } from '#/lib/secrets.js'
 
 import {
   normalizeMovieDetails,
@@ -56,6 +57,7 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
     }
 
     const headers: Record<string, string> = { accept: 'application/json' }
+    // TMDB v4 Read Access Tokens are JWTs sent via Bearer auth; v3 API keys use the query param.
     if (isBearerToken(key)) {
       headers.authorization = `Bearer ${key}`
     } else {
@@ -177,10 +179,4 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
       return normalizeSeasonDetails(tmdbSeriesId, seasonNumber, body)
     },
   }
-}
-
-// TMDB v4 Read Access Tokens are JWTs sent via Bearer auth; v3 API keys use the query param.
-function isBearerToken(key: string): boolean {
-  const parts = key.split('.')
-  return parts.length === 3 && parts.every((part) => part.length > 0)
 }
