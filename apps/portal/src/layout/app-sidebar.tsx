@@ -119,7 +119,7 @@ function NavUser() {
       toast.error('Could not sign out. Please try again.')
       return
     }
-    await router.navigate({ to: '/login' as never, replace: true })
+    await router.navigate({ to: '/login', replace: true })
   }
 
   return (
