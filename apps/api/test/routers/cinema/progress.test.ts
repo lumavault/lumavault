@@ -551,6 +551,39 @@ describe('ReportProgress', () => {
       watchCount: 1,
     })
   })
+
+  it('increments watch_count once when concurrent first-ever reports cross 95 percent', async () => {
+    const movie = await createMovie('Sicario')
+    const target = movieRef(movie.id)
+    const client = cinemaClient(alice.headers)
+
+    await Promise.all([
+      client.reportProgress({
+        target,
+        positionMs: 95_000n,
+        durationMs: 100_000n,
+      }),
+      client.reportProgress({
+        target,
+        positionMs: 96_000n,
+        durationMs: 100_000n,
+      }),
+      client.reportProgress({
+        target,
+        positionMs: 97_000n,
+        durationMs: 100_000n,
+      }),
+    ])
+
+    const row = await getWatchProgress(database.db, alice.id, {
+      kind: 'movie',
+      id: movie.id,
+    })
+    expect(row).toMatchObject({
+      finished: true,
+      watchCount: 1,
+    })
+  })
 })
 
 describe('SetWatched', () => {
