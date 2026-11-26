@@ -1,10 +1,4 @@
-export interface MovieWatchProgress {
-  positionMs: bigint
-  durationMs: bigint
-  finished: boolean
-  watchCount: number
-  updatedAt: Date
-}
+import type { WatchProgressRow } from '#/data/cinema/watch-progress/types.js'
 
 /** A movie that has at least one playable media file, with active art and the caller's progress. */
 export interface PlayableMovie {
@@ -18,11 +12,11 @@ export interface PlayableMovie {
   backdropObjectId: string | null
   createdAt: Date
   addedAt: Date
-  progress: MovieWatchProgress | null
+  progress: WatchProgressRow | null
 }
 
 /** A caller's in-progress playable movie for the Continue Watching row. */
 export interface ContinueWatchingMovie {
   movie: PlayableMovie
-  progress: MovieWatchProgress
+  progress: WatchProgressRow
 }

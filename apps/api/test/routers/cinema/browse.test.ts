@@ -381,11 +381,20 @@ describe('empty library and hidden unmatched or zero-file titles', () => {
     expect(await codeOf(client.getMovie({ movieId: emptyMovie.id }))).toBe(
       Code.NotFound,
     )
+    expect(await codeOf(client.getMovie({ movieId: randomUUID() }))).toBe(
+      Code.NotFound,
+    )
     expect(await codeOf(client.getSeries({ seriesId: emptySeries.id }))).toBe(
       Code.NotFound,
     )
-    expect(await codeOf(client.getMovie({ movieId: 'not-a-uuid' }))).toBe(
+    expect(await codeOf(client.getSeries({ seriesId: randomUUID() }))).toBe(
       Code.NotFound,
+    )
+    expect(await codeOf(client.getMovie({ movieId: 'not-a-uuid' }))).toBe(
+      Code.InvalidArgument,
+    )
+    expect(await codeOf(client.getSeries({ seriesId: 'not-a-uuid' }))).toBe(
+      Code.InvalidArgument,
     )
     expect(await codeOf(client.getMovie({ movieId: '   ' }))).toBe(
       Code.InvalidArgument,

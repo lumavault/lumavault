@@ -1,10 +1,4 @@
-export interface EpisodeWatchProgress {
-  positionMs: bigint
-  durationMs: bigint
-  finished: boolean
-  watchCount: number
-  updatedAt: Date
-}
+import type { WatchProgressRow } from '#/data/cinema/watch-progress/types.js'
 
 /** An episode with at least one playable media file, active still art, and the caller's progress. */
 export interface PlayableEpisode {
@@ -19,7 +13,7 @@ export interface PlayableEpisode {
   stillObjectId: string | null
   airDate: string | null
   addedAt: Date
-  progress: EpisodeWatchProgress | null
+  progress: WatchProgressRow | null
 }
 
 /** An in-progress or queued next-up episode for the caller's Continue Watching row. */
@@ -30,7 +24,7 @@ export interface ContinueWatchingEpisodeRow {
   seriesBackdropObjectId: string | null
   episode: PlayableEpisode
   /** Null when the entry is a queued next unwatched episode. */
-  progress: EpisodeWatchProgress | null
+  progress: WatchProgressRow | null
   /** Activity timestamp used to order Continue Watching across movies and series. */
   activityAt: Date
 }

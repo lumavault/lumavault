@@ -1,10 +1,11 @@
-import { uuid } from '#/data/sql.js'
+import { getSeriesHeadersByIds } from '#/data/cinema/series/get-series.js'
+import type { WatchProgressRow } from '#/data/cinema/watch-progress/types.js'
+import { activeClaimOn, asDate, big, uuid } from '#/data/sql.js'
 import { noRowsOnBadUuid } from '#/db/errors.js'
 import type { DbOrTx } from '#/db/index.js'
 import {
   cinemaEpisodes,
   cinemaMediaFiles,
-  cinemaSeries,
   cinemaWatchProgress,
 } from '#/db/schemas/cinema.js'
 import { iamObjectClaims } from '#/db/schemas/iam.js'
@@ -13,30 +14,52 @@ import {
   asc,
   desc,
   eq,
+  gt,
   inArray,
   isNotNull,
-  isNull,
   or,
   sql,
 } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 
-import type {
-  ContinueWatchingEpisodeRow,
-  EpisodeWatchProgress,
-  PlayableEpisode,
-} from './types.js'
+import type { ContinueWatchingEpisodeRow, PlayableEpisode } from './types.js'
 
 const stillClaim = alias(iamObjectClaims, 'episode_still_claim')
-const seriesPosterClaim = alias(iamObjectClaims, 'cw_series_poster_claim')
-const seriesBackdropClaim = alias(iamObjectClaims, 'cw_series_backdrop_claim')
 
-function toDate(value: Date | string): Date {
-  return value instanceof Date ? value : new Date(value)
+interface EpisodeActivity {
+  episodeId: string
+  seriesId: string
+  seasonNumber: number
+  episodeNumber: number
+  positionMs: bigint
+  finished: boolean
+  updatedAt: Date
 }
 
-function playableEpisodeFiles(db: DbOrTx) {
-  return db
+function toPlayableEpisode(row: {
+  episode: typeof cinemaEpisodes.$inferSelect
+  stillObjectId: string | null
+  addedAt: Date | string
+  progress: WatchProgressRow | null
+}): PlayableEpisode {
+  return {
+    id: row.episode.id,
+    seriesId: row.episode.seriesId,
+    tmdbId: row.episode.tmdbId,
+    seasonNumber: row.episode.seasonNumber,
+    episodeNumber: row.episode.episodeNumber,
+    title: row.episode.title,
+    overview: row.episode.overview,
+    runtimeMinutes: row.episode.runtimeMinutes,
+    stillObjectId: row.stillObjectId,
+    airDate: row.episode.airDate,
+    addedAt: asDate(row.addedAt),
+    progress: row.progress,
+  }
+}
+
+function selectPlayableEpisodes(db: DbOrTx, userId: string) {
+  const episodeFiles = db
     .select({
       episodeId: cinemaMediaFiles.episodeId,
       addedAt: sql<Date | string>`max(${cinemaMediaFiles.addedAt})`.as(
@@ -47,84 +70,13 @@ function playableEpisodeFiles(db: DbOrTx) {
     .where(isNotNull(cinemaMediaFiles.episodeId))
     .groupBy(cinemaMediaFiles.episodeId)
     .as('episode_files')
-}
 
-interface RawEpisodeRow {
-  id: string
-  seriesId: string
-  tmdbId: number
-  seasonNumber: number
-  episodeNumber: number
-  title: string
-  overview: string
-  runtimeMinutes: number | null
-  stillObjectId: string | null
-  airDate: string | null
-  addedAt: Date | string
-  progressPositionMs: bigint | null
-  progressDurationMs: bigint | null
-  progressFinished: boolean | null
-  progressWatchCount: number | null
-  progressUpdatedAt: Date | null
-}
-
-function toPlayableEpisode(row: RawEpisodeRow): PlayableEpisode {
-  const progress: EpisodeWatchProgress | null =
-    row.progressUpdatedAt !== null &&
-    row.progressPositionMs !== null &&
-    row.progressDurationMs !== null &&
-    row.progressFinished !== null &&
-    row.progressWatchCount !== null
-      ? {
-          positionMs: row.progressPositionMs,
-          durationMs: row.progressDurationMs,
-          finished: row.progressFinished,
-          watchCount: row.progressWatchCount,
-          updatedAt: row.progressUpdatedAt,
-        }
-      : null
-
-  return {
-    id: row.id,
-    seriesId: row.seriesId,
-    tmdbId: row.tmdbId,
-    seasonNumber: row.seasonNumber,
-    episodeNumber: row.episodeNumber,
-    title: row.title,
-    overview: row.overview,
-    runtimeMinutes: row.runtimeMinutes,
-    stillObjectId: row.stillObjectId,
-    airDate: row.airDate,
-    addedAt: toDate(row.addedAt),
-    progress,
-  }
-}
-
-/** All playable episodes of one series ordered by season and episode number ascending. */
-export async function getPlayableEpisodesBySeriesId(
-  db: DbOrTx,
-  seriesId: string,
-  userId: string,
-): Promise<PlayableEpisode[]> {
-  const episodeFiles = playableEpisodeFiles(db)
-  const rows = await db
+  return db
     .select({
-      id: cinemaEpisodes.id,
-      seriesId: cinemaEpisodes.seriesId,
-      tmdbId: cinemaEpisodes.tmdbId,
-      seasonNumber: cinemaEpisodes.seasonNumber,
-      episodeNumber: cinemaEpisodes.episodeNumber,
-      title: cinemaEpisodes.title,
-      overview: cinemaEpisodes.overview,
-      runtimeMinutes: cinemaEpisodes.runtimeMinutes,
+      episode: cinemaEpisodes,
       stillObjectId: stillClaim.objectId,
-      airDate: cinemaEpisodes.airDate,
       addedAt: episodeFiles.addedAt,
-      progressPositionMs: cinemaWatchProgress.positionMs,
-      progressDurationMs: cinemaWatchProgress.durationMs,
-      progressFinished: cinemaWatchProgress.finished,
-      progressWatchCount: cinemaWatchProgress.watchCount,
-      progressUpdatedAt: cinemaWatchProgress.updatedAt,
+      progress: cinemaWatchProgress,
     })
     .from(cinemaEpisodes)
     .innerJoin(episodeFiles, eq(episodeFiles.episodeId, cinemaEpisodes.id))
@@ -137,18 +89,23 @@ export async function getPlayableEpisodesBySeriesId(
     )
     .leftJoin(
       stillClaim,
-      and(
-        eq(stillClaim.objectId, cinemaEpisodes.stillObjectId),
-        isNull(stillClaim.releasedAt),
-      ),
+      activeClaimOn(stillClaim, cinemaEpisodes.stillObjectId),
     )
+}
+
+/** All playable episodes of one series ordered by season and episode number ascending. */
+export async function getPlayableEpisodesBySeriesId(
+  db: DbOrTx,
+  seriesId: string,
+  userId: string,
+): Promise<PlayableEpisode[]> {
+  const rows = await selectPlayableEpisodes(db, userId)
     .where(eq(cinemaEpisodes.seriesId, uuid(seriesId)))
     .orderBy(
       asc(cinemaEpisodes.seasonNumber),
       asc(cinemaEpisodes.episodeNumber),
     )
     .catch(noRowsOnBadUuid)
-
   return rows.map(toPlayableEpisode)
 }
 
@@ -162,6 +119,46 @@ function isAfterEpisode(
     (candidate.seasonNumber === seasonNumber &&
       candidate.episodeNumber > episodeNumber)
   )
+}
+
+// Picks the single Continue Watching episode for one series from activity ordered newest first.
+function pickContinueEpisode(
+  activity: EpisodeActivity[],
+  episodes: PlayableEpisode[],
+): {
+  episode: PlayableEpisode
+  progress: WatchProgressRow | null
+  activityAt: Date
+} | null {
+  const byId = new Map(episodes.map((ep) => [ep.id, ep]))
+  for (const row of activity) {
+    if (!row.finished && row.positionMs > 0n) {
+      const ep = byId.get(row.episodeId)
+      if (ep?.progress) {
+        return { episode: ep, progress: ep.progress, activityAt: row.updatedAt }
+      }
+      // Episode file was removed; fall back to older activity in this series.
+      continue
+    }
+    if (row.finished) {
+      const next = episodes.find(
+        (ep) =>
+          isAfterEpisode(ep, row.seasonNumber, row.episodeNumber) &&
+          !ep.progress?.finished,
+      )
+      if (!next) {
+        return null
+      }
+      const nextProgress =
+        next.progress && next.progress.positionMs > 0n ? next.progress : null
+      return {
+        episode: next,
+        progress: nextProgress,
+        activityAt: row.updatedAt,
+      }
+    }
+  }
+  return null
 }
 
 /**
@@ -192,7 +189,7 @@ export async function getContinueWatchingEpisodes(
         eq(cinemaWatchProgress.userId, options.userId),
         or(
           eq(cinemaWatchProgress.finished, true),
-          sql`${cinemaWatchProgress.positionMs} > 0`,
+          gt(cinemaWatchProgress.positionMs, big(0n)),
         ),
       ),
     )
@@ -202,156 +199,48 @@ export async function getContinueWatchingEpisodes(
     return []
   }
 
-  // Group qualifying activity rows per series, keeping series ordered by latest activity.
-  const activityBySeries = new Map<string, typeof activityRows>()
+  const activityBySeries = new Map<string, EpisodeActivity[]>()
   for (const row of activityRows) {
-    const list = activityBySeries.get(row.seriesId)
-    if (list) {
-      list.push(row)
-    } else {
-      activityBySeries.set(row.seriesId, [row])
-    }
+    const list = activityBySeries.get(row.seriesId) ?? []
+    list.push(row)
+    activityBySeries.set(row.seriesId, list)
   }
 
   const seriesIds = [...activityBySeries.keys()]
-  const episodeFiles = playableEpisodeFiles(db)
-  const playableRows = await db
-    .select({
-      seriesTitle: cinemaSeries.title,
-      seriesPosterObjectId: seriesPosterClaim.objectId,
-      seriesBackdropObjectId: seriesBackdropClaim.objectId,
-      id: cinemaEpisodes.id,
-      seriesId: cinemaEpisodes.seriesId,
-      tmdbId: cinemaEpisodes.tmdbId,
-      seasonNumber: cinemaEpisodes.seasonNumber,
-      episodeNumber: cinemaEpisodes.episodeNumber,
-      title: cinemaEpisodes.title,
-      overview: cinemaEpisodes.overview,
-      runtimeMinutes: cinemaEpisodes.runtimeMinutes,
-      stillObjectId: stillClaim.objectId,
-      airDate: cinemaEpisodes.airDate,
-      addedAt: episodeFiles.addedAt,
-      progressPositionMs: cinemaWatchProgress.positionMs,
-      progressDurationMs: cinemaWatchProgress.durationMs,
-      progressFinished: cinemaWatchProgress.finished,
-      progressWatchCount: cinemaWatchProgress.watchCount,
-      progressUpdatedAt: cinemaWatchProgress.updatedAt,
-    })
-    .from(cinemaEpisodes)
-    .innerJoin(cinemaSeries, eq(cinemaSeries.id, cinemaEpisodes.seriesId))
-    .innerJoin(episodeFiles, eq(episodeFiles.episodeId, cinemaEpisodes.id))
-    .leftJoin(
-      cinemaWatchProgress,
-      and(
-        eq(cinemaWatchProgress.episodeId, cinemaEpisodes.id),
-        eq(cinemaWatchProgress.userId, options.userId),
+  const [playableRows, seriesHeaders] = await Promise.all([
+    selectPlayableEpisodes(db, options.userId)
+      .where(inArray(cinemaEpisodes.seriesId, seriesIds))
+      .orderBy(
+        asc(cinemaEpisodes.seasonNumber),
+        asc(cinemaEpisodes.episodeNumber),
       ),
-    )
-    .leftJoin(
-      stillClaim,
-      and(
-        eq(stillClaim.objectId, cinemaEpisodes.stillObjectId),
-        isNull(stillClaim.releasedAt),
-      ),
-    )
-    .leftJoin(
-      seriesPosterClaim,
-      and(
-        eq(seriesPosterClaim.objectId, cinemaSeries.posterObjectId),
-        isNull(seriesPosterClaim.releasedAt),
-      ),
-    )
-    .leftJoin(
-      seriesBackdropClaim,
-      and(
-        eq(seriesBackdropClaim.objectId, cinemaSeries.backdropObjectId),
-        isNull(seriesBackdropClaim.releasedAt),
-      ),
-    )
-    .where(inArray(cinemaEpisodes.seriesId, seriesIds))
-    .orderBy(
-      asc(cinemaEpisodes.seasonNumber),
-      asc(cinemaEpisodes.episodeNumber),
-    )
+    getSeriesHeadersByIds(db, seriesIds),
+  ])
 
-  const seriesPlayable = new Map<
-    string,
-    {
-      seriesTitle: string
-      seriesPosterObjectId: string | null
-      seriesBackdropObjectId: string | null
-      episodes: PlayableEpisode[]
-      byId: Map<string, PlayableEpisode>
-    }
-  >()
-
+  const episodesBySeries = new Map<string, PlayableEpisode[]>()
   for (const row of playableRows) {
     const ep = toPlayableEpisode(row)
-    let entry = seriesPlayable.get(row.seriesId)
-    if (!entry) {
-      entry = {
-        seriesTitle: row.seriesTitle,
-        seriesPosterObjectId: row.seriesPosterObjectId,
-        seriesBackdropObjectId: row.seriesBackdropObjectId,
-        episodes: [],
-        byId: new Map(),
-      }
-      seriesPlayable.set(row.seriesId, entry)
-    }
-    entry.episodes.push(ep)
-    entry.byId.set(ep.id, ep)
+    const list = episodesBySeries.get(ep.seriesId) ?? []
+    list.push(ep)
+    episodesBySeries.set(ep.seriesId, list)
   }
 
   const results: ContinueWatchingEpisodeRow[] = []
-  for (const [seriesId, rows] of activityBySeries) {
-    const playable = seriesPlayable.get(seriesId)
-    if (!playable) {
+  for (const [seriesId, activity] of activityBySeries) {
+    const header = seriesHeaders.get(seriesId)
+    const episodes = episodesBySeries.get(seriesId)
+    if (!header || !episodes) {
       continue
     }
-
-    for (const row of rows) {
-      if (!row.finished && row.positionMs > 0n) {
-        const ep = playable.byId.get(row.episodeId)
-        if (!ep || !ep.progress) {
-          // Episode file was removed; check older activity in this series.
-          continue
-        }
-        results.push({
-          seriesId,
-          seriesTitle: playable.seriesTitle,
-          seriesPosterObjectId: playable.seriesPosterObjectId,
-          seriesBackdropObjectId: playable.seriesBackdropObjectId,
-          episode: ep,
-          progress: ep.progress,
-          activityAt: row.updatedAt,
-        })
-        break
-      }
-
-      if (row.finished) {
-        const next = playable.episodes.find(
-          (ep) =>
-            isAfterEpisode(ep, row.seasonNumber, row.episodeNumber) &&
-            !ep.progress?.finished,
-        )
-        if (next) {
-          const nextProgress =
-            next.progress && next.progress.positionMs > 0n
-              ? next.progress
-              : null
-          results.push({
-            seriesId,
-            seriesTitle: playable.seriesTitle,
-            seriesPosterObjectId: playable.seriesPosterObjectId,
-            seriesBackdropObjectId: playable.seriesBackdropObjectId,
-            episode: next,
-            progress: nextProgress,
-            activityAt: row.updatedAt,
-          })
-        }
-        // Finished the latest episode with nothing unwatched after it; series is done.
-        break
-      }
+    const picked = pickContinueEpisode(activity, episodes)
+    if (picked) {
+      results.push({
+        seriesId,
+        seriesTitle: header.title,
+        seriesPosterObjectId: header.posterObjectId,
+        seriesBackdropObjectId: header.backdropObjectId,
+        ...picked,
+      })
     }
   }
 

@@ -1,4 +1,14 @@
-import { likeContains, uuid, type PageCursor } from '#/data/sql.js'
+import type { WatchProgressRow } from '#/data/cinema/watch-progress/types.js'
+import {
+  activeClaimOn,
+  asDate,
+  big,
+  keysetAfterTimestamptz,
+  keysetOrder,
+  likeContains,
+  uuid,
+  type PageCursor,
+} from '#/data/sql.js'
 import { noRowsOnBadUuid } from '#/db/errors.js'
 import type { DbOrTx } from '#/db/index.js'
 import {
@@ -7,21 +17,13 @@ import {
   cinemaWatchProgress,
 } from '#/db/schemas/cinema.js'
 import { iamObjectClaims } from '#/db/schemas/iam.js'
-import { and, desc, eq, ilike, isNotNull, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, ilike, isNotNull, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 
-import type {
-  ContinueWatchingMovie,
-  MovieWatchProgress,
-  PlayableMovie,
-} from './types.js'
+import type { ContinueWatchingMovie, PlayableMovie } from './types.js'
 
 const posterClaim = alias(iamObjectClaims, 'movie_poster_claim')
 const backdropClaim = alias(iamObjectClaims, 'movie_backdrop_claim')
-
-function toDate(value: Date | string): Date {
-  return value instanceof Date ? value : new Date(value)
-}
 
 function playableMovieFiles(db: DbOrTx) {
   return db
@@ -37,52 +39,25 @@ function playableMovieFiles(db: DbOrTx) {
     .as('movie_files')
 }
 
-interface RawMovieRow {
-  id: string
-  tmdbId: number
-  title: string
-  overview: string
-  releaseYear: number | null
-  runtimeMinutes: number | null
+function toPlayableMovie(row: {
+  movie: typeof cinemaMovies.$inferSelect
   posterObjectId: string | null
   backdropObjectId: string | null
-  createdAt: Date
   addedAt: Date | string
-  progressPositionMs: bigint | null
-  progressDurationMs: bigint | null
-  progressFinished: boolean | null
-  progressWatchCount: number | null
-  progressUpdatedAt: Date | null
-}
-
-function toPlayableMovie(row: RawMovieRow): PlayableMovie {
-  const progress: MovieWatchProgress | null =
-    row.progressUpdatedAt !== null &&
-    row.progressPositionMs !== null &&
-    row.progressDurationMs !== null &&
-    row.progressFinished !== null &&
-    row.progressWatchCount !== null
-      ? {
-          positionMs: row.progressPositionMs,
-          durationMs: row.progressDurationMs,
-          finished: row.progressFinished,
-          watchCount: row.progressWatchCount,
-          updatedAt: row.progressUpdatedAt,
-        }
-      : null
-
+  progress: WatchProgressRow | null
+}): PlayableMovie {
   return {
-    id: row.id,
-    tmdbId: row.tmdbId,
-    title: row.title,
-    overview: row.overview,
-    releaseYear: row.releaseYear,
-    runtimeMinutes: row.runtimeMinutes,
+    id: row.movie.id,
+    tmdbId: row.movie.tmdbId,
+    title: row.movie.title,
+    overview: row.movie.overview,
+    releaseYear: row.movie.releaseYear,
+    runtimeMinutes: row.movie.runtimeMinutes,
     posterObjectId: row.posterObjectId,
     backdropObjectId: row.backdropObjectId,
-    createdAt: row.createdAt,
-    addedAt: toDate(row.addedAt),
-    progress,
+    createdAt: row.movie.createdAt,
+    addedAt: asDate(row.addedAt),
+    progress: row.progress,
   }
 }
 
@@ -90,21 +65,11 @@ function selectPlayableMovies(db: DbOrTx, userId: string) {
   const movieFiles = playableMovieFiles(db)
   const query = db
     .select({
-      id: cinemaMovies.id,
-      tmdbId: cinemaMovies.tmdbId,
-      title: cinemaMovies.title,
-      overview: cinemaMovies.overview,
-      releaseYear: cinemaMovies.releaseYear,
-      runtimeMinutes: cinemaMovies.runtimeMinutes,
+      movie: cinemaMovies,
       posterObjectId: posterClaim.objectId,
       backdropObjectId: backdropClaim.objectId,
-      createdAt: cinemaMovies.createdAt,
       addedAt: movieFiles.addedAt,
-      progressPositionMs: cinemaWatchProgress.positionMs,
-      progressDurationMs: cinemaWatchProgress.durationMs,
-      progressFinished: cinemaWatchProgress.finished,
-      progressWatchCount: cinemaWatchProgress.watchCount,
-      progressUpdatedAt: cinemaWatchProgress.updatedAt,
+      progress: cinemaWatchProgress,
     })
     .from(cinemaMovies)
     .innerJoin(movieFiles, eq(movieFiles.movieId, cinemaMovies.id))
@@ -117,17 +82,11 @@ function selectPlayableMovies(db: DbOrTx, userId: string) {
     )
     .leftJoin(
       posterClaim,
-      and(
-        eq(posterClaim.objectId, cinemaMovies.posterObjectId),
-        isNull(posterClaim.releasedAt),
-      ),
+      activeClaimOn(posterClaim, cinemaMovies.posterObjectId),
     )
     .leftJoin(
       backdropClaim,
-      and(
-        eq(backdropClaim.objectId, cinemaMovies.backdropObjectId),
-        isNull(backdropClaim.releasedAt),
-      ),
+      activeClaimOn(backdropClaim, cinemaMovies.backdropObjectId),
     )
   return { query, movieFiles }
 }
@@ -158,20 +117,20 @@ export async function getPlayableMoviesPage(
 ): Promise<PlayableMovie[]> {
   const { query } = selectPlayableMovies(db, options.userId)
   const pattern = options.query ? likeContains(options.query) : undefined
-  const after = options.after
   const rows = await query
     .where(
       and(
         pattern ? ilike(cinemaMovies.title, pattern) : undefined,
-        after
-          ? sql`(date_trunc('milliseconds', ${cinemaMovies.createdAt}), ${cinemaMovies.id}) > (${after.createdAt.toISOString()}::timestamptz, ${uuid(after.id)})`
+        options.after
+          ? keysetAfterTimestamptz(
+              cinemaMovies.createdAt,
+              cinemaMovies.id,
+              options.after,
+            )
           : undefined,
       ),
     )
-    .orderBy(
-      sql`date_trunc('milliseconds', ${cinemaMovies.createdAt})`,
-      cinemaMovies.id,
-    )
+    .orderBy(...keysetOrder(cinemaMovies.createdAt, cinemaMovies.id))
     .limit(options.limit)
   return rows.map(toPlayableMovie)
 }
@@ -199,18 +158,14 @@ export async function getContinueWatchingMovies(
       and(
         eq(cinemaWatchProgress.userId, options.userId),
         eq(cinemaWatchProgress.finished, false),
-        sql`${cinemaWatchProgress.positionMs} > 0`,
+        gt(cinemaWatchProgress.positionMs, big(0n)),
       ),
     )
     .orderBy(desc(cinemaWatchProgress.updatedAt), desc(cinemaMovies.id))
     .limit(options.limit)
 
-  const items: ContinueWatchingMovie[] = []
-  for (const row of rows) {
+  return rows.flatMap((row) => {
     const movie = toPlayableMovie(row)
-    if (movie.progress) {
-      items.push({ movie, progress: movie.progress })
-    }
-  }
-  return items
+    return movie.progress ? [{ movie, progress: movie.progress }] : []
+  })
 }
