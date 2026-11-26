@@ -23,11 +23,17 @@ export function useCursorPagination() {
     [pageToken],
   )
 
+  const reset = React.useCallback(() => {
+    setPageToken('')
+    setPageHistory([])
+  }, [])
+
   return {
     pageToken,
     hasPrevious: pageHistory.length > 0,
     goPrevious,
     goNext,
+    reset,
   }
 }
 
