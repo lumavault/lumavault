@@ -55,3 +55,15 @@ export function keysetAfter(
   const utc = cursor.createdAt.toISOString().replace('Z', '')
   return sql`(${createdAtMs(createdAt)}, ${id}) > (${utc}::timestamp, ${cursor.id})`
 }
+
+/**
+ * Rows that sort after the cursor in keysetOrder. For timestamptz columns paired with a
+ * uuid ID column.
+ */
+export function keysetAfterTz(
+  timestamp: AnyPgColumn,
+  id: AnyPgColumn,
+  cursor: PageCursor,
+): SQL {
+  return sql`(${createdAtMs(timestamp)}, ${id}) > (${cursor.createdAt.toISOString()}::timestamptz, ${uuid(cursor.id)})`
+}

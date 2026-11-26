@@ -1,4 +1,9 @@
-import { keysetOrder, type PageCursor } from '#/data/sql.js'
+import {
+  keysetAfterTz,
+  keysetOrder,
+  uuid,
+  type PageCursor,
+} from '#/data/sql.js'
 import { noRowsOnBadUuid } from '#/db/errors.js'
 import type { DbOrTx } from '#/db/index.js'
 import {
@@ -8,7 +13,7 @@ import {
   cinemaSeries,
 } from '#/db/schemas/cinema.js'
 import { iamObjectClaims } from '#/db/schemas/iam.js'
-import { and, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { and, eq, isNotNull, isNull, or, type SQL } from 'drizzle-orm'
 
 import type { MediaFileDetails, MediaFileFilterMode } from './types.js'
 
@@ -106,19 +111,13 @@ function filterCondition(filter: MediaFileFilterMode): SQL | undefined {
   }
 }
 
-// added_at is a timestamptz column, so compare against an explicit UTC timestamptz cursor
-// truncated to milliseconds to match JS Date precision regardless of session time zone.
-function addedAtAfter(cursor: PageCursor): SQL {
-  return sql`(date_trunc('milliseconds', ${cinemaMediaFiles.addedAt}), ${cinemaMediaFiles.id}) > (${cursor.createdAt.toISOString()}::timestamptz, ${cursor.id}::uuid)`
-}
-
 /** A media file by ID with size and match details. Null when missing or the ID is not a UUID. */
 export async function getMediaFileById(
   db: DbOrTx,
   mediaFileId: string,
 ): Promise<MediaFileDetails | null> {
   const [row] = await selectMediaFiles(db)
-    .where(eq(cinemaMediaFiles.id, sql`${mediaFileId}::uuid`))
+    .where(eq(cinemaMediaFiles.id, uuid(mediaFileId)))
     .catch(noRowsOnBadUuid)
   return row ? toDetails(row) : null
 }
@@ -147,7 +146,13 @@ export async function getMediaFilePage(
     .where(
       and(
         filterCondition(page.filter),
-        page.after ? addedAtAfter(page.after) : undefined,
+        page.after
+          ? keysetAfterTz(
+              cinemaMediaFiles.addedAt,
+              cinemaMediaFiles.id,
+              page.after,
+            )
+          : undefined,
       ),
     )
     .orderBy(...keysetOrder(cinemaMediaFiles.addedAt, cinemaMediaFiles.id))
