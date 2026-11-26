@@ -30,3 +30,18 @@ export interface FinishedUpload {
   householdId: string | null
   bytes: bigint
 }
+
+export interface StoreServerObjectInput {
+  app: IamApp
+  bytes: Uint8Array
+  filename: string
+  mimeType: string
+}
+
+export interface StoredServerObject {
+  objectId: string
+  bytes: bigint
+  sha256Digest: string
+  mimeType: string
+  filename: string
+}

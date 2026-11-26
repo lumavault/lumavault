@@ -7,7 +7,11 @@ import {
   iamObjectClaims,
   iamUploadReservations,
 } from '#/db/schemas/iam.js'
-import type { StorageGateway, StoredObject } from '#/lib/storage-gateway.js'
+import type {
+  StorageGateway,
+  StoredObject,
+  UploadObjectInput,
+} from '#/lib/storage-gateway.js'
 import type { ModuleContext } from '#/server/modules.js'
 import {
   APP_NAMESPACE,
@@ -51,6 +55,20 @@ class FakeGateway implements StorageGateway {
 
   async readHead(objectId: string) {
     return this.objects.has(objectId) ? new Uint8Array(0) : null
+  }
+
+  async upload(input: UploadObjectInput): Promise<StoredObject> {
+    const id = randomUUID()
+    const stored: StoredObject = {
+      id,
+      namespace: input.namespace,
+      sizeBytes: BigInt(input.bytes.byteLength),
+      sha256Digest: '0'.repeat(64),
+      mimeType: input.mimeType,
+      filename: input.filename,
+    }
+    this.objects.set(id, stored)
+    return stored
   }
 
   async delete(objectId: string) {

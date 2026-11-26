@@ -26,7 +26,11 @@ import {
 } from '#/db/schemas/cinema.js'
 import { iamHouseholds, iamObjectClaims } from '#/db/schemas/iam.js'
 import { MAX_PAGE_SIZE } from '#/lib/constants.js'
-import type { StorageGateway, StoredObject } from '#/lib/storage-gateway.js'
+import type {
+  StorageGateway,
+  StoredObject,
+  UploadObjectInput,
+} from '#/lib/storage-gateway.js'
 import { RPC_PREFIX } from '#/routes.js'
 import { createApp } from '#/server/app.js'
 import { loadModules, type ModuleContext } from '#/server/modules.js'
@@ -90,6 +94,20 @@ class FakeGateway implements StorageGateway {
       return null
     }
     return entry.data.subarray(0, maxBytes)
+  }
+
+  async upload(input: UploadObjectInput): Promise<StoredObject> {
+    const id = randomUUID()
+    const stored: StoredObject = {
+      id,
+      namespace: input.namespace,
+      sizeBytes: BigInt(input.bytes.byteLength),
+      sha256Digest: '0'.repeat(64),
+      mimeType: input.mimeType,
+      filename: input.filename,
+    }
+    this.objects.set(id, { stored, data: input.bytes })
+    return stored
   }
 
   async delete(objectId: string): Promise<void> {
