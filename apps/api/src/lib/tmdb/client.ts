@@ -1,3 +1,5 @@
+import { retryHttp } from '#/lib/retry.js'
+
 import {
   normalizeMovieDetails,
   normalizeSearchResults,
@@ -5,9 +7,6 @@ import {
   normalizeSeriesDetails,
 } from './normalize.js'
 import {
-  DEFAULT_INITIAL_BACKOFF_MS,
-  DEFAULT_MAX_BACKOFF_MS,
-  DEFAULT_MAX_RETRIES,
   DEFAULT_TIMEOUT_MS,
   DEFAULT_TMDB_BASE_URL,
   TmdbError,
@@ -15,24 +14,18 @@ import {
   type TmdbClientOptions,
 } from './types.js'
 
-const NUMERIC_SECONDS_RE = /^\d+(?:\.\d+)?$/
-
 export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
   const apiKey = options.apiKey?.trim() || undefined
   const baseUrl = (options.baseUrl ?? DEFAULT_TMDB_BASE_URL).replace(/\/+$/, '')
   const fetchFn = options.fetch ?? fetch
-  const sleep = options.sleep ?? defaultSleep
-  const now = options.now ?? Date.now
-  const maxRetries = Math.max(0, options.maxRetries ?? DEFAULT_MAX_RETRIES)
-  const initialBackoffMs = Math.max(
-    0,
-    options.initialBackoffMs ?? DEFAULT_INITIAL_BACKOFF_MS,
-  )
-  const maxBackoffMs = Math.max(
-    initialBackoffMs,
-    options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS,
-  )
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const retryOptions = {
+    maxRetries: options.maxRetries,
+    initialBackoffMs: options.initialBackoffMs,
+    maxBackoffMs: options.maxBackoffMs,
+    sleep: options.sleep,
+    now: options.now,
+  }
 
   function requireApiKey(): string {
     if (!apiKey) {
@@ -69,65 +62,52 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
       url.searchParams.set('api_key', key)
     }
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      let res: Response
-      try {
-        res = await fetchFn(url, {
-          method: 'GET',
-          headers,
-          signal: AbortSignal.timeout(timeoutMs),
-        })
-      } catch (err) {
-        throw new TmdbError('unavailable', 'TMDB request failed', {
-          cause: err,
-        })
-      }
-
-      if (res.status === 429) {
-        await res.body?.cancel()
-        if (attempt >= maxRetries) {
-          throw new TmdbError('rate_limited', 'TMDB rate limit exceeded', {
-            status: 429,
-          })
-        }
-        const delayMs = retryDelayMs(
-          res.headers.get('retry-after'),
-          attempt,
-          initialBackoffMs,
-          maxBackoffMs,
-          now,
-        )
-        await sleep(delayMs)
-        continue
-      }
-
-      if (allowNotFound && res.status === 404) {
-        await res.body?.cancel()
-        return null
-      }
-
-      if (!res.ok) {
-        await res.body?.cancel()
-        throw new TmdbError(
-          'unavailable',
-          `TMDB request failed with status ${res.status}`,
-          { status: res.status },
-        )
-      }
-
-      try {
-        return await res.json()
-      } catch (err) {
-        throw new TmdbError('unavailable', 'TMDB returned invalid JSON', {
-          status: res.status,
-          cause: err,
-        })
-      }
+    let res: Response
+    try {
+      res = await retryHttp(
+        () =>
+          fetchFn(url, {
+            method: 'GET',
+            headers,
+            signal: AbortSignal.timeout(timeoutMs),
+          }),
+        retryOptions,
+      )
+    } catch (err) {
+      throw new TmdbError('unavailable', 'TMDB request failed', {
+        cause: err,
+      })
     }
 
-    throw new TmdbError('rate_limited', 'TMDB rate limit exceeded', {
-      status: 429,
-    })
+    if (res.status === 429) {
+      await res.body?.cancel()
+      throw new TmdbError('rate_limited', 'TMDB rate limit exceeded', {
+        status: 429,
+      })
+    }
+
+    if (allowNotFound && res.status === 404) {
+      await res.body?.cancel()
+      return null
+    }
+
+    if (!res.ok) {
+      await res.body?.cancel()
+      throw new TmdbError(
+        'unavailable',
+        `TMDB request failed with status ${res.status}`,
+        { status: res.status },
+      )
+    }
+
+    try {
+      return await res.json()
+    } catch (err) {
+      throw new TmdbError('unavailable', 'TMDB returned invalid JSON', {
+        status: res.status,
+        cause: err,
+      })
+    }
   }
 
   return {
@@ -203,29 +183,4 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
 function isBearerToken(key: string): boolean {
   const parts = key.split('.')
   return parts.length === 3 && parts.every((part) => part.length > 0)
-}
-
-function retryDelayMs(
-  retryAfter: string | null,
-  attempt: number,
-  initialBackoffMs: number,
-  maxBackoffMs: number,
-  now: () => number,
-): number {
-  if (retryAfter !== null) {
-    const trimmed = retryAfter.trim()
-    if (NUMERIC_SECONDS_RE.test(trimmed)) {
-      const ms = Math.ceil(Number(trimmed) * 1000)
-      return Math.min(Math.max(0, ms), maxBackoffMs)
-    }
-    const parsedDate = Date.parse(trimmed)
-    if (!Number.isNaN(parsedDate)) {
-      return Math.min(Math.max(0, parsedDate - now()), maxBackoffMs)
-    }
-  }
-  return Math.min(initialBackoffMs * 2 ** attempt, maxBackoffMs)
-}
-
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }

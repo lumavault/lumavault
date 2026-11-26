@@ -1,7 +1,4 @@
 export const DEFAULT_TMDB_BASE_URL = 'https://api.themoviedb.org/3'
-export const DEFAULT_MAX_RETRIES = 3
-export const DEFAULT_INITIAL_BACKOFF_MS = 250
-export const DEFAULT_MAX_BACKOFF_MS = 5_000
 export const DEFAULT_TIMEOUT_MS = 10_000
 
 export type TmdbMediaKind = 'movie' | 'series'
