@@ -67,6 +67,67 @@ jobs:
           go build -o bin/lumavault ./core/cmd/lumavault
           pnpm -r --if-present run build
 
+  portal-e2e:
+    name: Portal End-to-End (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lumavault
+          POSTGRES_PASSWORD: lumavault
+          POSTGRES_DB: lumavault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lumavault -d lumavault"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mailpit:
+        image: axllent/mailpit:v1.34
+        ports:
+          - 1025:1025
+          - 8025:8025
+    env:
+      DATABASE_URL: postgres://lumavault:lumavault@localhost:5432/lumavault
+      SMTP_URL: smtp://localhost:1025
+      MAILPIT_URL: http://localhost:8025
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: pnpm
+
+      - name: Generate Protobuf stubs
+        run: make proto
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK, API, and Portal
+        run: |
+          pnpm --filter @lumavault/sdk run build
+          pnpm --filter @lumavault/api run build
+          pnpm --filter @lumavault/portal run build
+
+      - name: Push database schema
+        run: pnpm --filter @lumavault/api run db:push
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @lumavault/portal exec playwright install --with-deps chromium
+
+      - name: Run Portal E2E tests
+        run: pnpm --filter @lumavault/portal run test:e2e
+
   swift:
     name: Swift SDK
     runs-on: macos-latest
