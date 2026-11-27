@@ -4,10 +4,15 @@ import {
   PairingStatus,
 } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { createRpcTransport } from '@lumavault/ui/rpc'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
-const API_URL = 'http://localhost:4000'
-const MAILPIT_URL = 'http://localhost:8025'
+const API_URL = (
+  process.env.E2E_API_URL ??
+  `http://localhost:${process.env.E2E_API_PORT ?? '4001'}`
+).replace(/\/+$/, '')
+const MAILPIT_URL = (
+  process.env.MAILPIT_URL ?? 'http://localhost:8025'
+).replace(/\/+$/, '')
 const OWNER_EMAIL = 'owner@example.com'
 const OWNER_PASSWORD = 'owner-password-1234'
 const SECOND_HOUSEHOLD_EMAIL = 'friend@example.com'
@@ -17,6 +22,12 @@ const MEMBER_PASSWORD = 'member-password-1234'
 
 function createIamClient() {
   return createClient(IamService, createRpcTransport(API_URL))
+}
+
+async function signOut(page: Page, email: string) {
+  await page.getByRole('button', { name: email }).click()
+  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  await expect(page).toHaveURL(/\/login/)
 }
 
 // Polls Mailpit for the newest email to recipient and returns the first match of pattern.
@@ -91,8 +102,7 @@ test.describe.serial('LumaVault Portal end-to-end', () => {
     await expect(page.getByText('Playwright Key')).toBeVisible()
 
     // 3. Sign out and sign back in with passkey.
-    await page.getByRole('button', { name: 'Sign out' }).click()
-    await expect(page).toHaveURL(/\/login/)
+    await signOut(page, OWNER_EMAIL)
 
     await page.getByRole('button', { name: 'Sign in with a passkey' }).click()
     await expect(page).toHaveURL(/\/$/)
@@ -101,9 +111,7 @@ test.describe.serial('LumaVault Portal end-to-end', () => {
     ).toBeVisible()
 
     // 4. Sign out and sign back in with password.
-    await page.goto('/account')
-    await page.getByRole('button', { name: 'Sign out' }).click()
-    await expect(page).toHaveURL(/\/login/)
+    await signOut(page, OWNER_EMAIL)
 
     await page.getByLabel('Email').fill(OWNER_EMAIL)
     await page.locator('#login-password').fill(OWNER_PASSWORD)
@@ -111,9 +119,7 @@ test.describe.serial('LumaVault Portal end-to-end', () => {
     await expect(page).toHaveURL(/\/$/)
 
     // 5. Sign out and sign back in with magic link fetched from Mailpit.
-    await page.goto('/account')
-    await page.getByRole('button', { name: 'Sign out' }).click()
-    await expect(page).toHaveURL(/\/login/)
+    await signOut(page, OWNER_EMAIL)
 
     await page.getByRole('tab', { name: 'Magic link' }).click()
     await page.locator('#magic-email').fill(OWNER_EMAIL)

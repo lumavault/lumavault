@@ -206,12 +206,12 @@ pnpm --filter @lumavault/portal run test
 
 The Playwright suite in `apps/portal/e2e/portal.spec.ts` exercises first-run setup, password/passkey/magic-link sign-in (reading emails from Mailpit), invites, household management, allowances, and Apple TV pairing against the real API and Portal.
 
-1. Start from a clean PostgreSQL database and Mailpit (test 1 asserts that `/` redirects to `/setup`):
+Each run automatically drops, recreates, and pushes schemas into a dedicated `lumavault_e2e` database on your running PostgreSQL container and serves the API and Portal on ports 4001 and 3004, so it never wipes your local dev database and can run while `make dev` is up. (It still shares local Mailpit on port 8025 and clears Mailpit messages between runs.)
+
+1. Make sure PostgreSQL and Mailpit are running:
 
    ```bash
-   docker compose down -v
    docker compose up -d
-   DATABASE_URL=postgres://lumavault:lumavault@localhost:5432/lumavault pnpm --filter @lumavault/api run db:push
    ```
 
 2. Install Playwright Chromium (first time only):
@@ -220,12 +220,10 @@ The Playwright suite in `apps/portal/e2e/portal.spec.ts` exercises first-run set
    pnpm --filter @lumavault/portal exec playwright install chromium
    ```
 
-3. Build the SDK, API, and Portal (Playwright starts `apps/api/dist/` and `vite preview`, or reuses already-running servers on ports 4000 and 3000 when `CI` is unset):
+3. Build the Web SDK if you have not already (`make dev` also does this):
 
    ```bash
    pnpm --filter @lumavault/sdk run build
-   pnpm --filter @lumavault/api run build
-   pnpm --filter @lumavault/portal run build
    ```
 
 4. Run the E2E suite:
@@ -234,4 +232,4 @@ The Playwright suite in `apps/portal/e2e/portal.spec.ts` exercises first-run set
    pnpm --filter @lumavault/portal run test:e2e
    ```
 
-To run against non-default ports or URLs, set `E2E_API_PORT`, `E2E_PORTAL_PORT`, `E2E_API_URL`, `E2E_PORTAL_URL`, or `MAILPIT_URL` (see `apps/portal/playwright.config.ts`).
+To override defaults, set `E2E_DATABASE_URL` (database name must end with `_e2e`), `E2E_API_PORT`, `E2E_PORTAL_PORT`, `E2E_API_URL`, `E2E_PORTAL_URL`, or `MAILPIT_URL` (see `apps/portal/playwright.config.ts`).

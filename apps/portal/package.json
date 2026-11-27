@@ -13,7 +13,7 @@
     "build": "tsr generate && vite build",
     "typecheck": "tsr generate && tsc --noEmit",
     "test": "tsr generate && vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "pnpm --filter @lumavault/api run db:reset-e2e && playwright test"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.17.0",
