@@ -162,7 +162,7 @@ function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<Link to={'/account' as never} />}>
+              <DropdownMenuItem render={<Link to="/account" />}>
                 <UserCircleIcon />
                 Account
               </DropdownMenuItem>
