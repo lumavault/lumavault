@@ -2,6 +2,7 @@ import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import { createEmailService, type EmailService } from '#/email/emails.js'
 import { createMailer } from '#/email/mailer.js'
+import { escapeHtml, renderEmail } from '#/email/render.js'
 import { SMTPServer } from 'smtp-server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -55,12 +56,75 @@ describe('templates', () => {
       const [email] = sent
       expect(email?.subject).toMatch(subject)
       expect(email?.html).toMatch(/^<!DOCTYPE html/i)
-      expect(email?.html).toContain(LINK.replace('&', '&amp;'))
+      expect(email?.html).toContain(LINK.replaceAll('&', '&amp;'))
       expect(email?.text).toContain(LINK)
       expect(email?.text).not.toMatch(/<[a-z]/i)
       expect(email?.link).toBe(LINK)
     })
   }
+
+  it('escapes HTML special characters in text and URLs', async () => {
+    sent = []
+    const unsafeName = `<script>alert("xss")</script> & 'quoted'`
+    const unsafeHousehold = `O'Reilly & <Friends> "VIP"`
+    const urlWithSpecials = `http://localhost:3000/invite?a=1&b="><img src=x>&c='1'`
+
+    await service.sendMemberInvite('a@example.com', {
+      url: urlWithSpecials,
+      householdName: unsafeHousehold,
+      inviterName: unsafeName,
+    })
+
+    const [email] = sent
+    expect(email?.html).not.toContain('<script>')
+    expect(email?.html).not.toContain('<Friends>')
+    expect(email?.html).not.toContain('"><img')
+    expect(email?.html).toContain(escapeHtml(unsafeName))
+    expect(email?.html).toContain(escapeHtml(unsafeHousehold))
+    expect(email?.html).toContain(`href="${escapeHtml(urlWithSpecials)}"`)
+    expect(email?.text).toContain(unsafeName)
+    expect(email?.text).toContain(unsafeHousehold)
+    expect(email?.text).toContain(urlWithSpecials)
+  })
+
+  it('rejects non-http action URLs', () => {
+    for (const badUrl of [
+      'javascript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'not a url',
+    ]) {
+      expect(() =>
+        renderEmail({
+          subject: 'Test',
+          preview: 'Test',
+          heading: 'Test',
+          body: 'Test',
+          actionLabel: 'Open',
+          actionUrl: badUrl,
+          note: 'Test',
+        }),
+      ).toThrow(/http or https/)
+    }
+  })
+
+  it('strips line breaks from rendered subjects', () => {
+    const email = renderEmail({
+      subject: 'Hello\r\nBcc: attacker@example.com',
+      preview: 'Preview',
+      heading: 'Heading',
+      body: 'Body',
+      actionLabel: 'Open',
+      actionUrl: LINK,
+      note: 'Note',
+    })
+    expect(email.subject).toBe('Hello Bcc: attacker@example.com')
+  })
+})
+
+describe('escapeHtml', () => {
+  it('escapes &, <, >, ", and single quotes', () => {
+    expect(escapeHtml(`& < > " '`)).toBe('&amp; &lt; &gt; &quot; &#39;')
+  })
 })
 
 describe('console fallback', () => {
