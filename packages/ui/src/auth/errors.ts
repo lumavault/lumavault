@@ -68,7 +68,11 @@ export function mapMagicLinkUrlError(
   if (!normalized) {
     return null
   }
-  if (normalized === 'FORBIDDEN' || normalized === 'SIGNUP_DISABLED') {
+  if (
+    normalized === 'FORBIDDEN' ||
+    normalized === 'SIGNUP_DISABLED' ||
+    normalized === 'NEW_USER_SIGNUP_DISABLED'
+  ) {
     return INVITE_ONLY_MESSAGE
   }
   return (
