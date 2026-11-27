@@ -31,9 +31,8 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   url.pathname = `/${name}`
   const database = createDatabase(url.toString())
   // pool.end resolves before sockets close, so the forced drop below can kill a closing client.
-  database.pool.on('connect', (client) =>
-    client.on('error', ignoreAdminShutdown),
-  )
+  // pg-pool re-emits that client error on the pool, which throws if the pool has no listener.
+  database.pool.on('error', ignoreAdminShutdown)
   return {
     ...database,
     url: url.toString(),
