@@ -10,3 +10,11 @@ export const EMAIL_COLORS = {
   button: '#1c1c1a',
   buttonText: '#ffffff',
 } as const
+
+export const HTML_ESCAPE_MAP: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}

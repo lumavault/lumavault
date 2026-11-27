@@ -11,8 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "types": ["node"],
-    "jsx": "react-jsx"
+    "types": ["node"]
   },
   "include": ["src/**/*", "test/**/*", "drizzle.config.ts"]
 }
