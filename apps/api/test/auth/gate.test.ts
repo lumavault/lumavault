@@ -1,5 +1,5 @@
 import { isLockedAuthPath } from '#/auth/org-lockdown.js'
-import { createHouseholdFor, mintBearerSession } from '#/auth/server-helpers.js'
+import { mintBearerSession } from '#/auth/server-helpers.js'
 import { invitation, member, user } from '#/db/schemas/auth.js'
 import { iamHouseholdInvites } from '#/db/schemas/iam.js'
 import { hashSecret, newSecret } from '#/lib/secrets.js'
@@ -18,6 +18,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { createHouseholdFor } from '#test/support/households.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'

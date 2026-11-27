@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { Code, ConnectError } from '@connectrpc/connect'
-import { verifyTicket } from '#/auth/tickets.js'
 import { organization, user } from '#/db/schemas/auth.js'
 import {
   iamHouseholds,
@@ -28,6 +27,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { verifyTicket } from '#test/support/tickets.js'
 import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -75,8 +75,6 @@ class FakeGateway implements StorageGateway {
     this.deleted.push(objectId)
     this.objects.delete(objectId)
   }
-
-  async setThumbnail() {}
 }
 
 let database: TestDatabase

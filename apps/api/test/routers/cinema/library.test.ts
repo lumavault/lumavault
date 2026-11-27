@@ -15,7 +15,6 @@ import {
 } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
-import { createHouseholdFor } from '#/auth/server-helpers.js'
 import { getMediaFileById } from '#/data/cinema/media-file/get-media-file.js'
 import { user } from '#/db/schemas/auth.js'
 import {
@@ -45,6 +44,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { createHouseholdFor } from '#test/support/households.js'
 import { iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
@@ -114,8 +114,6 @@ class FakeGateway implements StorageGateway {
     this.deleted.push(objectId)
     this.objects.delete(objectId)
   }
-
-  async setThumbnail(): Promise<void> {}
 }
 
 function cinemaClient(

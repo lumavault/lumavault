@@ -30,7 +30,7 @@ export interface UploadObjectInput {
 
 /**
  * The API's server-to-server view of the Storage Gateway. Every call carries the internal
- * service key, so it can read, write, update, and delete any object.
+ * service key, so it can read, write, and delete any object.
  */
 export interface StorageGateway {
   /** The object, or null when the Gateway has no such object. */
@@ -44,8 +44,6 @@ export interface StorageGateway {
   upload(input: UploadObjectInput): Promise<StoredObject>
   /** Deletes an object's manifest. Deleting an object that is already gone succeeds. */
   delete(objectId: string): Promise<void>
-  /** Points an object at a thumbnail chunk that is already uploaded. */
-  setThumbnail(objectId: string, chunkSha256: string): Promise<void>
 }
 
 export function createStorageGateway(options: {
@@ -112,9 +110,6 @@ export function createStorageGateway(options: {
           throw err
         }
       }
-    },
-    async setThumbnail(objectId, chunkSha256) {
-      await client.update(objectId, { thumbnailChunkHash: chunkSha256 })
     },
   }
 }

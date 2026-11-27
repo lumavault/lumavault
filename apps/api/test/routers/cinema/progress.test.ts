@@ -8,7 +8,6 @@ import {
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
-import { createHouseholdFor } from '#/auth/server-helpers.js'
 import { getWatchProgress } from '#/data/cinema/watch-progress/get-watch-progress.js'
 import { user } from '#/db/schemas/auth.js'
 import {
@@ -30,6 +29,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { createHouseholdFor } from '#test/support/households.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'

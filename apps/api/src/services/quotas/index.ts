@@ -1,9 +1,9 @@
 // The quota ledger. App routers and workers call only finishUpload, storeServerObject,
-// releaseObject, and the read ticket signers, and never touch ledger tables, so the ledger
+// releaseObject, and signObjectReadTicket, and never touch ledger tables, so the ledger
 // can move to its own service later. IamService also uses reserveUpload, cancelReservation,
 // and expireReservations.
 export { finishUpload } from './finish.js'
-export { signObjectReadTicket, signThumbnailReadTicket } from './read-ticket.js'
+export { signObjectReadTicket } from './read-ticket.js'
 export { cancelReservation, releaseObject } from './release.js'
 export { reserveUpload } from './reserve.js'
 export { storeServerObject } from './store.js'
