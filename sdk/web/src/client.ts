@@ -24,7 +24,6 @@ import type {
   UpdateFields,
   UploadInput,
   UploadOptions,
-  UploadResult,
 } from './types.js'
 import { upload } from './upload.js'
 import { chunkUrl, streamUrl, type StreamUrlOptions } from './urls.js'
@@ -55,18 +54,14 @@ export class LumaVaultClient {
   }
 
   /** Chunks, hashes, sends only missing chunks, and commits. Empty inputs are rejected. */
-  async upload(
-    input: UploadInput,
-    options: UploadOptions,
-  ): Promise<UploadResult> {
-    const object = await upload(
+  upload(input: UploadInput, options: UploadOptions): Promise<ObjectMetadata> {
+    return upload(
       this.#rpc,
       this.#baseUrl,
       input,
       options,
       this.#headers(options.ticket),
     )
-    return { ...object, url: this.streamUrl(object.id) }
   }
 
   /** Streams the object's bytes, failing with data_loss if any chunk or the whole file mismatches. */
@@ -163,35 +158,6 @@ export class LumaVaultClient {
 
   async delete(id: string): Promise<void> {
     await this.#rpc.deleteObject({ objectId: id }, { headers: this.#headers() })
-  }
-
-  /**
-   * Makes a new object with the same bytes, billed separately by whoever commits it. The
-   * gateway keeps one copy of each chunk, so this writes only a new manifest. Needs the service key.
-   */
-  async copy(id: string): Promise<ObjectMetadata> {
-    const source = await this.get(id)
-    const { object } = await this.#rpc.commitObject(
-      {
-        namespace: source.namespace,
-        filename: source.filename,
-        mimeType: source.mimeType,
-        sizeBytes: source.sizeBytes,
-        chunkSizeBytes: source.chunkSizeBytes,
-        sha256Digest: source.sha256Digest,
-        chunkHashes: source.chunkHashes,
-        thumbnailChunkHash: source.thumbnailChunkHash,
-        skipDedup: true,
-      },
-      { headers: this.#headers() },
-    )
-    if (!object) {
-      throw new ConnectError(
-        `gateway returned no object for the copy of ${id}`,
-        Code.Internal,
-      )
-    }
-    return object
   }
 
   /** One page of objects in a namespace. */

@@ -9,7 +9,6 @@ export type {
   UploadInput,
   UploadOptions,
   UploadProgress,
-  UploadResult,
 } from './types.js'
 export {
   Namespace,

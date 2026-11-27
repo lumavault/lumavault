@@ -39,9 +39,6 @@ export interface UploadOptions {
   ticket?: string
 }
 
-/** The committed object plus a URL that streams it. */
-export type UploadResult = ObjectMetadata & { url: string }
-
 export interface DownloadOptions {
   signal?: AbortSignal
   /** Read ticket for this object, from the app's API. */

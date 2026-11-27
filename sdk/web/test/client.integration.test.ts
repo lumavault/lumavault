@@ -42,7 +42,6 @@ describe('LumaVaultClient against a real gateway', () => {
     expect(obj.filename).toBe('movie.bin')
     expect(obj.mimeType).toBe('video/mp4')
     expect(obj.chunkHashes).toHaveLength(3)
-    expect(obj.url).toBe(client.streamUrl(obj.id))
     expect(await readAll(client.download(obj.id))).toEqual(bytes)
 
     expect(events[0]?.phase).toBe('hashing')

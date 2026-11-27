@@ -27,12 +27,6 @@ public struct UploadProgress: Sendable, Equatable {
     }
 }
 
-/// The committed object plus a URL that streams it.
-public struct UploadResult: Sendable {
-    public let object: ObjectMetadata
-    public let url: URL
-}
-
 public struct ListPage: Sendable {
     public let objects: [ObjectMetadata]
     /// Pass to the next list call. Nil on the last page.

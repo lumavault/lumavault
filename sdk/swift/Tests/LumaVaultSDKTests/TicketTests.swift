@@ -58,7 +58,7 @@ enum TestTickets {
 
     private func upload() async throws -> ObjectMetadata {
         let ticket = TestTickets.upload(namespace: .cinema, max: bytes.count)
-        return try await client.upload(fileURL: tempFile(), namespace: .cinema, ticket: ticket).object
+        return try await client.upload(fileURL: tempFile(), namespace: .cinema, ticket: ticket)
     }
 
     @Test func rejectsCallsWithoutATicket() async throws {
