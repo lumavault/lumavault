@@ -16,7 +16,7 @@ import {
   getRecentlyAddedSeries,
 } from '#/data/cinema/series/get-series.js'
 import { paged } from '#/lib/paging.js'
-import { parseInput, requiredUuidSchema } from '#/lib/validation.js'
+import { requireUuid } from '#/lib/validation.js'
 import type { ApiModule } from '#/server/modules.js'
 
 import { HOME_HERO_LIMIT, HOME_ROW_LIMIT } from './constants.js'
@@ -30,9 +30,6 @@ import {
   seriesSummaryToWire,
   seriesToWire,
 } from './convert.js'
-
-const movieIdSchema = requiredUuidSchema('movie_id')
-const seriesIdSchema = requiredUuidSchema('series_id')
 
 function mergeLatest<T>(
   entries: { sortAt: Date; id: string; value: T }[],
@@ -153,7 +150,7 @@ export const module: ApiModule = {
 
     router.rpc(CinemaService.method.getMovie, async (req, call) => {
       const { viewer } = await requireCinemaAccess(call, ctx)
-      const movieId = parseInput(movieIdSchema, req.movieId)
+      const movieId = requireUuid(req.movieId, 'movie_id')
       const movie = await getPlayableMovieById(ctx.db, movieId, viewer.userId)
       if (!movie) {
         throw new ConnectError('movie not found', Code.NotFound)
@@ -163,7 +160,7 @@ export const module: ApiModule = {
 
     router.rpc(CinemaService.method.getSeries, async (req, call) => {
       const { viewer } = await requireCinemaAccess(call, ctx)
-      const seriesId = parseInput(seriesIdSchema, req.seriesId)
+      const seriesId = requireUuid(req.seriesId, 'series_id')
       const series = await getPlayableSeriesById(
         ctx.db,
         seriesId,

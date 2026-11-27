@@ -7,6 +7,7 @@ import {
   requireSignedIn,
   requireSuperAdmin,
 } from '#/guards.js'
+import { requireUuid } from '#/lib/validation.js'
 import type { ApiModule } from '#/server/modules.js'
 import {
   APP_NAMESPACE,
@@ -59,9 +60,10 @@ export const module: ApiModule = {
 
     router.rpc(IamService.method.cancelUpload, async (req, call) => {
       const viewer = await requireSignedIn(call, ctx)
+      const reservationId = requireUuid(req.reservationId, 'reservation_id')
       await cancelReservation(ctx, {
         userId: viewer.userId,
-        reservationId: req.reservationId,
+        reservationId,
       })
       return {}
     })

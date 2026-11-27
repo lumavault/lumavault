@@ -14,7 +14,7 @@ import { paged } from '#/lib/paging.js'
 import {
   parseInput,
   requiredObjectIdSchema,
-  requiredUuidSchema,
+  requireUuid,
   uuidSchema,
 } from '#/lib/validation.js'
 import type { ApiModule } from '#/server/modules.js'
@@ -26,7 +26,6 @@ import {
   unsupportedMediaFormatError,
 } from './convert.js'
 
-const reservationIdSchema = requiredUuidSchema('reservation_id')
 const objectIdSchema = requiredObjectIdSchema('object_id')
 
 export const module: ApiModule = {
@@ -34,7 +33,7 @@ export const module: ApiModule = {
   rpc(router, ctx) {
     router.rpc(CinemaService.method.addMediaFile, async (req, call) => {
       const viewer = await requireSuperAdmin(call, ctx)
-      const reservationId = parseInput(reservationIdSchema, req.reservationId)
+      const reservationId = requireUuid(req.reservationId, 'reservation_id')
       const objectId = parseInput(objectIdSchema, req.objectId)
 
       const reservation = await getUploadReservation(ctx.db, reservationId)

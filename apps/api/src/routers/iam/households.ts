@@ -28,7 +28,7 @@ import {
   requireHouseholdOwner,
 } from '#/guards.js'
 import { MEMBER_INVITE_TTL_MS } from '#/iam/constants.js'
-import { emailSchema } from '#/lib/validation.js'
+import { required, requireEmail } from '#/lib/validation.js'
 import { MEMBER_INVITE_PATH } from '#/routes.js'
 import type { ApiModule } from '#/server/modules.js'
 
@@ -36,7 +36,6 @@ import {
   assignableRoleFromWire,
   memberInviteToWire,
   memberToWire,
-  required,
 } from './convert.js'
 
 /** The caller's household row, locked so seat counts and role changes run one at a time. */
@@ -103,13 +102,7 @@ export const module: ApiModule = {
 
     router.rpc(IamService.method.inviteMember, async (req, call) => {
       const { viewer, household } = await requireHouseholdAdmin(call, ctx)
-      const email = required(req.email, 'email').toLowerCase()
-      if (!emailSchema.safeParse(email).success) {
-        throw new ConnectError(
-          'email is not a valid address',
-          Code.InvalidArgument,
-        )
-      }
+      const email = requireEmail(req.email)
       const role = assignableRoleFromWire(req.role)
       const now = new Date()
 

@@ -7,6 +7,27 @@ export const emailSchema = z.email()
 export const uuidSchema = z.uuid()
 export const nonNegativeBigintSchema = z.bigint().min(0n).max(MAX_PG_BIGINT)
 
+/** A required string field, trimmed. */
+export function required(value: string, field: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    throw new ConnectError(`${field} is required`, Code.InvalidArgument)
+  }
+  return trimmed
+}
+
+/** A required email address, trimmed and lowercased. */
+export function requireEmail(value: string, field = 'email'): string {
+  const email = required(value, field).toLowerCase()
+  return parseInput(emailSchema, email, `${field} is not a valid address`)
+}
+
+/** A required UUID string field, trimmed. */
+export function requireUuid(value: string, field: string): string {
+  const id = required(value, field)
+  return parseInput(uuidSchema, id, `${field} is not a valid ID`)
+}
+
 /** Schema for a required, trimmed UUID string field. */
 export function requiredUuidSchema(field: string) {
   return z

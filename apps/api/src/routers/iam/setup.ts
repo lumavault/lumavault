@@ -17,10 +17,10 @@ import {
   IAM_APPS,
   SETUP_STORAGE_CAP_BYTES,
 } from '#/iam/constants.js'
-import { emailSchema } from '#/lib/validation.js'
+import { required, requireEmail } from '#/lib/validation.js'
 import type { ApiModule, ModuleContext } from '#/server/modules.js'
 
-import { householdToWire, required, userToWire } from './convert.js'
+import { householdToWire, userToWire } from './convert.js'
 
 async function checkPassword(
   ctx: ModuleContext,
@@ -53,13 +53,7 @@ export const module: ApiModule = {
     router.rpc(IamService.method.completeSetup, async (req, call) => {
       const name = required(req.name, 'name')
       const householdName = required(req.householdName, 'household_name')
-      const email = required(req.email, 'email').toLowerCase()
-      if (!emailSchema.safeParse(email).success) {
-        throw new ConnectError(
-          'email is not a valid address',
-          Code.InvalidArgument,
-        )
-      }
+      const email = requireEmail(req.email)
       if (ctx.config.adminEmail && email !== ctx.config.adminEmail) {
         throw new ConnectError(
           'this server is set up for a different admin email',

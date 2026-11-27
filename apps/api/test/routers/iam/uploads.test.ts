@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { Code, ConnectError } from '@connectrpc/connect'
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
@@ -174,6 +175,19 @@ describe('CancelUpload', () => {
         iamClient(app, member.headers).cancelUpload({ reservationId }),
       ),
     ).toBe(Code.PermissionDenied)
+  })
+
+  it('rejects a missing or malformed reservation ID and returns NotFound for an unknown UUID', async () => {
+    const asAdmin = iamClient(app, admin.headers)
+    expect(await codeOf(asAdmin.cancelUpload({ reservationId: '' }))).toBe(
+      Code.InvalidArgument,
+    )
+    expect(
+      await codeOf(asAdmin.cancelUpload({ reservationId: 'not-a-uuid' })),
+    ).toBe(Code.InvalidArgument)
+    expect(
+      await codeOf(asAdmin.cancelUpload({ reservationId: randomUUID() })),
+    ).toBe(Code.NotFound)
   })
 })
 
