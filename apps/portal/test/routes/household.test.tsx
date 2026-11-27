@@ -153,11 +153,14 @@ describe('Household management route (/household)', () => {
     expect(await screen.findByText('No seats remaining')).toBeInTheDocument()
 
     // Cancelling an invite restores seats.
-    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel' })
-    fireEvent.click(cancelButtons[0]!)
-    await waitFor(() => {
-      expect(cancelSpy).toHaveBeenCalled()
-    })
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Cancel invite for pending@example.com',
+      }),
+    )
+    expect(await screen.findByText('2 seats remaining')).toBeInTheDocument()
+    expect(cancelSpy).toHaveBeenCalled()
+    expect(screen.queryByText('pending@example.com')).not.toBeInTheDocument()
   })
 
   it('lets the Owner transfer ownership and immediately refreshes viewer role controls', async () => {

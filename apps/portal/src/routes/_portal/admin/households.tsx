@@ -40,7 +40,6 @@ import {
   computeStorageSummary,
   formatBytes,
   formatStorageCap,
-  isUnlimitedCap,
 } from '@lumavault/ui/lib/format-bytes'
 import {
   createConnectQueryKey,
@@ -67,6 +66,7 @@ import {
 } from './-storage-cap'
 
 const PAGE_SIZE = 20
+const DEFAULT_MEMBER_LIMIT = 4
 
 function AdminHouseholdsPage() {
   const viewer = useViewer()
@@ -82,14 +82,12 @@ function AdminHouseholdsPage() {
   )
 
   const [editing, setEditing] = React.useState<HouseholdSummary | null>(null)
-  const [capDraft, setCapDraft] = React.useState<StorageCapDraft>({
-    unlimited: false,
-    amount: '100',
-    unit: 'GB',
-  })
+  const [capDraft, setCapDraft] = React.useState<StorageCapDraft>(() =>
+    capBytesToDraft(0n),
+  )
   const [capTouched, setCapTouched] = React.useState(false)
   const [enabledApps, setEnabledApps] = React.useState<App[]>([])
-  const [memberLimit, setMemberLimit] = React.useState('4')
+  const [memberLimit, setMemberLimit] = React.useState('')
   const [formError, setFormError] = React.useState<string | null>(null)
 
   function openEditDialog(summary: HouseholdSummary) {
@@ -98,23 +96,20 @@ function AdminHouseholdsPage() {
     setCapDraft(capBytesToDraft(allowance?.storageCapBytes ?? 0n))
     setCapTouched(false)
     setEnabledApps([...(allowance?.enabledApps ?? [])])
-    setMemberLimit(String(allowance?.memberLimit ?? 4))
+    setMemberLimit(String(allowance?.memberLimit ?? DEFAULT_MEMBER_LIMIT))
     setFormError(null)
   }
 
   const originalAllowance = editing?.household?.allowance
   const originalCapBytes = originalAllowance?.storageCapBytes ?? 0n
   const originalApps = originalAllowance?.enabledApps ?? []
-  const originalLimit = originalAllowance?.memberLimit ?? 4
+  const originalLimit = originalAllowance?.memberLimit ?? DEFAULT_MEMBER_LIMIT
 
   const parsedCapBytes = capTouched
     ? parseStorageCapDraft(capDraft)
     : originalCapBytes
   const capChanged =
-    capTouched &&
-    parsedCapBytes !== null &&
-    parsedCapBytes !== originalCapBytes &&
-    !(isUnlimitedCap(originalCapBytes) && capDraft.unlimited)
+    capTouched && parsedCapBytes !== null && parsedCapBytes !== originalCapBytes
 
   const appsChanged = Boolean(editing) && !sameApps(enabledApps, originalApps)
 
@@ -150,11 +145,7 @@ function AdminHouseholdsPage() {
 
   async function handleSaveAllowance(event: React.FormEvent) {
     event.preventDefault()
-    if (!editing?.household || changedPaths.length === 0) return
-    if (appsError || capError || parsedMemberLimit === null) {
-      setFormError(appsError ?? capError ?? memberLimitError)
-      return
-    }
+    if (!editing?.household || !canSave || parsedMemberLimit === null) return
 
     setFormError(null)
     try {
@@ -224,102 +215,98 @@ function AdminHouseholdsPage() {
               </AlertDescription>
             </Alert>
           ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Household</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Storage</TableHead>
-                    <TableHead>Apps</TableHead>
-                    <TableHead>Members</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {households.map((item) => {
-                    const house = item.household
-                    if (!house) return null
-                    const capBytes = house.allowance?.storageCapBytes ?? 0n
-                    const summary = item.usage
-                      ? computeStorageSummary(item.usage, capBytes)
-                      : null
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Household</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Storage</TableHead>
+                  <TableHead>Apps</TableHead>
+                  <TableHead>Members</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {households.map((item) => {
+                  const house = item.household
+                  if (!house) return null
+                  const capBytes = house.allowance?.storageCapBytes ?? 0n
+                  const summary = item.usage
+                    ? computeStorageSummary(item.usage, capBytes)
+                    : null
 
-                    return (
-                      <TableRow key={house.id}>
-                        <TableCell className="font-medium">
-                          {house.name}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span>{item.owner?.name ?? '—'}</span>
+                  return (
+                    <TableRow key={house.id}>
+                      <TableCell className="font-medium">
+                        {house.name}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span>{item.owner?.name ?? '—'}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {item.owner?.email ?? ''}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span>
+                            {summary
+                              ? `${formatBytes(summary.usedBytes)} / ${formatStorageCap(capBytes)}`
+                              : formatStorageCap(capBytes)}
+                          </span>
+                          {summary?.isOverCap ? (
+                            <Badge variant="destructive" className="w-fit">
+                              Over cap
+                            </Badge>
+                          ) : summary && summary.reservedBytes > 0n ? (
                             <span className="text-xs text-muted-foreground">
-                              {item.owner?.email ?? ''}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span>
-                              {summary
-                                ? `${formatBytes(summary.usedBytes)} / ${formatStorageCap(capBytes)}`
-                                : formatStorageCap(capBytes)}
-                            </span>
-                            {summary?.isOverCap ? (
-                              <Badge variant="destructive" className="w-fit">
-                                Over cap
-                              </Badge>
-                            ) : summary && summary.reservedBytes > 0n ? (
-                              <span className="text-xs text-muted-foreground">
-                                {formatBytes(summary.reservedBytes)} reserved
-                              </span>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {(house.allowance?.enabledApps ?? []).map((app) => (
-                              <Badge key={app} variant="secondary">
-                                {appLabel(app)}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {item.memberCount} /{' '}
-                          {house.allowance?.memberLimit ?? 0}
-                          {item.pendingInviteCount > 0 ? (
-                            <span className="text-xs text-muted-foreground">
-                              {' '}
-                              (+{item.pendingInviteCount} pending)
+                              {formatBytes(summary.reservedBytes)} reserved
                             </span>
                           ) : null}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(item)}
-                          >
-                            <SlidersHorizontalIcon data-icon="inline-start" />
-                            Edit allowance
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-
-              <CursorPagination
-                hasPrevious={pagination.hasPrevious}
-                nextPageToken={nextPageToken}
-                onPrevious={pagination.goPrevious}
-                onNext={pagination.goNext}
-              />
-            </>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(house.allowance?.enabledApps ?? []).map((app) => (
+                            <Badge key={app} variant="secondary">
+                              {appLabel(app)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {item.memberCount} / {house.allowance?.memberLimit ?? 0}
+                        {item.pendingInviteCount > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {' '}
+                            (+{item.pendingInviteCount} pending)
+                          </span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(item)}
+                        >
+                          <SlidersHorizontalIcon data-icon="inline-start" />
+                          Edit allowance
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
           )}
+          <CursorPagination
+            hasPrevious={pagination.hasPrevious}
+            nextPageToken={nextPageToken}
+            onPrevious={pagination.goPrevious}
+            onNext={pagination.goNext}
+          />
         </CardContent>
       </Card>
 

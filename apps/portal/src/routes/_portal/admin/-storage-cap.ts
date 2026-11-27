@@ -4,9 +4,11 @@ import {
   MAX_STORAGE_CAP_BYTES,
 } from '@lumavault/ui/lib/format-bytes'
 
-export type CapUnit = 'GB' | 'TB'
+export type CapUnit = 'B' | 'MB' | 'GB' | 'TB'
 
 export const CAP_UNIT_BYTES: Record<CapUnit, bigint> = {
+  B: 1n,
+  MB: 1024n ** 2n,
   GB: 1024n ** 3n,
   TB: 1024n ** 4n,
 }
@@ -25,18 +27,18 @@ export function capBytesToDraft(capBytes: bigint): StorageCapDraft {
   if (isUnlimitedCap(capBytes)) {
     return { unlimited: true, amount: '100', unit: 'GB' }
   }
-  if (capBytes >= CAP_UNIT_BYTES.TB && capBytes % CAP_UNIT_BYTES.TB === 0n) {
-    return {
-      unlimited: false,
-      amount: (capBytes / CAP_UNIT_BYTES.TB).toString(),
-      unit: 'TB',
-    }
+  if (capBytes <= 0n) {
+    return { unlimited: false, amount: '1', unit: 'GB' }
   }
-  const gb = capBytes / CAP_UNIT_BYTES.GB
+  // Largest unit that divides exactly, so re-saving the draft never changes the cap.
+  const unit =
+    (['TB', 'GB', 'MB'] as const).find(
+      (u) => capBytes % CAP_UNIT_BYTES[u] === 0n,
+    ) ?? 'B'
   return {
     unlimited: false,
-    amount: gb > 0n ? gb.toString() : '1',
-    unit: 'GB',
+    amount: (capBytes / CAP_UNIT_BYTES[unit]).toString(),
+    unit,
   }
 }
 

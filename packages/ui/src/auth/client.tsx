@@ -3,9 +3,9 @@ import { passkeyClient } from '@better-auth/passkey/client'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { createAuthClient as createBetterAuthClient } from 'better-auth/react'
 
-export const AUTH_BASE_PATH = '/api/auth'
+const AUTH_BASE_PATH = '/api/auth'
 
-export function createAuthClient(apiUrl: string) {
+function createAuthClient(apiUrl: string) {
   return createBetterAuthClient({
     baseURL: apiUrl.replace(/\/+$/, ''),
     basePath: AUTH_BASE_PATH,
@@ -18,7 +18,7 @@ export function createAuthClient(apiUrl: string) {
 
 export type AuthClient = ReturnType<typeof createAuthClient>
 
-export interface AuthConfig {
+interface AuthConfig {
   apiUrl: string
   portalUrl: string
   allowedOrigins: readonly string[]
@@ -29,9 +29,12 @@ interface AuthContextValue {
   config: AuthConfig
 }
 
+// Stable default so the context value and guard effects do not change every render.
+const NO_ALLOWED_ORIGINS: readonly string[] = Object.freeze([])
+
 const AuthContext = React.createContext<AuthContextValue | null>(null)
 
-export interface AuthProviderProps {
+interface AuthProviderProps {
   apiUrl: string
   portalUrl: string
   allowedOrigins?: readonly string[]
@@ -42,7 +45,7 @@ export interface AuthProviderProps {
 export function AuthProvider({
   apiUrl,
   portalUrl,
-  allowedOrigins = [],
+  allowedOrigins = NO_ALLOWED_ORIGINS,
   authClient,
   children,
 }: AuthProviderProps) {

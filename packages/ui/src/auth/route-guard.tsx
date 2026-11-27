@@ -5,13 +5,12 @@ import { useViewer } from '#household'
 import { useAuthConfig } from './client'
 import { buildPortalLoginUrl, validateReturnUrl } from './return-url'
 
-export interface AuthGuardProps {
+interface AuthGuardProps {
   allowNoHousehold?: boolean
   requireSuperAdmin?: boolean
   currentUrl?: string
   onRedirect?: (url: string) => void
   loadingFallback?: React.ReactNode
-  noHouseholdFallback?: React.ReactNode
   forbiddenFallback?: React.ReactNode
   children: React.ReactNode
 }
@@ -26,12 +25,14 @@ export function AuthGuard({
   currentUrl,
   onRedirect = defaultRedirect,
   loadingFallback = null,
-  noHouseholdFallback,
   forbiddenFallback,
   children,
 }: AuthGuardProps) {
   const viewer = useViewer()
   const config = useAuthConfig()
+  // Kept in a ref so an inline callback from the caller does not re-run the redirect effect.
+  const onRedirectRef = React.useRef(onRedirect)
+  onRedirectRef.current = onRedirect
 
   const shouldRedirectToLogin =
     !viewer.isPending && !viewer.error && !viewer.isAuthenticated
@@ -39,8 +40,7 @@ export function AuthGuard({
     !viewer.isPending &&
     viewer.isAuthenticated &&
     !viewer.hasHousehold &&
-    !allowNoHousehold &&
-    noHouseholdFallback === undefined
+    !allowNoHousehold
   const shouldRedirectForbidden =
     !viewer.isPending &&
     viewer.isAuthenticated &&
@@ -57,12 +57,12 @@ export function AuthGuard({
         portalOrigin: config.portalUrl,
         allowedOrigins: config.allowedOrigins,
       })
-      onRedirect(buildPortalLoginUrl(config.portalUrl, safeReturn))
+      onRedirectRef.current(buildPortalLoginUrl(config.portalUrl, safeReturn))
       return
     }
 
     if (shouldRedirectNoHousehold || shouldRedirectForbidden) {
-      onRedirect(`${config.portalUrl.replace(/\/+$/, '')}/`)
+      onRedirectRef.current(`${config.portalUrl.replace(/\/+$/, '')}/`)
     }
   }, [
     shouldRedirectToLogin,
@@ -71,7 +71,6 @@ export function AuthGuard({
     currentUrl,
     config.portalUrl,
     config.allowedOrigins,
-    onRedirect,
   ])
 
   if (viewer.isPending) {
@@ -109,7 +108,7 @@ export function AuthGuard({
   }
 
   if (!viewer.hasHousehold && !allowNoHousehold) {
-    return noHouseholdFallback !== undefined ? <>{noHouseholdFallback}</> : null
+    return null
   }
 
   return <>{children}</>
