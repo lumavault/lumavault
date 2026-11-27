@@ -1,40 +1,16 @@
 import { create } from '@bufbuild/protobuf'
-import {
-  App,
-  GetViewerResponseSchema,
-  ListUsersResponseSchema,
-  Role,
-} from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
+import { ListUsersResponseSchema } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderPortal } from '#test/support/render-portal'
+import { superAdminViewer } from '#test/support/viewers'
 import { describe, expect, it } from 'vitest'
-
-const ADMIN_VIEWER = create(GetViewerResponseSchema, {
-  user: {
-    id: 'admin-1',
-    name: 'Server Owner',
-    email: 'admin@example.com',
-    isSuperAdmin: true,
-  },
-  household: {
-    id: 'house-1',
-    name: 'Owner Home',
-    ownerUserId: 'admin-1',
-    allowance: {
-      storageCapBytes: 500n * 1024n ** 3n,
-      enabledApps: [App.PHOTOS],
-      memberLimit: 4,
-    },
-  },
-  role: Role.OWNER,
-})
 
 describe('Super-Admin users route (/admin/users)', () => {
   it('searches users by query and paginates with nextPageToken', async () => {
     renderPortal({
       initialPath: '/admin/users',
       iamHandlers: {
-        getViewer: () => ADMIN_VIEWER,
+        getViewer: () => superAdminViewer(),
         listUsers: (req) => {
           if (req.query === 'maya') {
             return create(ListUsersResponseSchema, {
@@ -91,5 +67,34 @@ describe('Super-Admin users route (/admin/users)', () => {
     await waitFor(() => {
       expect(screen.queryByText('Second Page User')).not.toBeInTheDocument()
     })
+  })
+
+  it('keeps pagination visible when a later page is empty', async () => {
+    renderPortal({
+      initialPath: '/admin/users',
+      iamHandlers: {
+        getViewer: () => superAdminViewer(),
+        listUsers: (req) =>
+          req.pageToken === 'page-2'
+            ? create(ListUsersResponseSchema, {})
+            : create(ListUsersResponseSchema, {
+                users: [
+                  {
+                    id: 'u-1',
+                    name: 'First Page User',
+                    email: 'p1@example.com',
+                  },
+                ],
+                nextPageToken: 'page-2',
+              }),
+      },
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Next' }))
+    expect(
+      await screen.findByText('No user accounts exist yet.'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
+    expect(await screen.findByText('First Page User')).toBeInTheDocument()
   })
 })
