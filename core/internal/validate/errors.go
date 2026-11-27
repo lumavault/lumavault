@@ -5,6 +5,6 @@ package validate
 
 import "errors"
 
-// ErrInvalid is wrapped by every error this package returns. Callers wrap it again with
-// their own sentinel (for example metadata.ErrInvalidArgument) so errors.Is matches both.
+// ErrInvalid is the shared sentinel for invalid requests and inputs across validate,
+// chunkstore, metadata, and gateway.
 var ErrInvalid = errors.New("validate: invalid input")

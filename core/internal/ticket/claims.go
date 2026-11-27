@@ -52,6 +52,11 @@ func (c Claims) validate() error {
 		if (c.ObjectID == "") == (c.ChunkSHA256 == "") {
 			return fmt.Errorf("%w: read ticket needs exactly one of obj and chk", ErrClaims)
 		}
+		if c.ObjectID != "" {
+			if err := validate.ObjectID(c.ObjectID); err != nil {
+				return fmt.Errorf("%w: obj: %v", ErrClaims, err)
+			}
+		}
 		if c.ChunkSHA256 != "" {
 			if err := validate.Hash(c.ChunkSHA256); err != nil {
 				return fmt.Errorf("%w: chk: %v", ErrClaims, err)

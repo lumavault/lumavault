@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lumavault/lumavault/core/internal/constants"
+	"github.com/lumavault/lumavault/core/internal/validate"
 )
 
 const (
@@ -65,7 +66,7 @@ func (s *LocalChunkStore) PutChunk(ctx context.Context, hash string, r io.Reader
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	if err := checkHash(hash); err != nil {
+	if err := validate.Hash(hash); err != nil {
 		return 0, err
 	}
 	if r == nil {
@@ -159,7 +160,7 @@ func (s *LocalChunkStore) GetChunk(ctx context.Context, hash string) (io.ReadClo
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
-	if err := checkHash(hash); err != nil {
+	if err := validate.Hash(hash); err != nil {
 		return nil, 0, err
 	}
 
@@ -194,7 +195,7 @@ func (s *LocalChunkStore) ReadChunkRange(ctx context.Context, hash string, offse
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := checkHash(hash); err != nil {
+	if err := validate.Hash(hash); err != nil {
 		return nil, err
 	}
 	if offset < 0 || length < 0 {
@@ -235,7 +236,7 @@ func (s *LocalChunkStore) HasChunks(ctx context.Context, hashes []string) ([]str
 		return nil, err
 	}
 	for _, h := range hashes {
-		if err := checkHash(h); err != nil {
+		if err := validate.Hash(h); err != nil {
 			return nil, err
 		}
 	}
@@ -276,7 +277,7 @@ func (s *LocalChunkStore) StatChunks(ctx context.Context, hashes []string) (map[
 		return nil, err
 	}
 	for _, h := range hashes {
-		if err := checkHash(h); err != nil {
+		if err := validate.Hash(h); err != nil {
 			return nil, err
 		}
 	}
@@ -307,7 +308,7 @@ func (s *LocalChunkStore) DeleteChunk(ctx context.Context, hash string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := checkHash(hash); err != nil {
+	if err := validate.Hash(hash); err != nil {
 		return err
 	}
 
@@ -351,7 +352,7 @@ func (s *LocalChunkStore) GarbageCollect(ctx context.Context, isReferenced func(
 		}
 
 		hash := d.Name()
-		if err := checkHash(hash); err != nil {
+		if err := validate.Hash(hash); err != nil {
 			return nil
 		}
 

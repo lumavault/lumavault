@@ -42,7 +42,7 @@ func (g *gateway) putChunk(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		switch {
-		case errors.Is(err, chunkstore.ErrHashMismatch), errors.Is(err, chunkstore.ErrInvalidHash):
+		case errors.Is(err, chunkstore.ErrHashMismatch), errors.Is(err, validate.ErrInvalid):
 			writeError(w, http.StatusBadRequest, err.Error())
 		case errors.Is(err, chunkstore.ErrChunkTooLarge), errors.As(err, &maxErr):
 			writeError(w, http.StatusRequestEntityTooLarge, chunkstore.ErrChunkTooLarge.Error())

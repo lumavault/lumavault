@@ -262,8 +262,14 @@ func TestTicketConfig(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(envTicketSecret, env[0])
 			t.Setenv(envServiceKey, env[1])
-			if _, err := parseConfig([]string{"-data-dir", t.TempDir()}); err == nil {
-				t.Fatalf("parseConfig accepted secret %q and key %q", env[0], env[1])
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := run(ctx, []string{"-addr", "127.0.0.1:0", "-data-dir", t.TempDir(), "-gc-interval", "0"}, io.Discard)
+			if err == nil {
+				t.Fatalf("run accepted secret %q and key %q", env[0], env[1])
+			}
+			if !strings.Contains(err.Error(), envTicketSecret) {
+				t.Errorf("error %q should mention %s", err, envTicketSecret)
 			}
 		})
 	}
