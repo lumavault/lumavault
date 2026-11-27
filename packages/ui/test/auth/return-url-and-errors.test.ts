@@ -106,6 +106,9 @@ describe('mapAuthError', () => {
   it('maps magic link error query params', () => {
     expect(mapMagicLinkUrlError('TOKEN_EXPIRED')).toContain('expired')
     expect(mapMagicLinkUrlError('FORBIDDEN')).toContain('invite only')
+    expect(mapMagicLinkUrlError('new_user_signup_disabled')).toContain(
+      'invite only',
+    )
     expect(mapMagicLinkUrlError(null)).toBeNull()
   })
 })

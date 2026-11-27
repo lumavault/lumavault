@@ -138,7 +138,7 @@ describe('Login route (/login)', () => {
     })
 
     renderPortal({
-      initialPath: '/login?error=EXPIRED_TOKEN',
+      initialPath: '/login?error=TOKEN_EXPIRED',
       unauthenticated: true,
       authClient,
     })
@@ -213,7 +213,7 @@ describe('Login route (/login)', () => {
     })
 
     renderPortal({
-      initialPath: '/login?error=EXPIRED_TOKEN',
+      initialPath: '/login?error=TOKEN_EXPIRED',
       unauthenticated: true,
       authClient,
     })
