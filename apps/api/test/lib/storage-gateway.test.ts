@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { Code, ConnectError, LumaVaultClient, Namespace } from '@lumavault/sdk'
-import { signUploadTicket } from '#/auth/tickets.js'
+import { signReadTicket, signUploadTicket } from '#/auth/tickets.js'
 import {
   createStorageGateway,
   type StorageGateway,
@@ -115,12 +115,101 @@ describe('StorageGateway against a Gateway with ticket checks on', () => {
     await expect(storage.delete(obj.id)).resolves.toBeUndefined()
   })
 
+  it('uploads a small image with the service key and serves it through a signed read URL', async () => {
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4])
+    const uploaded = await storage.upload({
+      bytes,
+      namespace: Namespace.CINEMA,
+      filename: 'poster.jpg',
+      mimeType: 'image/jpeg',
+    })
+    expect(uploaded).toEqual({
+      id: uploaded.id,
+      namespace: Namespace.CINEMA,
+      sizeBytes: BigInt(bytes.byteLength),
+      sha256Digest: sha(bytes),
+      mimeType: 'image/jpeg',
+      filename: 'poster.jpg',
+    })
+    expect(await storage.stat(uploaded.id)).toEqual(uploaded)
+
+    const { ticket } = signReadTicket(TEST_ENV.LUMAVAULT_TICKET_SECRET, {
+      objectId: uploaded.id,
+    })
+    const url = new LumaVaultClient({ baseUrl: gw.baseUrl }).streamUrl(
+      uploaded.id,
+      ticket,
+    )
+    const res = await fetch(url)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/jpeg')
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes)
+  })
+
+  it('gives duplicate server uploads their own manifests so deleting one keeps the other', async () => {
+    const bytes = new Uint8Array([10, 20, 30, 40])
+    const first = await storage.upload({
+      bytes,
+      namespace: Namespace.CINEMA,
+      filename: 'a.jpg',
+      mimeType: 'image/jpeg',
+    })
+    const second = await storage.upload({
+      bytes,
+      namespace: Namespace.CINEMA,
+      filename: 'b.jpg',
+      mimeType: 'image/jpeg',
+    })
+    expect(first.id).not.toBe(second.id)
+
+    await storage.delete(first.id)
+    expect(await storage.stat(first.id)).toBeNull()
+    expect(await storage.stat(second.id)).toEqual(second)
+  })
+
+  it('rejects empty uploads or missing metadata', async () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    for (const bad of [
+      {
+        bytes: new Uint8Array(0),
+        namespace: Namespace.CINEMA,
+        filename: 'a.jpg',
+        mimeType: 'image/jpeg',
+      },
+      {
+        bytes,
+        namespace: Namespace.CINEMA,
+        filename: '   ',
+        mimeType: 'image/jpeg',
+      },
+      {
+        bytes,
+        namespace: Namespace.CINEMA,
+        filename: 'a.jpg',
+        mimeType: '',
+      },
+    ]) {
+      const err = await storage.upload(bad).catch((e: unknown) => e)
+      expect(ConnectError.from(err).code).toBe(Code.InvalidArgument)
+    }
+  })
+
   it('is rejected without the right service key', async () => {
     const wrong = createStorageGateway({
       baseUrl: gw.baseUrl,
       serviceKey: 'not-the-key',
     })
-    const err = await wrong.stat('anything').catch((e: unknown) => e)
-    expect(ConnectError.from(err).code).toBe(Code.Unauthenticated)
+    const statErr = await wrong.stat('anything').catch((e: unknown) => e)
+    expect(ConnectError.from(statErr).code).toBe(Code.Unauthenticated)
+
+    const uploadErr = await wrong
+      .upload({
+        bytes: new Uint8Array([1, 2, 3]),
+        namespace: Namespace.CINEMA,
+        filename: 'poster.jpg',
+        mimeType: 'image/jpeg',
+      })
+      .catch((e: unknown) => e)
+    expect(ConnectError.from(uploadErr).code).toBe(Code.Unauthenticated)
   })
 })

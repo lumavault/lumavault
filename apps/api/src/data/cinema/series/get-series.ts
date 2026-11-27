@@ -1,7 +1,7 @@
 import {
   activeClaimOn,
   asDate,
-  keysetAfterTimestamptz,
+  keysetAfterTz,
   keysetOrder,
   likeContains,
   uuid,
@@ -162,7 +162,7 @@ export async function getPlayableSeriesPage(
       and(
         pattern ? ilike(cinemaSeries.title, pattern) : undefined,
         options.after
-          ? keysetAfterTimestamptz(
+          ? keysetAfterTz(
               cinemaSeries.createdAt,
               cinemaSeries.id,
               options.after,

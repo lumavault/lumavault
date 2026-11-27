@@ -43,6 +43,7 @@ function schema(isTest: boolean) {
     SMTP_URL: optional,
     LUMAVAULT_MAIL_FROM: optional,
     LUMAVAULT_TRUST_PROXY: z.enum(['true', 'false']).default('false'),
+    TMDB_API_KEY: optional,
   })
 }
 
@@ -65,6 +66,8 @@ export interface Config {
   mailFrom: string
   /** Read the client address from the last X-Forwarded-For entry, which a reverse proxy adds. */
   trustProxy: boolean
+  /** Optional TMDB API key or read access token for Cinema catalog lookups. */
+  tmdbApiKey?: string
 }
 
 /** Reads and checks config from the environment. Throws one error listing every problem. */
@@ -93,5 +96,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     smtpUrl: e.SMTP_URL,
     mailFrom: e.LUMAVAULT_MAIL_FROM ?? DEFAULT_MAIL_FROM,
     trustProxy: e.LUMAVAULT_TRUST_PROXY === 'true',
+    tmdbApiKey: e.TMDB_API_KEY,
   }
 }

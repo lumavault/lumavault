@@ -70,13 +70,13 @@ export function keysetAfter(
 }
 
 /**
- * Rows that sort after the cursor in keysetOrder. For timestamptz columns with uuid IDs,
- * such as Cinema catalog tables.
+ * Rows that sort after the cursor in keysetOrder. For timestamptz columns paired with a
+ * uuid ID column.
  */
-export function keysetAfterTimestamptz(
-  createdAt: AnyPgColumn,
+export function keysetAfterTz(
+  timestamp: AnyPgColumn,
   id: AnyPgColumn,
   cursor: PageCursor,
 ): SQL {
-  return sql`(${createdAtMs(createdAt)}, ${id}) > (${cursor.createdAt.toISOString()}::timestamptz, ${uuid(cursor.id)})`
+  return sql`(${createdAtMs(timestamp)}, ${id}) > (${cursor.createdAt.toISOString()}::timestamptz, ${uuid(cursor.id)})`
 }

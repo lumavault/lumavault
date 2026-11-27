@@ -3,7 +3,7 @@ import {
   activeClaimOn,
   asDate,
   big,
-  keysetAfterTimestamptz,
+  keysetAfterTz,
   keysetOrder,
   likeContains,
   uuid,
@@ -122,7 +122,7 @@ export async function getPlayableMoviesPage(
       and(
         pattern ? ilike(cinemaMovies.title, pattern) : undefined,
         options.after
-          ? keysetAfterTimestamptz(
+          ? keysetAfterTz(
               cinemaMovies.createdAt,
               cinemaMovies.id,
               options.after,
