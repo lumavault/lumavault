@@ -161,13 +161,19 @@ async function joinFromInvite(
       Code.ResourceExhausted,
     )
   }
+  const accepted = await markInvitationAccepted(tx, invite.id, now)
+  if (!accepted) {
+    throw new ConnectError(
+      'invite is no longer usable',
+      Code.FailedPrecondition,
+    )
+  }
   await createMember(tx, {
     organizationId: household.householdId,
     userId,
     role: memberInviteRole(invite),
     createdAt: now,
   })
-  await markInvitationAccepted(tx, invite.id)
   const ownerUserId = (await getOwnerUserId(tx, household.householdId)) ?? ''
   return householdToWire(org, household, ownerUserId)
 }

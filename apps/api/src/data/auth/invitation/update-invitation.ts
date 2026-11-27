@@ -1,15 +1,30 @@
 import type { DbOrTx } from '#/db/index.js'
 import { invitation } from '#/db/schemas/auth.js'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, gt, sql } from 'drizzle-orm'
 
+import type { Invitation } from './types.js'
+
+/**
+ * Marks a pending, unexpired member invitation accepted and returns it. Null when it was
+ * already used, canceled, or expired.
+ */
 export async function markInvitationAccepted(
   db: DbOrTx,
   invitationId: string,
-): Promise<void> {
-  await db
+  now: Date,
+): Promise<Invitation | null> {
+  const [row] = await db
     .update(invitation)
     .set({ status: 'accepted' })
-    .where(eq(invitation.id, invitationId))
+    .where(
+      and(
+        eq(invitation.id, invitationId),
+        eq(invitation.status, 'pending'),
+        gt(invitation.expiresAt, now),
+      ),
+    )
+    .returning()
+  return row ?? null
 }
 
 export async function cancelInvitation(
