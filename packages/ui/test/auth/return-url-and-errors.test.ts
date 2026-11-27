@@ -92,11 +92,23 @@ describe('mapAuthError', () => {
     )
     cancelled.name = 'NotAllowedError'
     expect(mapAuthError(cancelled)).toBe('Passkey prompt was cancelled.')
+    expect(mapAuthError({ code: 'AUTH_CANCELLED' })).toBe(
+      'Passkey prompt was cancelled.',
+    )
+  })
+
+  it('does not treat server messages mentioning not allowed as a cancelled passkey', () => {
+    expect(
+      mapAuthError({ status: 403, message: 'Email domain not allowed' }),
+    ).toBe('Email domain not allowed')
   })
 
   it('maps magic link error query params', () => {
-    expect(mapMagicLinkUrlError('EXPIRED_TOKEN')).toContain('expired')
+    expect(mapMagicLinkUrlError('TOKEN_EXPIRED')).toContain('expired')
     expect(mapMagicLinkUrlError('FORBIDDEN')).toContain('invite only')
+    expect(mapMagicLinkUrlError('new_user_signup_disabled')).toContain(
+      'invite only',
+    )
     expect(mapMagicLinkUrlError(null)).toBeNull()
   })
 })

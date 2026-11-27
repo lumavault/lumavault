@@ -50,13 +50,8 @@ function normalizePairingCode(raw: string): string {
 }
 
 function mapPairingError(err: unknown): string {
-  if (err instanceof ConnectError) {
-    if (err.code === Code.NotFound) {
-      return 'That code is wrong, expired, or already used. Check the TV and try again.'
-    }
-    if (err.code === Code.ResourceExhausted) {
-      return 'Too many pairing attempts. Wait a few minutes and try again.'
-    }
+  if (err instanceof ConnectError && err.code === Code.NotFound) {
+    return 'That code is wrong, expired, or already used. Check the TV and try again.'
   }
   return rpcErrorMessage(err, 'Could not approve pairing. Please try again.')
 }
@@ -72,20 +67,32 @@ function PairPage() {
   const [approvedDevice, setApprovedDevice] = React.useState<string | null>(
     null,
   )
-  const [error, setError] = React.useState<string | null>(null)
+  const household = viewer.household
 
-  if (!viewer.household) {
-    return (
-      <div className="flex max-w-lg flex-col gap-6">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold tracking-tight">
-            Pair Apple TV
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Approve a TV sign-in using the 6-character code on screen.
-          </p>
-        </div>
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    approvePairing.mutate(
+      { code },
+      {
+        onSuccess: (res) => {
+          setApprovedDevice(res.deviceName || 'Apple TV')
+          setCode('')
+        },
+      },
+    )
+  }
 
+  return (
+    <div className="flex max-w-md flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight">Pair Apple TV</h1>
+        <p className="text-sm text-muted-foreground">
+          Enter the {PAIRING_CODE_LENGTH}-character code shown on your TV.
+          {household ? ` It will open in ${household.name}.` : null}
+        </p>
+      </div>
+
+      {!household ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -97,142 +104,100 @@ function PairPage() {
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
-      </div>
-    )
-  }
-
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    setError(null)
-    const normalized = normalizePairingCode(code)
-    if (normalized.length !== PAIRING_CODE_LENGTH) {
-      setError('Enter all 6 characters shown on your Apple TV.')
-      return
-    }
-
-    try {
-      const res = await approvePairing.mutateAsync({ code: normalized })
-      setApprovedDevice(res.deviceName || 'Apple TV')
-      setCode('')
-    } catch (err) {
-      setError(mapPairingError(err))
-    }
-  }
-
-  return (
-    <div className="flex max-w-md flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Pair Apple TV</h1>
-        <p className="text-sm text-muted-foreground">
-          Enter the 6-character code shown on your TV. It will open in{' '}
-          {viewer.household.name}.
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Approve TV sign-in</CardTitle>
-          <CardDescription>Household: {viewer.household.name}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {approvedDevice ? (
-            <div className="flex flex-col gap-4">
-              <Alert>
-                <CheckCircle2Icon />
-                <AlertTitle>TV signed in</AlertTitle>
-                <AlertDescription>
-                  {approvedDevice} is now signed in to {viewer.household.name}.
-                </AlertDescription>
-              </Alert>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setApprovedDevice(null)
-                  setError(null)
-                }}
-              >
-                Pair another Apple TV
-              </Button>
-            </div>
-          ) : (
-            <form onSubmit={(e) => void handleSubmit(e)} noValidate>
-              <FieldGroup>
-                {error ? (
-                  <Alert variant="destructive">
-                    <AlertCircleIcon />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                ) : null}
-
-                <Field>
-                  <FieldLabel htmlFor="pairing-code">Pairing code</FieldLabel>
-                  <div className="flex justify-center py-2">
-                    <InputOTP
-                      id="pairing-code"
-                      maxLength={PAIRING_CODE_LENGTH}
-                      value={code}
-                      onChange={(value) => setCode(normalizePairingCode(value))}
-                      pasteTransformer={normalizePairingCode}
-                      disabled={approvePairing.isPending}
-                      inputMode="text"
-                      aria-label="Pairing code"
-                    >
-                      <InputOTPGroup>
-                        <InputOTPSlot
-                          index={0}
-                          className="size-10 text-base font-mono"
-                        />
-                        <InputOTPSlot
-                          index={1}
-                          className="size-10 text-base font-mono"
-                        />
-                        <InputOTPSlot
-                          index={2}
-                          className="size-10 text-base font-mono"
-                        />
-                      </InputOTPGroup>
-                      <InputOTPSeparator />
-                      <InputOTPGroup>
-                        <InputOTPSlot
-                          index={3}
-                          className="size-10 text-base font-mono"
-                        />
-                        <InputOTPSlot
-                          index={4}
-                          className="size-10 text-base font-mono"
-                        />
-                        <InputOTPSlot
-                          index={5}
-                          className="size-10 text-base font-mono"
-                        />
-                      </InputOTPGroup>
-                    </InputOTP>
-                  </div>
-                  <FieldDescription>
-                    Spaces, dashes, and lowercase letters are handled
-                    automatically.
-                  </FieldDescription>
-                </Field>
-
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Approve TV sign-in</CardTitle>
+            <CardDescription>Household: {household.name}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {approvedDevice ? (
+              <div className="flex flex-col gap-4">
+                <Alert>
+                  <CheckCircle2Icon />
+                  <AlertTitle>TV signed in</AlertTitle>
+                  <AlertDescription>
+                    {approvedDevice} is now signed in to {household.name}.
+                  </AlertDescription>
+                </Alert>
                 <Button
-                  type="submit"
-                  disabled={
-                    approvePairing.isPending ||
-                    code.length !== PAIRING_CODE_LENGTH
-                  }
-                  className="w-full"
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setApprovedDevice(null)
+                    approvePairing.reset()
+                  }}
                 >
-                  {approvePairing.isPending ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : null}
-                  Approve Apple TV
+                  Pair another Apple TV
                 </Button>
-              </FieldGroup>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} noValidate>
+                <FieldGroup>
+                  {approvePairing.error ? (
+                    <Alert variant="destructive">
+                      <AlertCircleIcon />
+                      <AlertDescription>
+                        {mapPairingError(approvePairing.error)}
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  <Field>
+                    <FieldLabel htmlFor="pairing-code">Pairing code</FieldLabel>
+                    <div className="flex justify-center py-2">
+                      <InputOTP
+                        id="pairing-code"
+                        maxLength={PAIRING_CODE_LENGTH}
+                        value={code}
+                        onChange={(value) => {
+                          approvePairing.reset()
+                          setCode(normalizePairingCode(value))
+                        }}
+                        pasteTransformer={normalizePairingCode}
+                        disabled={approvePairing.isPending}
+                      >
+                        {[0, 3].map((start) => (
+                          <React.Fragment key={start}>
+                            {start > 0 ? <InputOTPSeparator /> : null}
+                            <InputOTPGroup>
+                              {[start, start + 1, start + 2].map((index) => (
+                                <InputOTPSlot
+                                  key={index}
+                                  index={index}
+                                  className="size-10 text-base font-mono"
+                                />
+                              ))}
+                            </InputOTPGroup>
+                          </React.Fragment>
+                        ))}
+                      </InputOTP>
+                    </div>
+                    <FieldDescription>
+                      Spaces, dashes, and lowercase letters are handled
+                      automatically.
+                    </FieldDescription>
+                  </Field>
+
+                  <Button
+                    type="submit"
+                    disabled={
+                      approvePairing.isPending ||
+                      code.length !== PAIRING_CODE_LENGTH
+                    }
+                    className="w-full"
+                  >
+                    {approvePairing.isPending ? (
+                      <Spinner data-icon="inline-start" />
+                    ) : null}
+                    Approve Apple TV
+                  </Button>
+                </FieldGroup>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

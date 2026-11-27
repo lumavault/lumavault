@@ -22,10 +22,12 @@ import {
 } from '@lumavault/ui/components/ui/field'
 import { Skeleton } from '@lumavault/ui/components/ui/skeleton'
 import { Spinner } from '@lumavault/ui/components/ui/spinner'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { zodFieldErrors } from '#/lib/format'
 import { AlertCircleIcon } from 'lucide-react'
 import { toast } from 'sonner'
+
+import { unwrap } from './-auth-result'
 
 const LINKED_ACCOUNTS_QUERY_KEY = ['auth', 'linked-accounts'] as const
 
@@ -36,13 +38,20 @@ export function PasswordCard() {
   const linkedAccountsQuery = useQuery({
     queryKey: LINKED_ACCOUNTS_QUERY_KEY,
     retry: false,
-    queryFn: async () => {
-      const res = await authClient.listAccounts()
-      if (res?.error) {
-        throw new Error(mapAuthError(res.error))
-      }
-      return res?.data ?? []
-    },
+    queryFn: async () => unwrap(await authClient.listAccounts()) ?? [],
+  })
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (input: {
+      currentPassword: string
+      newPassword: string
+    }) =>
+      unwrap(
+        await authClient.changePassword({
+          ...input,
+          revokeOtherSessions: true,
+        }),
+      ),
   })
 
   const [currentPassword, setCurrentPassword] = React.useState('')
@@ -51,56 +60,49 @@ export function PasswordCard() {
   const [pwErrors, setPwErrors] = React.useState<
     Partial<Record<PasswordField, string>>
   >({})
-  const [pwActionError, setPwActionError] = React.useState<string | null>(null)
-  const [isChangingPassword, setIsChangingPassword] = React.useState(false)
-  const [pwSuccess, setPwSuccess] = React.useState(false)
 
+  const isChangingPassword = changePasswordMutation.isPending
   const hasCredentialAccount = (linkedAccountsQuery.data ?? []).some(
     (account) => account.providerId === 'credential',
   )
 
-  async function handlePasswordSubmit(event: React.FormEvent) {
+  function handlePasswordSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setPwSuccess(false)
-    setPwActionError(null)
     const parsed = changePasswordSchema.safeParse({
       currentPassword,
       newPassword,
       confirmPassword,
     })
     if (!parsed.success) {
+      changePasswordMutation.reset()
       setPwErrors(zodFieldErrors<PasswordField>(parsed.error))
       return
     }
     setPwErrors({})
-    setIsChangingPassword(true)
-    try {
-      const res = await authClient.changePassword({
+    changePasswordMutation.mutate(
+      {
         currentPassword: parsed.data.currentPassword,
         newPassword: parsed.data.newPassword,
-        revokeOtherSessions: false,
-      })
-      if (res?.error) {
-        setPwActionError(mapAuthError(res.error))
-        return
-      }
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-      setPwSuccess(true)
-      toast.success('Password updated.')
-    } catch (err) {
-      setPwActionError(mapAuthError(err))
-    } finally {
-      setIsChangingPassword(false)
-    }
+      },
+      {
+        onSuccess: () => {
+          setCurrentPassword('')
+          setNewPassword('')
+          setConfirmPassword('')
+          toast.success('Password updated. Other devices were signed out.')
+        },
+      },
+    )
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Password</CardTitle>
-        <CardDescription>Update the password for your account.</CardDescription>
+        <CardDescription>
+          Update the password for your account. Other devices will be signed
+          out.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {linkedAccountsQuery.isPending ? (
@@ -109,7 +111,7 @@ export function PasswordCard() {
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertDescription>
-              {linkedAccountsQuery.error.message}
+              {mapAuthError(linkedAccountsQuery.error)}
             </AlertDescription>
           </Alert>
         ) : !hasCredentialAccount ? (
@@ -119,21 +121,15 @@ export function PasswordCard() {
           </p>
         ) : (
           <form
-            onSubmit={(e) => void handlePasswordSubmit(e)}
+            onSubmit={handlePasswordSubmit}
             noValidate
             className="flex flex-col gap-4"
           >
-            {pwActionError ? (
+            {changePasswordMutation.error ? (
               <Alert variant="destructive">
                 <AlertCircleIcon />
-                <AlertDescription>{pwActionError}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {pwSuccess ? (
-              <Alert>
                 <AlertDescription>
-                  Your password has been updated.
+                  {mapAuthError(changePasswordMutation.error)}
                 </AlertDescription>
               </Alert>
             ) : null}

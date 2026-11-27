@@ -47,7 +47,10 @@ describe('Apple TV pairing route (/pair)', () => {
               Code.NotFound,
             )
           }
-          throw new ConnectError('too many attempts', Code.ResourceExhausted)
+          throw new ConnectError(
+            'too many pairing attempts; wait a few minutes',
+            Code.ResourceExhausted,
+          )
         },
       },
     })
