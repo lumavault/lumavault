@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { LumaVaultClient } from '@lumavault/sdk'
 import { organization } from '#/db/schemas/auth.js'
 import { cinemaMovies } from '#/db/schemas/cinema.js'
@@ -24,6 +24,7 @@ import {
   type TestDatabase,
 } from '#test/support/db.js'
 import { startTestGateway, type TestGateway } from '#test/support/gateway.js'
+import { codeOf } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -73,15 +74,6 @@ class FakeGateway implements StorageGateway {
   }
 
   async setThumbnail() {}
-}
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
 }
 
 describe('storeServerObject with fake Gateway', () => {

@@ -1,4 +1,4 @@
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { App, Role } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
 import { user } from '#/db/schemas/auth.js'
@@ -12,7 +12,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
-import { iamClient } from '#test/support/rpc.js'
+import { codeOf, iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -38,15 +38,6 @@ async function freshServer(env: Record<string, string> = {}): Promise<Server> {
 afterAll(async () => {
   await Promise.all(servers.map((s) => s.database.drop()))
 })
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
 
 const setup = {
   name: 'Root',

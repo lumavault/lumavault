@@ -1,10 +1,10 @@
+import { startTestGateway, type TestGateway } from '@lumavault/test-gateway'
 import { authHeaders } from '#/auth.js'
 import { Code, ConnectError, LumaVaultClient, Namespace } from '#/index.js'
-import { startGateway, type TestGateway } from '#test/support/gateway.js'
 import {
   mintTicket,
   TEST_SERVICE_KEY,
-  TICKET_ENV,
+  TICKET_GATEWAY_OPTIONS,
 } from '#test/support/tickets.js'
 import { patternBytes } from '#test/support/vectors.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -38,7 +38,7 @@ describe('storage tickets against a gateway with checks on', () => {
   let server: LumaVaultClient
 
   beforeAll(async () => {
-    gateway = await startGateway(TICKET_ENV)
+    gateway = await startTestGateway(TICKET_GATEWAY_OPTIONS)
     client = new LumaVaultClient({ baseUrl: gateway.baseUrl })
     server = new LumaVaultClient({
       baseUrl: gateway.baseUrl,

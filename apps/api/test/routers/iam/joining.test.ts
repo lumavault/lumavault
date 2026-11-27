@@ -6,9 +6,6 @@ import {
 } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_OWNER_ROLE } from '#/auth/constants.js'
 import { createInvitation } from '#/data/auth/invitation/create-invitation.js'
-import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
 import { invitation, member } from '#/db/schemas/auth.js'
 import { iamHouseholdInvites, iamHouseholds } from '#/db/schemas/iam.js'
 import { hashSecret, newSecret } from '#/lib/secrets.js'
@@ -16,8 +13,10 @@ import { createApp } from '#/server/app.js'
 import { loadModules, type ModuleContext } from '#/server/modules.js'
 import {
   createTestContext,
+  makeHousehold,
   signUp,
   TEST_WEB_ORIGIN,
+  type TestHousehold,
   type TestUser,
 } from '#test/support/context.js'
 import {
@@ -48,33 +47,6 @@ async function failure(
     const e = ConnectError.from(err)
     return { code: e.code, message: e.rawMessage }
   }
-}
-
-interface TestHousehold {
-  id: string
-  owner: TestUser
-}
-
-async function makeHousehold(memberLimit = 4): Promise<TestHousehold> {
-  const n = ++counter
-  const owner = await signUp(ctx, `owner${n}@example.com`)
-  const org = await createOrganization(ctx.db, {
-    name: `House ${n}`,
-    createdAt: new Date(),
-  })
-  await createMember(ctx.db, {
-    organizationId: org.id,
-    userId: owner.id,
-    role: HOUSEHOLD_OWNER_ROLE,
-    createdAt: new Date(),
-  })
-  await createHousehold(ctx.db, {
-    householdId: org.id,
-    storageCapBytes: 10n ** 12n,
-    enabledApps: ['photos'],
-    memberLimit,
-  })
-  return { id: org.id, owner }
 }
 
 /** A member invite written straight to the database, so expired ones can be made too. */
@@ -155,7 +127,7 @@ afterAll(async () => {
 
 describe('GetInvite', () => {
   it('describes a member invite to someone signed out', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const invite = await memberInvite(h, 'Guest@Example.com')
     const res = await iamClient(app).getInvite({
       invite: { invite: { case: 'memberInviteId', value: invite.id } },
@@ -249,8 +221,8 @@ describe('JoinHousehold', () => {
   })
 
   it('adds an existing account with no household from a member invite and cancels its other invites', async () => {
-    const h = await makeHousehold()
-    const other = await makeHousehold()
+    const h = await makeHousehold(ctx)
+    const other = await makeHousehold(ctx)
     const user = await newUser()
     const invite = await memberInvite(h, user.email.toUpperCase())
     const otherInvite = await memberInvite(other, user.email)
@@ -283,7 +255,7 @@ describe('JoinHousehold', () => {
   })
 
   it('refuses a member invite when the household has no free seat', async () => {
-    const h = await makeHousehold(2)
+    const h = await makeHousehold(ctx, { memberLimit: 2 })
     const user = await newUser()
     const invite = await memberInvite(h, user.email)
     // The Super-Admin lowers the limit after the invite went out, so the Owner fills every seat.
@@ -301,8 +273,8 @@ describe('JoinHousehold', () => {
   })
 
   it('refuses a caller already in a household and changes nothing', async () => {
-    const h = await makeHousehold()
-    const other = await makeHousehold()
+    const h = await makeHousehold(ctx)
+    const other = await makeHousehold(ctx)
     const invite = await memberInvite(other, h.owner.email)
     const res = await failure(
       iamClient(app, h.owner.headers).joinHousehold({
@@ -324,7 +296,7 @@ describe('JoinHousehold', () => {
   })
 
   it('gives expired, revoked, used, and wrong-email invites each their own reason', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const user = await newUser()
     const client = iamClient(app, user.headers)
     const join = (id: string) =>
@@ -404,8 +376,8 @@ describe('JoinHousehold', () => {
   })
 
   it('leaves exactly one membership when two invites are used at once', async () => {
-    const a = await makeHousehold()
-    const b = await makeHousehold()
+    const a = await makeHousehold(ctx)
+    const b = await makeHousehold(ctx)
     const user = await newUser()
     const first = await memberInvite(a, user.email)
     const second = await memberInvite(b, user.email)
@@ -427,7 +399,7 @@ describe('JoinHousehold', () => {
   })
 
   it('requires sign-in', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const invite = await memberInvite(h, 'anon@example.com')
     expect(
       await failure(

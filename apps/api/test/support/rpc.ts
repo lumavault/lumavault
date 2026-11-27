@@ -1,5 +1,10 @@
-// An IamService client that calls the Hono app in memory. Tests only.
-import { createClient, type Client } from '@connectrpc/connect'
+// RPC test helpers for calling the Hono app in memory. Tests only.
+import {
+  Code,
+  ConnectError,
+  createClient,
+  type Client,
+} from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { RPC_PREFIX } from '#/routes.js'
@@ -24,4 +29,14 @@ export function iamClient(
       ],
     }),
   )
+}
+
+/** Awaits an RPC promise and returns ok or the Connect error code. */
+export async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
+  try {
+    await promise
+    return 'ok'
+  } catch (err) {
+    return ConnectError.from(err).code
+  }
 }

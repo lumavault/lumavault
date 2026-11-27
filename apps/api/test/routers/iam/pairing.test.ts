@@ -1,4 +1,4 @@
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { PairingStatus } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { createHouseholdFor } from '#/auth/server-helpers.js'
 import { iamHouseholds, iamPairingRequests } from '#/db/schemas/iam.js'
@@ -23,7 +23,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
-import { iamClient } from '#test/support/rpc.js'
+import { codeOf, iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -35,15 +35,6 @@ let approver: TestUser
 let loner: TestUser
 let householdId: string
 let nextIp = 1
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
 
 // Each Apple TV gets its own address, so one test's rate limits never touch another's.
 function tv(ip = `203.0.113.${nextIp++}`) {

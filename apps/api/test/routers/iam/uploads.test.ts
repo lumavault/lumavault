@@ -1,4 +1,4 @@
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
 import { createHouseholdFor } from '#/auth/server-helpers.js'
@@ -18,7 +18,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
-import { iamClient } from '#test/support/rpc.js'
+import { codeOf, iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -31,15 +31,6 @@ let member: TestUser
 let outsider: TestUser
 let owner: TestUser
 let householdId: string
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
 
 async function reserved(): Promise<bigint> {
   const [h] = await database.db

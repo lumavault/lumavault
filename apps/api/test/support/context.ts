@@ -1,12 +1,17 @@
 // Test helpers for code that needs a real ModuleContext. Never imported by the server.
 import { createContextValues, type ContextValues } from '@connectrpc/connect'
 import { createAuth } from '#/auth/auth.js'
+import { HOUSEHOLD_OWNER_ROLE } from '#/auth/constants.js'
 import { allowSignUp } from '#/auth/sign-up-gate.js'
 import { loadConfig } from '#/config.js'
+import { createMember } from '#/data/auth/member/create-member.js'
+import { createOrganization } from '#/data/auth/organization/create-organization.js'
+import { createHousehold } from '#/data/iam/household/create-household.js'
 import * as authTables from '#/db/schemas/auth.js'
 import { createEmailService, type EmailService } from '#/email/emails.js'
 import { createMailer } from '#/email/mailer.js'
 import type { AppDataHooks } from '#/iam/app-data.js'
+import { DEFAULT_MEMBER_LIMIT, type IamApp } from '#/iam/constants.js'
 import {
   createStorageGateway,
   type StorageGateway,
@@ -129,4 +134,45 @@ export function rpcValues(headers: Headers = new Headers()): ContextValues {
     requestKey,
     new Request('http://api.test/api/rpc/x', { headers }),
   )
+}
+
+export interface TestHousehold {
+  id: string
+  owner: TestUser
+}
+
+export interface MakeHouseholdOptions {
+  name?: string
+  ownerEmail?: string
+  storageCapBytes?: bigint
+  enabledApps?: IamApp[]
+  memberLimit?: number
+}
+
+let householdSeq = 0
+
+/** A household owned by a fresh user, created straight in the database. */
+export async function makeHousehold(
+  ctx: ModuleContext,
+  options: MakeHouseholdOptions = {},
+): Promise<TestHousehold> {
+  const n = ++householdSeq
+  const owner = await signUp(ctx, options.ownerEmail ?? `owner${n}@example.com`)
+  const org = await createOrganization(ctx.db, {
+    name: options.name ?? `House ${n}`,
+    createdAt: new Date(),
+  })
+  await createMember(ctx.db, {
+    organizationId: org.id,
+    userId: owner.id,
+    role: HOUSEHOLD_OWNER_ROLE,
+    createdAt: new Date(),
+  })
+  await createHousehold(ctx.db, {
+    householdId: org.id,
+    storageCapBytes: options.storageCapBytes ?? 10n ** 12n,
+    enabledApps: options.enabledApps ?? ['photos'],
+    memberLimit: options.memberLimit ?? DEFAULT_MEMBER_LIMIT,
+  })
+  return { id: org.id, owner }
 }

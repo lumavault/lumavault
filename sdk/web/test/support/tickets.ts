@@ -3,9 +3,9 @@ import { createHmac } from 'node:crypto'
 export const TEST_TICKET_SECRET = 'sdk-test-ticket-secret-0123456789abcdef'
 export const TEST_SERVICE_KEY = 'sdk-test-service-key'
 
-export const TICKET_ENV = {
-  LUMAVAULT_TICKET_SECRET: TEST_TICKET_SECRET,
-  LUMAVAULT_SERVICE_KEY: TEST_SERVICE_KEY,
+export const TICKET_GATEWAY_OPTIONS = {
+  ticketSecret: TEST_TICKET_SECRET,
+  serviceKey: TEST_SERVICE_KEY,
 }
 
 type Claims =

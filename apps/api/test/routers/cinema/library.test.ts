@@ -45,7 +45,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
-import { iamClient } from '#test/support/rpc.js'
+import { codeOf, iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -188,11 +188,6 @@ async function catchConnectError(
   } catch (err) {
     return ConnectError.from(err)
   }
-}
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  const err = await catchConnectError(promise)
-  return err ? err.code : 'ok'
 }
 
 let database: TestDatabase
