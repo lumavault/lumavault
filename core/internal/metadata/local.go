@@ -3,11 +3,15 @@ package metadata
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +19,7 @@ import (
 	lumavaultv1 "github.com/lumavault/lumavault/core/gen/go/lumavault/v1"
 	"github.com/lumavault/lumavault/core/internal/validate"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -22,19 +27,33 @@ const (
 	tmpSubdir     = "tmp"
 )
 
+// dedupKey identifies an object by (namespace, sha256_digest) for idempotent CommitObject deduplication.
+type dedupKey struct {
+	namespace lumavaultv1.Namespace
+	sha256    string
+}
+
+// pageCursor encodes the deterministic pagination position for ListObjects.
+type pageCursor struct {
+	CreatedAtNanos int64  `json:"t"`
+	ID             string `json:"id"`
+}
+
 // Compile-time check that LocalMetadataStore implements MetadataStore.
 var _ MetadataStore = (*LocalMetadataStore)(nil)
 
 // LocalMetadataStore is the Day-1 filesystem-backed MetadataStore implementation.
-// It delegates deterministic validation, indexing, and reference counting to an in-memory
-// Engine protected by a sync.RWMutex, and persists one atomic binary Protobuf file per object
-// under <rootDir>/objects/<id>.pb.
+// It maintains object manifests, deduplication indexes, and chunk reference counts
+// in memory protected by a sync.RWMutex, and persists one atomic binary Protobuf file
+// per object under <rootDir>/objects/<id>.pb.
 type LocalMetadataStore struct {
 	objectsDir string
 	tmpDir     string
 
-	mu     sync.RWMutex
-	engine *Engine
+	mu         sync.RWMutex
+	objects    map[string]*lumavaultv1.ObjectMetadata
+	dedupIndex map[dedupKey][]string // object IDs ordered oldest-first (CreatedAt ASC, Id ASC)
+	chunkRefs  map[string]int
 }
 
 // NewLocalMetadataStore initializes a LocalMetadataStore rooted at rootDir, creating
@@ -64,7 +83,9 @@ func NewLocalMetadataStore(rootDir string) (*LocalMetadataStore, error) {
 	s := &LocalMetadataStore{
 		objectsDir: objectsDir,
 		tmpDir:     tmpDir,
-		engine:     NewEngine(),
+		objects:    make(map[string]*lumavaultv1.ObjectMetadata),
+		dedupIndex: make(map[dedupKey][]string),
+		chunkRefs:  make(map[string]int),
 	}
 
 	if err := s.loadFromDisk(); err != nil {
@@ -79,33 +100,53 @@ func (s *LocalMetadataStore) CommitObject(ctx context.Context, req *lumavaultv1.
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	if req == nil {
-		return nil, false, fmt.Errorf("%w: request is nil", ErrInvalidArgument)
+	if err := invalidArg(validate.CommitRequest(req)); err != nil {
+		return nil, false, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := dedupKey{namespace: req.Namespace, sha256: req.Sha256Digest}
+	if !req.SkipDedup {
+		if ids := s.dedupIndex[key]; len(ids) > 0 {
+			return cloneObject(s.objects[ids[0]]), true, nil
+		}
 	}
 
 	id, err := newUUIDv4()
 	if err != nil {
 		return nil, false, fmt.Errorf("metadata: generate object id: %w", err)
 	}
-	now := time.Now().UTC()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	obj, deduplicated, err := s.engine.CommitObject(req, id, now)
-	if err != nil {
-		return nil, false, err
-	}
-	if deduplicated {
-		return obj, true, nil
+	if _, exists := s.objects[id]; exists {
+		return nil, false, fmt.Errorf("%w: object ID %q already exists", ErrInvalidArgument, id)
 	}
 
+	ts := timestamppb.New(time.Now().UTC())
+	obj := &lumavaultv1.ObjectMetadata{
+		Id:                 id,
+		Namespace:          req.Namespace,
+		Filename:           req.Filename,
+		MimeType:           req.MimeType,
+		SizeBytes:          req.SizeBytes,
+		ChunkSizeBytes:     req.ChunkSizeBytes,
+		Sha256Digest:       req.Sha256Digest,
+		ChunkHashes:        slices.Clone(req.ChunkHashes),
+		ThumbnailChunkHash: req.ThumbnailChunkHash,
+		CreatedAt:          ts,
+		UpdatedAt:          cloneTimestamp(ts),
+	}
+
+	// Persist to disk before mutating in-memory state so a failed write needs no rollback.
 	if err := s.writeObjectFile(obj); err != nil {
-		_ = s.engine.DeleteObject(obj.Id)
 		return nil, false, err
 	}
 
-	return obj, false, nil
+	s.objects[id] = obj
+	s.insertDedupID(key, obj)
+	s.adjustChunkRefs(obj, +1)
+
+	return cloneObject(obj), false, nil
 }
 
 // GetObject retrieves a single object's metadata by ID.
@@ -113,11 +154,18 @@ func (s *LocalMetadataStore) GetObject(ctx context.Context, objectID string) (*l
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if validate.ObjectID(objectID) != nil {
+		return nil, fmt.Errorf("%w: invalid object_id %q", ErrInvalidArgument, objectID)
+	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.engine.GetObject(objectID)
+	obj, ok := s.objects[objectID]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", ErrObjectNotFound, objectID)
+	}
+	return cloneObject(obj), nil
 }
 
 // ListObjects lists objects within a namespace with deterministic cursor pagination.
@@ -125,11 +173,75 @@ func (s *LocalMetadataStore) ListObjects(ctx context.Context, req *lumavaultv1.L
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if req == nil {
+		return nil, fmt.Errorf("%w: request is nil", ErrInvalidArgument)
+	}
+	if validate.Namespace(req.Namespace) != nil {
+		return nil, fmt.Errorf("%w: valid namespace is required", ErrInvalidArgument)
+	}
+	if req.PageSize < 0 {
+		return nil, fmt.Errorf("%w: page_size (%d) must not be negative", ErrInvalidArgument, req.PageSize)
+	}
+
+	pageSize := int(req.PageSize)
+	if pageSize == 0 {
+		pageSize = DefaultPageSize
+	} else if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
+	}
+
+	var cursor *pageCursor
+	if req.PageToken != "" {
+		c, err := decodePageToken(req.PageToken)
+		if err != nil {
+			return nil, err
+		}
+		cursor = c
+	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.engine.ListObjects(req)
+	var matched []*lumavaultv1.ObjectMetadata
+	for _, obj := range s.objects {
+		if obj.Namespace != req.Namespace {
+			continue
+		}
+		matched = append(matched, obj)
+	}
+
+	sort.Slice(matched, func(i, j int) bool {
+		return compareObjectsDesc(matched[i], matched[j]) < 0
+	})
+
+	startIdx := 0
+	if cursor != nil {
+		startIdx = sort.Search(len(matched), func(i int) bool {
+			return isAfterCursor(matched[i], cursor)
+		})
+	}
+
+	if startIdx >= len(matched) {
+		return &lumavaultv1.ListObjectsResponse{}, nil
+	}
+
+	endIdx := startIdx + pageSize
+	var nextToken string
+	if endIdx < len(matched) {
+		nextToken = encodePageToken(matched[endIdx-1])
+	} else {
+		endIdx = len(matched)
+	}
+
+	page := make([]*lumavaultv1.ObjectMetadata, 0, endIdx-startIdx)
+	for _, obj := range matched[startIdx:endIdx] {
+		page = append(page, cloneObject(obj))
+	}
+
+	return &lumavaultv1.ListObjectsResponse{
+		Objects:       page,
+		NextPageToken: nextToken,
+	}, nil
 }
 
 // UpdateObjectMetadata partially updates mutable storage-level metadata fields
@@ -142,28 +254,38 @@ func (s *LocalMetadataStore) UpdateObjectMetadata(ctx context.Context, req *luma
 	if req == nil || req.Object == nil || validate.ObjectID(req.Object.Id) != nil {
 		return nil, fmt.Errorf("%w: object and valid object.id are required", ErrInvalidArgument)
 	}
-
-	now := time.Now().UTC()
+	if req.UpdateMask == nil || len(req.UpdateMask.Paths) == 0 {
+		return nil, fmt.Errorf("%w: non-empty update_mask is required", ErrInvalidArgument)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	prevObj, err := s.engine.GetObject(req.Object.Id)
-	if err != nil {
-		return nil, err
+	existing, ok := s.objects[req.Object.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", ErrObjectNotFound, req.Object.Id)
 	}
 
-	updated, err := s.engine.UpdateObjectMetadata(req, now)
-	if err != nil {
-		return nil, err
+	updated := cloneObject(existing)
+	for _, path := range req.UpdateMask.Paths {
+		if err := applyFieldMaskPath(updated, req.Object, path); err != nil {
+			return nil, err
+		}
 	}
+	updated.UpdatedAt = timestamppb.New(time.Now().UTC())
 
+	// Persist to disk before mutating in-memory state so a failed write needs no rollback.
 	if err := s.writeObjectFile(updated); err != nil {
-		s.engine.putObjectDirect(prevObj)
 		return nil, err
 	}
 
-	return updated, nil
+	if existing.ThumbnailChunkHash != updated.ThumbnailChunkHash {
+		s.adjustChunkRefs(existing, -1)
+		s.adjustChunkRefs(updated, +1)
+	}
+
+	s.objects[updated.Id] = updated
+	return cloneObject(updated), nil
 }
 
 // DeleteObject removes an object's metadata file from disk and updates in-memory indexes
@@ -179,16 +301,27 @@ func (s *LocalMetadataStore) DeleteObject(ctx context.Context, objectID string) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !s.engine.hasObject(objectID) {
+	existing, ok := s.objects[objectID]
+	if !ok {
 		return fmt.Errorf("%w: %q", ErrObjectNotFound, objectID)
 	}
 
-	objPath := s.objectFilePath(objectID)
-	if err := os.Remove(objPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(s.objectFilePath(objectID)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("metadata: remove object file %s: %w", objectID, err)
 	}
 
-	return s.engine.DeleteObject(objectID)
+	delete(s.objects, objectID)
+
+	// Remove objectID from the oldest-first slice; if others remain, ids[0] is the oldest remaining object.
+	key := dedupKey{namespace: existing.Namespace, sha256: existing.Sha256Digest}
+	if ids := slices.DeleteFunc(s.dedupIndex[key], func(id string) bool { return id == objectID }); len(ids) > 0 {
+		s.dedupIndex[key] = ids
+	} else {
+		delete(s.dedupIndex, key)
+	}
+
+	s.adjustChunkRefs(existing, -1)
+	return nil
 }
 
 // IsChunkReferenced checks whether hash is currently referenced by any committed object.
@@ -196,22 +329,25 @@ func (s *LocalMetadataStore) IsChunkReferenced(ctx context.Context, hash string)
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
+	if err := invalidArg(validate.Hash(hash)); err != nil {
+		return false, err
+	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.engine.IsChunkReferenced(hash)
+	return s.chunkRefs[hash] > 0, nil
 }
 
 // loadFromDisk reads all <id>.pb manifests in objectsDir, verifies each filename matches
-// its embedded ObjectMetadata.Id, and restores the in-memory Engine.
+// its embedded ObjectMetadata.Id, and rebuilds the in-memory indexes.
 func (s *LocalMetadataStore) loadFromDisk() error {
 	entries, err := os.ReadDir(s.objectsDir)
 	if err != nil {
 		return fmt.Errorf("metadata: read objects dir: %w", err)
 	}
 
-	var objects []*lumavaultv1.ObjectMetadata
+	var loaded []*lumavaultv1.ObjectMetadata
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pb") {
 			continue
@@ -229,10 +365,54 @@ func (s *LocalMetadataStore) loadFromDisk() error {
 		if obj.Id != expectedID || validate.ObjectID(obj.Id) != nil {
 			return fmt.Errorf("metadata: object file %s has mismatched or unsafe id %q", entry.Name(), obj.Id)
 		}
-		objects = append(objects, obj)
+		loaded = append(loaded, obj)
 	}
 
-	return s.engine.Restore(objects)
+	// Sort oldest-first (CreatedAt ASC, Id ASC) so deduplication slice order is deterministic across restarts.
+	sort.Slice(loaded, func(i, j int) bool {
+		return compareObjectsAsc(loaded[i], loaded[j]) < 0
+	})
+
+	for _, obj := range loaded {
+		s.objects[obj.Id] = obj
+		key := dedupKey{namespace: obj.Namespace, sha256: obj.Sha256Digest}
+		s.dedupIndex[key] = append(s.dedupIndex[key], obj.Id)
+		s.adjustChunkRefs(obj, +1)
+	}
+
+	return nil
+}
+
+// insertDedupID inserts obj.Id into dedupIndex[key] in oldest-first (CreatedAt ASC, Id ASC) order.
+func (s *LocalMetadataStore) insertDedupID(key dedupKey, obj *lumavaultv1.ObjectMetadata) {
+	ids := s.dedupIndex[key]
+	idx, _ := slices.BinarySearchFunc(ids, obj, func(existingID string, target *lumavaultv1.ObjectMetadata) int {
+		return compareObjectsAsc(s.objects[existingID], target)
+	})
+	s.dedupIndex[key] = slices.Insert(ids, idx, obj.Id)
+}
+
+// adjustChunkRefs increments or decrements per-object unique chunk reference counts in
+// s.chunkRefs across chunk_hashes and thumbnail_chunk_hash, removing entries whose count drops to zero.
+func (s *LocalMetadataStore) adjustChunkRefs(obj *lumavaultv1.ObjectMetadata, delta int) {
+	seen := make(map[string]struct{}, len(obj.ChunkHashes)+1)
+	for _, h := range obj.ChunkHashes {
+		if h == "" {
+			continue
+		}
+		seen[h] = struct{}{}
+	}
+	if obj.ThumbnailChunkHash != "" {
+		seen[obj.ThumbnailChunkHash] = struct{}{}
+	}
+	for h := range seen {
+		next := s.chunkRefs[h] + delta
+		if next <= 0 {
+			delete(s.chunkRefs, h)
+		} else {
+			s.chunkRefs[h] = next
+		}
+	}
 }
 
 // objectFilePath returns the <objectsDir>/<objectID>.pb path for an object manifest.
@@ -289,6 +469,112 @@ func (s *LocalMetadataStore) writeFileAtomic(destPath string, data []byte) (retE
 		return fmt.Errorf("metadata: rename temp file to %s: %w", filepath.Base(destPath), err)
 	}
 	return nil
+}
+
+// applyFieldMaskPath copies a single mutable FieldMask field from src onto updated.
+func applyFieldMaskPath(updated, src *lumavaultv1.ObjectMetadata, path string) error {
+	switch path {
+	case "filename":
+		updated.Filename = src.Filename
+	case "mime_type":
+		updated.MimeType = src.MimeType
+	case "thumbnail_chunk_hash":
+		if src.ThumbnailChunkHash != "" {
+			if err := invalidArg(validate.Hash(src.ThumbnailChunkHash)); err != nil {
+				return fmt.Errorf("thumbnail_chunk_hash: %w", err)
+			}
+		}
+		updated.ThumbnailChunkHash = src.ThumbnailChunkHash
+	default:
+		return fmt.Errorf("%w: unsupported or immutable update_mask path %q", ErrInvalidArgument, path)
+	}
+	return nil
+}
+
+// compareObjectsAsc orders objects oldest-first by (CreatedAt ASC, Id ASC).
+func compareObjectsAsc(a, b *lumavaultv1.ObjectMetadata) int {
+	ta := a.GetCreatedAt().AsTime().UnixNano()
+	tb := b.GetCreatedAt().AsTime().UnixNano()
+	if ta != tb {
+		if ta < tb {
+			return -1
+		}
+		return 1
+	}
+	if a.Id < b.Id {
+		return -1
+	}
+	if a.Id > b.Id {
+		return 1
+	}
+	return 0
+}
+
+// compareObjectsDesc orders objects newest-first by (CreatedAt DESC, Id ASC) for ListObjects.
+func compareObjectsDesc(a, b *lumavaultv1.ObjectMetadata) int {
+	ta := a.GetCreatedAt().AsTime().UnixNano()
+	tb := b.GetCreatedAt().AsTime().UnixNano()
+	if ta != tb {
+		if ta > tb {
+			return -1
+		}
+		return 1
+	}
+	if a.Id < b.Id {
+		return -1
+	}
+	if a.Id > b.Id {
+		return 1
+	}
+	return 0
+}
+
+// isAfterCursor reports whether obj falls strictly after cursor c under (CreatedAt DESC, Id ASC) ordering.
+func isAfterCursor(obj *lumavaultv1.ObjectMetadata, c *pageCursor) bool {
+	t := obj.GetCreatedAt().AsTime().UnixNano()
+	if t != c.CreatedAtNanos {
+		return t < c.CreatedAtNanos
+	}
+	return obj.Id > c.ID
+}
+
+// encodePageToken encodes obj's (CreatedAt, Id) sort key as a URL-safe base64 pagination token.
+func encodePageToken(obj *lumavaultv1.ObjectMetadata) string {
+	c := pageCursor{
+		CreatedAtNanos: obj.GetCreatedAt().AsTime().UnixNano(),
+		ID:             obj.Id,
+	}
+	b, _ := json.Marshal(c)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// decodePageToken parses and validates a URL-safe base64 pagination token.
+func decodePageToken(token string) (*pageCursor, error) {
+	b, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid page_token encoding: %v", ErrInvalidArgument, err)
+	}
+	var c pageCursor
+	if err := json.Unmarshal(b, &c); err != nil || c.ID == "" {
+		return nil, fmt.Errorf("%w: malformed page_token payload", ErrInvalidArgument)
+	}
+	return &c, nil
+}
+
+// cloneObject returns a deep Protobuf copy of obj so callers cannot mutate store state.
+func cloneObject(obj *lumavaultv1.ObjectMetadata) *lumavaultv1.ObjectMetadata {
+	if obj == nil {
+		return nil
+	}
+	return proto.Clone(obj).(*lumavaultv1.ObjectMetadata)
+}
+
+// cloneTimestamp returns a deep Protobuf copy of ts.
+func cloneTimestamp(ts *timestamppb.Timestamp) *timestamppb.Timestamp {
+	if ts == nil {
+		return nil
+	}
+	return proto.Clone(ts).(*timestamppb.Timestamp)
 }
 
 // newUUIDv4 generates a random RFC 4122 version-4 UUID string.
