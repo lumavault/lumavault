@@ -1,17 +1,17 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { HOUSEHOLD_OWNER_ROLE, SUPER_ADMIN_ROLE } from '#/auth/constants.js'
-import { createCredentialAccount } from '#/data/auth/account/create-account.js'
-import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createUser } from '#/data/auth/user/create-user.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
-import { createInstanceSettingsIfMissing } from '#/data/iam/instance-settings/create-instance-settings.js'
+import { createCredentialAccount } from '#/data/auth/account.js'
+import { createMember } from '#/data/auth/member.js'
+import { createOrganization } from '#/data/auth/organization.js'
+import { createUser } from '#/data/auth/user.js'
+import { createHousehold } from '#/data/iam/household.js'
 import {
+  createInstanceSettingsIfMissing,
   getInstanceSettings,
   getInstanceSettingsForUpdate,
-} from '#/data/iam/instance-settings/get-instance-settings.js'
-import { markSetupCompleted } from '#/data/iam/instance-settings/update-instance-settings.js'
+  markSetupCompleted,
+} from '#/data/iam/instance-settings.js'
 import {
   DEFAULT_MEMBER_LIMIT,
   IAM_APPS,

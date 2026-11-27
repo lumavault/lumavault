@@ -2,7 +2,7 @@ import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
 import {
   setWatchProgressWatched,
   upsertWatchProgress,
-} from '#/data/cinema/watch-progress/update-watch-progress.js'
+} from '#/data/cinema/watch-progress.js'
 import { requireApp } from '#/guards.js'
 import { parseNonNegativeBigint } from '#/lib/validation.js'
 import type { ApiModule } from '#/server/modules.js'

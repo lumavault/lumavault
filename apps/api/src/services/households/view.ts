@@ -1,6 +1,6 @@
-import { getOwnerUserId } from '#/data/auth/member/get-member.js'
-import { getOrganizationById } from '#/data/auth/organization/get-organization.js'
-import type { Household } from '#/data/iam/household/types.js'
+import { getOwnerUserId } from '#/data/auth/member.js'
+import { getOrganizationById } from '#/data/auth/organization.js'
+import type { Household } from '#/data/iam/household.js'
 import type { DbOrTx } from '#/db/index.js'
 
 import type { HouseholdView } from './types.js'

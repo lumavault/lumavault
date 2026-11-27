@@ -1,7 +1,9 @@
 import { Code, ConnectError } from '@connectrpc/connect'
-import { getHouseholdForUpdate } from '#/data/iam/household/get-household.js'
-import { addReservedBytes } from '#/data/iam/household/update-household.js'
-import { createUploadReservation } from '#/data/iam/upload-reservation/create-upload-reservation.js'
+import {
+  addReservedBytes,
+  getHouseholdForUpdate,
+} from '#/data/iam/household.js'
+import { createUploadReservation } from '#/data/iam/upload-reservation.js'
 import type { ModuleContext } from '#/server/modules.js'
 
 import { RESERVATION_TTL_MS, SHARED_LIBRARY_APPS } from './constants.js'

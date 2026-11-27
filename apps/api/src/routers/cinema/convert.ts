@@ -24,22 +24,22 @@ import { signReadTicket } from '#/auth/tickets.js'
 import type {
   ContinueWatchingEpisodeRow,
   PlayableEpisode,
-} from '#/data/cinema/episode/types.js'
+} from '#/data/cinema/episode.js'
 import type {
   MediaContainerValue,
   MediaFileDetails,
   MediaFileFilterMode,
   MediaFileKindValue,
-} from '#/data/cinema/media-file/types.js'
+} from '#/data/cinema/media-file.js'
 import type {
   ContinueWatchingMovie,
   PlayableMovie,
-} from '#/data/cinema/movie/types.js'
-import type { PlayableSeriesSummary } from '#/data/cinema/series/types.js'
+} from '#/data/cinema/movie.js'
+import type { PlayableSeriesSummary } from '#/data/cinema/series.js'
 import type {
   WatchProgressRow,
   WatchProgressTarget,
-} from '#/data/cinema/watch-progress/types.js'
+} from '#/data/cinema/watch-progress.js'
 import type { PageCursor } from '#/data/sql.js'
 import { requireApp } from '#/guards.js'
 import { parseInput, requiredUuidSchema, uuidSchema } from '#/lib/validation.js'

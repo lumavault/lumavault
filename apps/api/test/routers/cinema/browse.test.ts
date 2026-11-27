@@ -9,9 +9,9 @@ import { createConnectTransport } from '@connectrpc/connect-web'
 import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
 import { HOUSEHOLD_OWNER_ROLE, SUPER_ADMIN_ROLE } from '#/auth/constants.js'
 import { verifyTicket } from '#/auth/tickets.js'
-import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
+import { createMember } from '#/data/auth/member.js'
+import { createOrganization } from '#/data/auth/organization.js'
+import { createHousehold } from '#/data/iam/household.js'
 import { user } from '#/db/schemas/auth.js'
 import {
   cinemaEpisodes,

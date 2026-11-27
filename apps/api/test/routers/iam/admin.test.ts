@@ -5,9 +5,9 @@ import {
   HOUSEHOLD_MEMBER_ROLE,
   HOUSEHOLD_OWNER_ROLE,
 } from '#/auth/constants.js'
-import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
+import { createMember } from '#/data/auth/member.js'
+import { createOrganization } from '#/data/auth/organization.js'
+import { createHousehold } from '#/data/iam/household.js'
 import { invitation } from '#/db/schemas/auth.js'
 import { iamHouseholdInvites, iamHouseholds } from '#/db/schemas/iam.js'
 import { DEFAULT_MEMBER_LIMIT } from '#/iam/constants.js'

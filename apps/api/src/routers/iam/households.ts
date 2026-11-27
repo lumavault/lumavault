@@ -1,26 +1,24 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { HOUSEHOLD_ADMIN_ROLE, HOUSEHOLD_OWNER_ROLE } from '#/auth/constants.js'
-import { createInvitation } from '#/data/auth/invitation/create-invitation.js'
-import {
-  getInvitationForUpdate,
-  getPendingInvitationsByOrganizationId,
-} from '#/data/auth/invitation/get-invitation.js'
 import {
   cancelInvitation,
   cancelPendingInvitationsByEmail,
-} from '#/data/auth/invitation/update-invitation.js'
+  createInvitation,
+  getInvitationForUpdate,
+  getPendingInvitationsByOrganizationId,
+} from '#/data/auth/invitation.js'
 import {
   getMember,
   getMembersWithUsers,
-} from '#/data/auth/member/get-member.js'
-import { updateMemberRole } from '#/data/auth/member/update-member.js'
-import { getOrganizationById } from '#/data/auth/organization/get-organization.js'
+  updateMemberRole,
+} from '#/data/auth/member.js'
+import { getOrganizationById } from '#/data/auth/organization.js'
 import {
   getHouseholdById,
   getHouseholdForUpdate,
-} from '#/data/iam/household/get-household.js'
-import type { Household } from '#/data/iam/household/types.js'
+  type Household,
+} from '#/data/iam/household.js'
 import type { DbOrTx } from '#/db/index.js'
 import {
   requireHouseholdAdmin,

@@ -12,37 +12,35 @@ import {
 } from '#/auth/constants.js'
 import { isHouseholdRole } from '#/auth/role-checks.js'
 import {
+  cancelAllPendingInvitationsByEmail,
   getInvitationById,
   getInvitationForUpdate,
   getPendingInvitationsByOrganizationId,
-} from '#/data/auth/invitation/get-invitation.js'
-import type { Invitation } from '#/data/auth/invitation/types.js'
-import {
-  cancelAllPendingInvitationsByEmail,
   markInvitationAccepted,
-} from '#/data/auth/invitation/update-invitation.js'
-import { createMember } from '#/data/auth/member/create-member.js'
+  type Invitation,
+} from '#/data/auth/invitation.js'
 import {
+  createMember,
   getMembersWithUsers,
   getOwnerUserId,
-} from '#/data/auth/member/get-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { getOrganizationById } from '#/data/auth/organization/get-organization.js'
-import { getUserById, getUserForUpdate } from '#/data/auth/user/get-user.js'
+} from '#/data/auth/member.js'
+import {
+  createOrganization,
+  getOrganizationById,
+} from '#/data/auth/organization.js'
+import { getUserById, getUserForUpdate } from '#/data/auth/user.js'
 import {
   getHouseholdInviteByTokenHash,
   getHouseholdInviteByTokenHashForUpdate,
-} from '#/data/iam/household-invite/get-household-invite.js'
-import type { HouseholdInvite } from '#/data/iam/household-invite/types.js'
-import {
   redeemHouseholdInvite,
   revokeUnusedHouseholdInvitesByEmail,
-} from '#/data/iam/household-invite/update-household-invite.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
+  type HouseholdInvite,
+} from '#/data/iam/household-invite.js'
 import {
+  createHousehold,
   getHouseholdByUserId,
   getHouseholdForUpdate,
-} from '#/data/iam/household/get-household.js'
+} from '#/data/iam/household.js'
 import type { DbOrTx } from '#/db/index.js'
 import { requireSignedIn } from '#/guards.js'
 import { hashSecret } from '#/lib/secrets.js'

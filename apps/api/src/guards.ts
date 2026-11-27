@@ -3,7 +3,7 @@ import {
   HOUSEHOLD_MEMBER_ROLE,
   HOUSEHOLD_OWNER_ROLE,
 } from '#/auth/constants.js'
-import type { HouseholdMembership } from '#/data/iam/household/types.js'
+import type { HouseholdMembership } from '#/data/iam/household.js'
 import type { IamApp } from '#/iam/constants.js'
 import { requestContext, type Viewer } from '#/server/context.js'
 import type { ModuleContext } from '#/server/modules.js'

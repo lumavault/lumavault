@@ -1,5 +1,5 @@
 import { Code, ConnectError } from '@connectrpc/connect'
-import { createObjectClaim } from '#/data/iam/object-claim/create-object-claim.js'
+import { createObjectClaim } from '#/data/iam/object-claim.js'
 import { isUniqueViolation } from '#/db/errors.js'
 import type { ModuleContext } from '#/server/modules.js'
 

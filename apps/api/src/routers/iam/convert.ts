@@ -22,12 +22,12 @@ import {
   type HouseholdRole,
 } from '#/auth/constants.js'
 import { hasUserRole, isHouseholdRole } from '#/auth/role-checks.js'
-import type { Invitation } from '#/data/auth/invitation/types.js'
-import type { MemberWithUser } from '#/data/auth/member/types.js'
-import type { Organization } from '#/data/auth/organization/types.js'
-import type { User } from '#/data/auth/user/types.js'
-import type { HouseholdInvite } from '#/data/iam/household-invite/types.js'
-import type { Household } from '#/data/iam/household/types.js'
+import type { Invitation } from '#/data/auth/invitation.js'
+import type { MemberWithUser } from '#/data/auth/member.js'
+import type { Organization } from '#/data/auth/organization.js'
+import type { User } from '#/data/auth/user.js'
+import type { HouseholdInvite } from '#/data/iam/household-invite.js'
+import type { Household } from '#/data/iam/household.js'
 import type { IamApp } from '#/iam/constants.js'
 import type {
   HouseholdSummary,

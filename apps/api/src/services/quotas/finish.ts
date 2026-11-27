@@ -1,17 +1,16 @@
 import { Code, ConnectError } from '@connectrpc/connect'
-import { getHouseholdForUpdate } from '#/data/iam/household/get-household.js'
 import {
   addUsedBytes,
+  getHouseholdForUpdate,
   settleReservedBytes,
-} from '#/data/iam/household/update-household.js'
-import { createObjectClaim } from '#/data/iam/object-claim/create-object-claim.js'
-import { getObjectClaim } from '#/data/iam/object-claim/get-object-claim.js'
+} from '#/data/iam/household.js'
+import { createObjectClaim, getObjectClaim } from '#/data/iam/object-claim.js'
 import {
   getUploadReservation,
   getUploadReservationForUpdate,
-} from '#/data/iam/upload-reservation/get-upload-reservation.js'
-import type { UploadReservation } from '#/data/iam/upload-reservation/types.js'
-import { settleUploadReservation } from '#/data/iam/upload-reservation/update-upload-reservation.js'
+  settleUploadReservation,
+  type UploadReservation,
+} from '#/data/iam/upload-reservation.js'
 import { isUniqueViolation } from '#/db/errors.js'
 import type { DbOrTx } from '#/db/index.js'
 import type { ModuleContext } from '#/server/modules.js'

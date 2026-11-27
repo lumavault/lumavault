@@ -3,18 +3,19 @@ import {
   IamService,
   type Allowance,
 } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import { getUsers } from '#/data/auth/user/get-user.js'
-import { createHouseholdInvite } from '#/data/iam/household-invite/create-household-invite.js'
+import { getUsers } from '#/data/auth/user.js'
 import {
+  createHouseholdInvite,
   getHouseholdInviteForUpdate,
   getOpenHouseholdInvites,
-} from '#/data/iam/household-invite/get-household-invite.js'
-import {
   revokeHouseholdInvite,
   revokeUnusedHouseholdInvitesByEmail,
-} from '#/data/iam/household-invite/update-household-invite.js'
-import type { AllowancePatch, Household } from '#/data/iam/household/types.js'
-import { updateHouseholdAllowance } from '#/data/iam/household/update-household.js'
+} from '#/data/iam/household-invite.js'
+import {
+  updateHouseholdAllowance,
+  type AllowancePatch,
+  type Household,
+} from '#/data/iam/household.js'
 import type { DbOrTx } from '#/db/index.js'
 import { requireSuperAdmin } from '#/guards.js'
 import {
