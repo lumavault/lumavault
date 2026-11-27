@@ -19,6 +19,18 @@ export function requiredUuidSchema(field: string) {
     )
 }
 
+/** Schema for a required, trimmed Storage Gateway object ID without path separators. */
+export function requiredObjectIdSchema(field = 'object_id') {
+  return z
+    .string()
+    .trim()
+    .min(1, `${field} is required`)
+    .refine(
+      (value) => value !== '.' && value !== '..' && !/[/\\]/.test(value),
+      `${field} is not valid`,
+    )
+}
+
 /** Parses value with schema or throws an InvalidArgument ConnectError. */
 export function parseInput<T extends z.ZodType>(
   schema: T,
