@@ -2,8 +2,6 @@ export { LumaVaultClient } from './client.js'
 export type { StreamUrlOptions } from './urls.js'
 export type {
   DownloadOptions,
-  ListOptions,
-  ListPage,
   LumaVaultClientOptions,
   UpdateFields,
   UploadInput,

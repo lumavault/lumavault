@@ -103,7 +103,7 @@ describe('storage tickets against a gateway with checks on', () => {
     )
   })
 
-  it('lets the service key list, rename, and delete', async () => {
+  it('lets the service key rename and delete', async () => {
     const obj = await client.upload(file(), {
       namespace: Namespace.CINEMA,
       ticket: uploadTicket(),
@@ -111,16 +111,9 @@ describe('storage tickets against a gateway with checks on', () => {
     expect(
       (await server.update(obj.id, { filename: 'renamed.bin' })).filename,
     ).toBe('renamed.bin')
-    expect(
-      (await server.list({ namespace: Namespace.CINEMA })).objects.map(
-        (o) => o.id,
-      ),
-    ).toContain(obj.id)
+    expect(await codeOf(client.delete(obj.id))).toBe(Code.Unauthenticated)
     await server.delete(obj.id)
     expect(await codeOf(server.get(obj.id))).toBe(Code.NotFound)
-    expect(await codeOf(client.list({ namespace: Namespace.CINEMA }))).toBe(
-      Code.Unauthenticated,
-    )
   })
 
   it('lets the service key copy an object, and refuses a client with no key', async () => {

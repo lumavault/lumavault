@@ -2,6 +2,8 @@ package gateway
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"connectrpc.com/connect/v2"
@@ -11,9 +13,9 @@ import (
 
 func (h *harness) wantNoObjects() {
 	h.t.Helper()
-	list, err := h.client.ListObjects(context.Background(), &lumavaultv1.ListObjectsRequest{Namespace: lumavaultv1.Namespace_NAMESPACE_CINEMA})
-	if err != nil || len(list.GetObjects()) != 0 {
-		h.t.Fatalf("expected no committed objects, got %v (err %v)", list.GetObjects(), err)
+	entries, err := os.ReadDir(filepath.Join(h.metaRoot, "objects"))
+	if err != nil || len(entries) != 0 {
+		h.t.Fatalf("expected no committed objects, got %v (err %v)", entries, err)
 	}
 }
 
@@ -139,7 +141,5 @@ func TestControlErrorMapping(t *testing.T) {
 	_, err = h.client.DeleteObject(ctx, &lumavaultv1.DeleteObjectRequest{ObjectId: "nope"})
 	wantCode(t, err, connect.CodeNotFound)
 	_, err = h.client.HasChunks(ctx, &lumavaultv1.HasChunksRequest{ChunkHashes: []string{"ZZ"}})
-	wantCode(t, err, connect.CodeInvalidArgument)
-	_, err = h.client.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{})
 	wantCode(t, err, connect.CodeInvalidArgument)
 }

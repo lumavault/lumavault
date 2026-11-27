@@ -62,27 +62,16 @@ private final class ProgressLog: @unchecked Sendable {
         #expect(second.object.id != first.object.id)
     }
 
-    @Test func getsUpdatesListsAndDeletes() async throws {
-        var ids: [String] = []
-        for n in 1...3 {
-            let file = try tempFile(named: "save\(n).sav", bytes: ChunkVectors.patternBytes(count: 100 + n))
-            ids.append(try await client.upload(fileURL: file, namespace: .games).object.id)
-        }
+    @Test func getsUpdatesAndDeletes() async throws {
+        let file = try tempFile(named: "save1.sav", bytes: ChunkVectors.patternBytes(count: 101))
+        let id = try await client.upload(fileURL: file, namespace: .games).object.id
 
-        let updated = try await client.update(objectID: ids[0], filename: "renamed.sav")
+        let updated = try await client.update(objectID: id, filename: "renamed.sav")
         #expect(updated.filename == "renamed.sav")
-        #expect(try await client.get(objectID: ids[0]).filename == "renamed.sav")
+        #expect(try await client.get(objectID: id).filename == "renamed.sav")
 
-        let page = try await client.list(namespace: .games, limit: 2)
-        #expect(page.objects.count == 2)
-        #expect(page.hasMore)
-
-        var all: [String] = []
-        for try await object in client.listAll(namespace: .games, limit: 2) { all.append(object.id) }
-        #expect(Set(ids).isSubset(of: Set(all)))
-
-        try await client.delete(objectID: ids[1])
-        let error = await #expect(throws: ConnectError.self) { try await self.client.get(objectID: ids[1]) }
+        try await client.delete(objectID: id)
+        let error = await #expect(throws: ConnectError.self) { try await self.client.get(objectID: id) }
         #expect(error?.code == .notFound)
     }
 }

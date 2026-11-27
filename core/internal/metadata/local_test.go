@@ -325,105 +325,6 @@ func TestConcurrentCommitsAndReads(t *testing.T) {
 	}
 }
 
-func TestListObjects_NamespaceFilteringAndPagination(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	store, err := NewLocalMetadataStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewLocalMetadataStore: %v", err)
-	}
-
-	chunk := testHash("photo-chunk")
-	for i := 0; i < 5; i++ {
-		_, _, err := store.CommitObject(ctx, &lumavaultv1.CommitObjectRequest{
-			Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-			Filename:       fmt.Sprintf("photo_%d.jpg", i),
-			SizeBytes:      1024,
-			ChunkSizeBytes: 4 << 20,
-			Sha256Digest:   testHash(fmt.Sprintf("photo-digest-%d", i)),
-			ChunkHashes:    []string{chunk},
-		})
-		if err != nil {
-			t.Fatalf("CommitObject %d: %v", i, err)
-		}
-	}
-
-	// Commit an object in NAMESPACE_GAMES to verify namespace isolation.
-	if _, _, err := store.CommitObject(ctx, &lumavaultv1.CommitObjectRequest{
-		Namespace:      lumavaultv1.Namespace_NAMESPACE_GAMES,
-		Filename:       "emerald.gba",
-		SizeBytes:      1024,
-		ChunkSizeBytes: 4 << 20,
-		Sha256Digest:   testHash("rom-gba"),
-		ChunkHashes:    []string{chunk},
-	}); err != nil {
-		t.Fatalf("CommitObject ROM: %v", err)
-	}
-
-	gamesResp, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
-		Namespace: lumavaultv1.Namespace_NAMESPACE_GAMES,
-		PageSize:  999, // clamped to MaxPageSize
-	})
-	if err != nil || len(gamesResp.Objects) != 1 || gamesResp.Objects[0].Filename != "emerald.gba" {
-		t.Fatalf("expected 1 game object, got %+v (err=%v)", gamesResp, err)
-	}
-
-	// Paginate all 5 photos with page_size = 2, and delete the boundary item after page 1
-	// to verify cursor pagination remains stable even when boundary items are deleted.
-	page1, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
-		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		PageSize:  2,
-	})
-	if err != nil || len(page1.Objects) != 2 || page1.NextPageToken == "" {
-		t.Fatalf("page1: len=%d token=%q err=%v", len(page1.Objects), page1.NextPageToken, err)
-	}
-
-	// Delete the 2nd item of page1 (the cursor boundary object) before fetching page2.
-	if err := store.DeleteObject(ctx, page1.Objects[1].Id); err != nil {
-		t.Fatalf("DeleteObject boundary item: %v", err)
-	}
-
-	page2, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
-		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		PageSize:  2,
-		PageToken: page1.NextPageToken,
-	})
-	if err != nil || len(page2.Objects) != 2 || page2.NextPageToken == "" {
-		t.Fatalf("page2: len=%d token=%q err=%v", len(page2.Objects), page2.NextPageToken, err)
-	}
-
-	page3, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
-		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		PageSize:  2,
-		PageToken: page2.NextPageToken,
-	})
-	if err != nil || len(page3.Objects) != 1 || page3.NextPageToken != "" {
-		t.Fatalf("page3: len=%d token=%q err=%v", len(page3.Objects), page3.NextPageToken, err)
-	}
-
-	// Verify invalid ListObjects arguments.
-	if _, err := store.ListObjects(ctx, nil); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for nil request, got %v", err)
-	}
-	if _, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
-		Namespace: lumavaultv1.Namespace_NAMESPACE_UNSPECIFIED,
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for unspecified namespace, got %v", err)
-	}
-	if _, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
-		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		PageSize:  -1,
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for negative page_size, got %v", err)
-	}
-	if _, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
-		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		PageToken: "!!!not-base64!!!",
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for invalid page_token, got %v", err)
-	}
-}
-
 func TestUpdateObjectMetadata_FieldMask(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -654,9 +555,6 @@ func TestLocalMetadataStore_DiskErrorsContextAndCleanup(t *testing.T) {
 	}
 	if _, err := store.GetObject(cancelledCtx, "id"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled on GetObject, got %v", err)
-	}
-	if _, err := store.ListObjects(cancelledCtx, &lumavaultv1.ListObjectsRequest{}); !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled on ListObjects, got %v", err)
 	}
 	if _, err := store.UpdateObjectMetadata(cancelledCtx, &lumavaultv1.UpdateObjectMetadataRequest{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled on UpdateObjectMetadata, got %v", err)

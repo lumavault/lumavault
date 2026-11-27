@@ -53,18 +53,3 @@ export interface UpdateFields {
   mimeType?: string
   thumbnailChunkHash?: string
 }
-
-export interface ListOptions {
-  namespace: Namespace
-  /** The cursor from a previous page. Omit for the first page. */
-  cursor?: string
-  /** Page size. The gateway applies its own default and maximum. */
-  limit?: number
-}
-
-export interface ListPage {
-  objects: ObjectMetadata[]
-  /** Pass to the next list call. Undefined on the last page. */
-  cursor?: string
-  hasMore: boolean
-}

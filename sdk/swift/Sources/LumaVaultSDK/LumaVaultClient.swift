@@ -95,37 +95,4 @@ public final class LumaVaultClient: Sendable {
         request.objectID = objectID
         _ = try await rpc.deleteObject(request: request).unwrap()
     }
-
-    /// One page of objects in a namespace.
-    public func list(namespace: Namespace, cursor: String? = nil, limit: Int32? = nil) async throws -> ListPage {
-        var request = Lumavault_V1_ListObjectsRequest()
-        request.namespace = namespace
-        request.pageToken = cursor ?? ""
-        request.pageSize = limit ?? 0
-        let response = try await rpc.listObjects(request: request).unwrap()
-        let hasMore = !response.nextPageToken.isEmpty
-        return ListPage(objects: response.objects, cursor: hasMore ? response.nextPageToken : nil, hasMore: hasMore)
-    }
-
-    /// Every object in a namespace, fetching pages as the loop asks for them.
-    public func listAll(namespace: Namespace, limit: Int32? = nil) -> AsyncThrowingStream<ObjectMetadata, Error> {
-        let pages = PageWalker()
-        return AsyncThrowingStream {
-            while pages.buffered.isEmpty && !pages.done {
-                let page = try await self.list(namespace: namespace, cursor: pages.cursor, limit: limit)
-                pages.buffered = page.objects
-                pages.cursor = page.cursor
-                pages.done = !page.hasMore
-            }
-            return pages.buffered.isEmpty ? nil : pages.buffered.removeFirst()
-        }
-    }
-}
-
-/// Paging state for listAll. AsyncThrowingStream calls its closure one at a time, so the
-/// state is never touched concurrently.
-private final class PageWalker: @unchecked Sendable {
-    var cursor: String?
-    var buffered: [ObjectMetadata] = []
-    var done = false
 }

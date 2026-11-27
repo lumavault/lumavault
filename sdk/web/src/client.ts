@@ -18,8 +18,6 @@ import {
 } from './gen/lumavault/v1/storage_pb.js'
 import type {
   DownloadOptions,
-  ListOptions,
-  ListPage,
   LumaVaultClientOptions,
   UpdateFields,
   UploadInput,
@@ -194,37 +192,7 @@ export class LumaVaultClient {
     return object
   }
 
-  /** One page of objects in a namespace. */
-  async list(options: ListOptions): Promise<ListPage> {
-    const res = await this.#rpc.listObjects(
-      {
-        namespace: options.namespace,
-        pageToken: options.cursor ?? '',
-        pageSize: options.limit ?? 0,
-      },
-      { headers: this.#headers() },
-    )
-    const hasMore = res.nextPageToken !== ''
-    return {
-      objects: res.objects,
-      cursor: hasMore ? res.nextPageToken : undefined,
-      hasMore,
-    }
-  }
-
   #headers(ticket?: string): Record<string, string> {
     return authHeaders({ ticket, serviceKey: this.#serviceKey })
-  }
-
-  /** Every object in a namespace, fetching pages as the loop asks for them. */
-  async *listAll(
-    options: Omit<ListOptions, 'cursor'>,
-  ): AsyncGenerator<ObjectMetadata> {
-    let cursor: string | undefined
-    do {
-      const page = await this.list({ ...options, cursor })
-      yield* page.objects
-      cursor = page.cursor
-    } while (cursor)
   }
 }

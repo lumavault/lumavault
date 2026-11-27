@@ -56,11 +56,6 @@ service StorageService {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
 
-  // Lists objects within a namespace with deterministic cursor pagination.
-  rpc ListObjects(ListObjectsRequest) returns (ListObjectsResponse) {
-    option idempotency_level = NO_SIDE_EFFECTS;
-  }
-
   // Partially updates mutable storage-level metadata fields (filename, mime_type,
   // thumbnail_chunk_hash) using a FieldMask.
   rpc UpdateObjectMetadata(UpdateObjectMetadataRequest) returns (UpdateObjectMetadataResponse);
@@ -105,17 +100,6 @@ message GetObjectRequest {
 
 message GetObjectResponse {
   ObjectMetadata object = 1;
-}
-
-message ListObjectsRequest {
-  Namespace namespace = 1;
-  int32 page_size = 2;
-  string page_token = 3;
-}
-
-message ListObjectsResponse {
-  repeated ObjectMetadata objects = 1;
-  string next_page_token = 2;
 }
 
 message UpdateObjectMetadataRequest {

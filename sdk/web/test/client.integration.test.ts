@@ -113,36 +113,18 @@ describe('LumaVaultClient against a real gateway', () => {
     expect((err as ConnectError).code).toBe(Code.InvalidArgument)
   })
 
-  it('gets, updates, lists, and deletes', async () => {
-    const created = await Promise.all(
-      [1, 2, 3].map((n) =>
-        client.upload(patternBytes(n, 100 + n), {
-          namespace: Namespace.GAMES,
-          filename: `save${n}.sav`,
-        }),
-      ),
-    )
-    const ids = created.map((o) => o.id)
-
-    const updated = await client.update(ids[0]!, { filename: 'renamed.sav' })
-    expect(updated.filename).toBe('renamed.sav')
-    expect((await client.get(ids[0]!)).filename).toBe('renamed.sav')
-
-    const page = await client.list({ namespace: Namespace.GAMES, limit: 2 })
-    expect(page.objects).toHaveLength(2)
-    expect(page.hasMore).toBe(true)
-    expect(page.cursor).toBeTruthy()
-
-    const all: string[] = []
-    for await (const o of client.listAll({
+  it('gets, updates, and deletes', async () => {
+    const created = await client.upload(patternBytes(1, 101), {
       namespace: Namespace.GAMES,
-      limit: 2,
-    }))
-      all.push(o.id)
-    expect(all).toEqual(expect.arrayContaining(ids))
+      filename: 'save1.sav',
+    })
 
-    await client.delete(ids[1]!)
-    const err = await client.get(ids[1]!).catch((e: unknown) => e)
+    const updated = await client.update(created.id, { filename: 'renamed.sav' })
+    expect(updated.filename).toBe('renamed.sav')
+    expect((await client.get(created.id)).filename).toBe('renamed.sav')
+
+    await client.delete(created.id)
+    const err = await client.get(created.id).catch((e: unknown) => e)
     expect((err as ConnectError).code).toBe(Code.NotFound)
   })
 

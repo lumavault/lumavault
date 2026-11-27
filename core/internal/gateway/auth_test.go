@@ -92,10 +92,6 @@ func (h *harness) calls(obj *lumavaultv1.ObjectMetadata, commit *lumavaultv1.Com
 			_, err := h.client.GetObject(ctx, &lumavaultv1.GetObjectRequest{ObjectId: obj.GetId()})
 			return err
 		}},
-		{"ListObjects", func(ctx context.Context) error {
-			_, err := h.client.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{Namespace: obj.GetNamespace()})
-			return err
-		}},
 		{"UpdateObjectMetadata", func(ctx context.Context) error {
 			_, err := h.client.UpdateObjectMetadata(ctx, &lumavaultv1.UpdateObjectMetadataRequest{
 				Object:     &lumavaultv1.ObjectMetadata{Id: obj.GetId(), Filename: "renamed.mp4"},
@@ -130,35 +126,35 @@ func TestRPCCredentialTable(t *testing.T) {
 	}{
 		{"no credential", context.Background(), map[string]string{
 			"HasChunks": "unauthenticated", "CommitObject": "unauthenticated", "GetObject": "unauthenticated",
-			"ListObjects": "unauthenticated", "UpdateObjectMetadata": "unauthenticated", "DeleteObject": "unauthenticated",
+			"UpdateObjectMetadata": "unauthenticated", "DeleteObject": "unauthenticated",
 		}},
 		{"wrong service key", as(headerServiceKey, "nope"), map[string]string{
 			"HasChunks": "unauthenticated", "CommitObject": "unauthenticated", "GetObject": "unauthenticated",
-			"ListObjects": "unauthenticated", "UpdateObjectMetadata": "unauthenticated", "DeleteObject": "unauthenticated",
+			"UpdateObjectMetadata": "unauthenticated", "DeleteObject": "unauthenticated",
 		}},
 		{"service key", service(), map[string]string{
 			"HasChunks": "ok", "CommitObject": "ok", "GetObject": "ok",
-			"ListObjects": "ok", "UpdateObjectMetadata": "ok", "DeleteObject": "not_found",
+			"UpdateObjectMetadata": "ok", "DeleteObject": "not_found",
 		}},
 		{"upload ticket", bearer(uploadTicket(t, commit.GetNamespace(), commit.GetSizeBytes())), map[string]string{
 			"HasChunks": "ok", "CommitObject": "ok", "GetObject": "permission_denied",
-			"ListObjects": "permission_denied", "UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
+			"UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
 		}},
 		{"read ticket for the object", bearer(mint(t, ticket.Claims{Kind: ticket.KindRead, ObjectID: obj.GetId()})), map[string]string{
 			"HasChunks": "permission_denied", "CommitObject": "permission_denied", "GetObject": "ok",
-			"ListObjects": "permission_denied", "UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
+			"UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
 		}},
 		{"read ticket for another object", bearer(otherObj), map[string]string{
 			"HasChunks": "permission_denied", "CommitObject": "permission_denied", "GetObject": "permission_denied",
-			"ListObjects": "permission_denied", "UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
+			"UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
 		}},
 		{"thumbnail read ticket", bearer(mint(t, ticket.Claims{Kind: ticket.KindRead, ChunkSHA256: obj.GetChunkHashes()[0]})), map[string]string{
 			"HasChunks": "permission_denied", "CommitObject": "permission_denied", "GetObject": "permission_denied",
-			"ListObjects": "permission_denied", "UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
+			"UpdateObjectMetadata": "permission_denied", "DeleteObject": "permission_denied",
 		}},
 		{"expired ticket", bearer(mint(t, ticket.Claims{Kind: ticket.KindRead, ObjectID: obj.GetId(), Exp: time.Now().Add(-time.Hour).Unix()})), map[string]string{
 			"HasChunks": "unauthenticated", "CommitObject": "unauthenticated", "GetObject": "unauthenticated",
-			"ListObjects": "unauthenticated", "UpdateObjectMetadata": "unauthenticated", "DeleteObject": "unauthenticated",
+			"UpdateObjectMetadata": "unauthenticated", "DeleteObject": "unauthenticated",
 		}},
 	}
 	for _, row := range rows {
@@ -198,11 +194,12 @@ func TestChecksOffAllowsEverything(t *testing.T) {
 	data := pattern(10)
 	h.putChunk(data)
 	req := commitReq(data, 10, []string{sha(data)})
-	if _, err := h.client.CommitObject(context.Background(), req); err != nil {
+	res, err := h.client.CommitObject(context.Background(), req)
+	if err != nil {
 		t.Fatalf("commit without credentials: %v", err)
 	}
-	if _, err := h.client.ListObjects(context.Background(), &lumavaultv1.ListObjectsRequest{Namespace: req.GetNamespace()}); err != nil {
-		t.Fatalf("list without credentials: %v", err)
+	if _, err := h.client.DeleteObject(context.Background(), &lumavaultv1.DeleteObjectRequest{ObjectId: res.GetObject().GetId()}); err != nil {
+		t.Fatalf("delete without credentials: %v", err)
 	}
 }
 
