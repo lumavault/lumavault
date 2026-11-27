@@ -1,10 +1,10 @@
-import type { UploadInput } from './chunking/source.js'
 import type {
   Namespace,
   ObjectMetadata,
 } from './gen/lumavault/v1/storage_pb.js'
 
-export type { UploadInput }
+/** Anything the SDK can upload. A File is a Blob, so it is covered too. */
+export type UploadInput = Blob | Uint8Array
 
 export interface LumaVaultClientOptions {
   /** Storage Gateway base URL, for example http://localhost:8080. */
@@ -14,6 +14,13 @@ export interface LumaVaultClientOptions {
    * only; never set this in a browser or app.
    */
   serviceKey?: string
+}
+
+export interface StreamUrlOptions {
+  /** Read ticket for this object, from the app's API. */
+  ticket?: string
+  /** Ask the gateway for a Content-Disposition attachment header so browsers save the file. */
+  download?: boolean
 }
 
 export interface UploadProgress {

@@ -12,6 +12,18 @@ struct ChunkPlan: Equatable, Sendable {
     let chunkHashes: [String]
 }
 
+/// Picks the chunk size for a file: start at 4 MiB and double until the file fits in at most
+/// 256 chunks, capped at 64 MiB. Deterministic so the same file always yields the same chunks.
+func chunkSize(forFileSize sizeBytes: UInt64) -> Int {
+    var size = ChunkingConstants.minChunkSizeBytes
+    while size < ChunkingConstants.maxChunkSizeBytes
+        && UInt64(size) * UInt64(ChunkingConstants.targetMaxChunks) < sizeBytes
+    {
+        size *= 2
+    }
+    return size
+}
+
 /// Splits the file into chunks and hashes each chunk and the whole file in one pass.
 /// The file is read in small pieces, so memory stays flat even for multi-gigabyte files.
 func planChunks(
@@ -59,4 +71,14 @@ func planChunks(
         sha256Digest: fileHasher.finalize().lowercaseHex,
         chunkHashes: chunkHashes
     )
+}
+
+extension Sequence where Element == UInt8 {
+    /// Lowercase hex, the form the gateway uses for SHA-256 digests.
+    var lowercaseHex: String {
+        map { byte in
+            let hex = String(byte, radix: 16)
+            return byte < 16 ? "0" + hex : hex
+        }.joined()
+    }
 }

@@ -1,7 +1,34 @@
 import { Code, ConnectError } from '@connectrpc/connect'
-import { planChunks } from '#/chunking/plan.js'
+import { chunkSizeFor, planChunks, sliceInput } from '#/chunking.js'
 import { loadVectors, patternBytes } from '#test/support/vectors.js'
 import { describe, expect, it } from 'vitest'
+
+describe('chunkSizeFor', () => {
+  for (const { sizeBytes, chunkSizeBytes } of loadVectors().chunkSizeRule) {
+    it(`picks ${chunkSizeBytes} bytes for a ${sizeBytes}-byte file`, () => {
+      expect(chunkSizeFor(sizeBytes)).toBe(chunkSizeBytes)
+    })
+  }
+})
+
+describe('sliceInput', () => {
+  it('returns a zero-copy subarray for an ArrayBuffer-backed Uint8Array', () => {
+    const bytes = patternBytes(0, 16)
+    const slice = sliceInput(bytes, 4, 10)
+    expect(slice).toBeInstanceOf(Uint8Array)
+    expect(slice).toEqual(bytes.subarray(4, 10))
+    expect((slice as Uint8Array).buffer).toBe(bytes.buffer)
+  })
+
+  it('returns a Blob slice for a Blob', async () => {
+    const bytes = patternBytes(0, 16)
+    const slice = sliceInput(new Blob([bytes]), 4, 10)
+    expect(slice).toBeInstanceOf(Blob)
+    expect(new Uint8Array(await (slice as Blob).arrayBuffer())).toEqual(
+      bytes.subarray(4, 10),
+    )
+  })
+})
 
 describe('planChunks', () => {
   for (const vector of loadVectors().files) {

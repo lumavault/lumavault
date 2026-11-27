@@ -2,8 +2,7 @@ import { create } from '@bufbuild/protobuf'
 import type { Client } from '@connectrpc/connect'
 import { Code, ConnectError } from '@connectrpc/connect'
 
-import { planChunks, type ChunkPlan } from './chunking/plan.js'
-import { forEachConcurrent } from './concurrency.js'
+import { planChunks, sliceInput, type ChunkPlan } from './chunking.js'
 import { DEFAULT_UPLOAD_CONCURRENCY } from './constants.js'
 import { putChunk } from './dataplane.js'
 import {
@@ -61,14 +60,16 @@ export async function upload(
     toSend,
     options.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY,
     async (i) => {
+      const start = i * plan.chunkSizeBytes
+      const length = chunkLength(plan, i)
       await putChunk(
         baseUrl,
         plan.chunkHashes[i] as string,
-        chunkBody(input, plan, i),
+        sliceInput(input, start, start + length),
         headers,
         signal,
       )
-      loaded += chunkLength(plan, i)
+      loaded += length
       report('uploading', loaded, plan.sizeBytes)
     },
   )
@@ -95,6 +96,30 @@ export async function upload(
   return res.object
 }
 
+/** Runs worker over items with at most limit calls in flight, stopping at the first failure. */
+export async function forEachConcurrent<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0
+  let failed = false
+  const lane = async () => {
+    while (!failed && next < items.length) {
+      const item = items[next++] as T
+      try {
+        await worker(item)
+      } catch (err) {
+        failed = true
+        throw err
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, lane),
+  )
+}
+
 // A file can repeat the same chunk, such as runs of zeros; send each distinct hash once.
 function uniqueChunkIndexes(plan: ChunkPlan): number[] {
   const seen = new Set<string>()
@@ -108,23 +133,6 @@ function chunkLength(plan: ChunkPlan, index: number): number {
     plan.chunkSizeBytes,
     plan.sizeBytes - index * plan.chunkSizeBytes,
   )
-}
-
-// Blob slices stream from disk when sent, so parallel uploads hold almost nothing in memory.
-function chunkBody(
-  input: UploadInput,
-  plan: ChunkPlan,
-  index: number,
-): Blob | Uint8Array<ArrayBuffer> {
-  const start = index * plan.chunkSizeBytes
-  const end = start + chunkLength(plan, index)
-  if (input instanceof Blob) {
-    return input.slice(start, end)
-  }
-  const view = input.subarray(start, end)
-  return view.buffer instanceof ArrayBuffer
-    ? (view as Uint8Array<ArrayBuffer>)
-    : new Uint8Array(view)
 }
 
 function progressReporter(onProgress?: (p: UploadProgress) => void) {
