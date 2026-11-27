@@ -1,4 +1,4 @@
-import { sql, type SQL } from 'drizzle-orm'
+import { and, eq, isNull, sql, type SQL } from 'drizzle-orm'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
 /** A bigint parameter. node-postgres cannot send BigInt values itself. */
@@ -9,6 +9,19 @@ export function big(value: bigint): SQL {
 /** A text parameter cast to uuid, for IDs that come from clients. Pair with noRowsOnBadUuid. */
 export function uuid(value: string): SQL {
   return sql`${value}::uuid`
+}
+
+/** Normalizes a timestamp returned from a Postgres aggregate (string or Date) into a Date. */
+export function asDate(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value)
+}
+
+/** Join condition matching an active (unreleased) object claim on objectId. */
+export function activeClaimOn(
+  claim: { objectId: AnyPgColumn; releasedAt: AnyPgColumn },
+  objectIdColumn: AnyPgColumn,
+): SQL {
+  return and(eq(claim.objectId, objectIdColumn), isNull(claim.releasedAt))!
 }
 
 /** A LIKE pattern matching text that contains value, with its wildcards taken literally. */
