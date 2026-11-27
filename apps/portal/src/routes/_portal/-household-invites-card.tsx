@@ -1,9 +1,5 @@
 import * as React from 'react'
-import {
-  IamService,
-  Role,
-  type MemberInvite,
-} from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
+import { IamService, Role } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { emailSchema } from '@lumavault/ui/auth'
 import {
   Alert,
@@ -43,33 +39,25 @@ import {
   TableHeader,
   TableRow,
 } from '@lumavault/ui/components/ui/table'
-import { roleLabel } from '@lumavault/ui/household'
-import { useMutation } from '@lumavault/ui/rpc'
+import { ASSIGNABLE_ROLE_ITEMS, roleLabel } from '@lumavault/ui/household'
+import { useMutation, useQuery } from '@lumavault/ui/rpc'
 import { CopyLinkAlert } from '#/components/copy-link-alert'
 import { formatDate, rpcErrorMessage } from '#/lib/format'
 import { AlertCircleIcon, MailPlusIcon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
-const ROLE_ITEMS = { admin: 'Admin', member: 'Member' } as const
+import { useRefreshHousehold } from './-household-members-card'
 
-export interface HouseholdInvitesCardProps {
-  pendingInvites: readonly MemberInvite[]
-  seatsRemaining: number | undefined
-  onRefreshMembers: () => Promise<void>
-}
-
-export function HouseholdInvitesCard({
-  pendingInvites,
-  seatsRemaining,
-  onRefreshMembers,
-}: HouseholdInvitesCardProps) {
+export function HouseholdInvitesCard() {
+  const membersQuery = useQuery(IamService.method.listMembers)
+  const onRefresh = useRefreshHousehold()
+  const pendingInvites = membersQuery.data?.pendingInvites ?? []
+  const seatsRemaining = membersQuery.data?.seatsRemaining
   const inviteMember = useMutation(IamService.method.inviteMember)
   const cancelInvite = useMutation(IamService.method.cancelMemberInvite)
 
   const [inviteEmail, setInviteEmail] = React.useState('')
-  const [inviteRole, setInviteRole] = React.useState<'member' | 'admin'>(
-    'member',
-  )
+  const [inviteRole, setInviteRole] = React.useState<Role>(Role.MEMBER)
   const [inviteEmailError, setInviteEmailError] = React.useState<string | null>(
     null,
   )
@@ -79,8 +67,7 @@ export function HouseholdInvitesCard({
   )
 
   const noSeats = seatsRemaining === 0
-  const formDisabled =
-    inviteMember.isPending || seatsRemaining === undefined || noSeats
+  const formDisabled = inviteMember.isPending || noSeats
 
   async function handleInviteSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -99,11 +86,11 @@ export function HouseholdInvitesCard({
     try {
       const res = await inviteMember.mutateAsync({
         email: parsed.data,
-        role: inviteRole === 'admin' ? Role.ADMIN : Role.MEMBER,
+        role: inviteRole,
       })
       setInviteEmail('')
       setCreatedInviteUrl(res.inviteUrl)
-      await onRefreshMembers()
+      await onRefresh()
       toast.success('Member invite created and emailed.')
     } catch (err) {
       setInviteError(rpcErrorMessage(err, 'Could not create invite.'))
@@ -114,7 +101,7 @@ export function HouseholdInvitesCard({
     setInviteError(null)
     try {
       await cancelInvite.mutateAsync({ inviteId })
-      await onRefreshMembers()
+      await onRefresh()
       toast.success('Invite cancelled.')
     } catch (err) {
       setInviteError(rpcErrorMessage(err, 'Could not cancel invite.'))
@@ -192,10 +179,10 @@ export function HouseholdInvitesCard({
             <Field className="sm:w-36">
               <FieldLabel htmlFor="member-invite-role">Role</FieldLabel>
               <Select
-                items={ROLE_ITEMS}
+                items={ASSIGNABLE_ROLE_ITEMS}
                 value={inviteRole}
                 onValueChange={(v) => {
-                  if (v === 'admin' || v === 'member') setInviteRole(v)
+                  if (v !== null) setInviteRole(v)
                 }}
                 disabled={formDisabled}
               >
@@ -204,8 +191,11 @@ export function HouseholdInvitesCard({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="member">Member</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    {ASSIGNABLE_ROLE_ITEMS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -257,6 +247,7 @@ export function HouseholdInvitesCard({
                         size="sm"
                         disabled={cancelInvite.isPending}
                         onClick={() => void handleCancelInvite(invite.id)}
+                        aria-label={`Cancel invite for ${invite.email}`}
                       >
                         <XIcon data-icon="inline-start" />
                         Cancel

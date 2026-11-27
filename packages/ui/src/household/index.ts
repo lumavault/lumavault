@@ -1,4 +1,5 @@
 export {
+  ASSIGNABLE_ROLE_ITEMS,
   appLabel,
   hasEnabledApp,
   isAdminRole,

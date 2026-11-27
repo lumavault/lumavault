@@ -38,6 +38,12 @@ export function roleLabel(role: Role): string {
   }
 }
 
+// Owner is excluded because ownership moves only through TransferOwnership.
+export const ASSIGNABLE_ROLE_ITEMS = [
+  { value: Role.MEMBER, label: roleLabel(Role.MEMBER) },
+  { value: Role.ADMIN, label: roleLabel(Role.ADMIN) },
+]
+
 export function appLabel(app: App): string {
   switch (app) {
     case App.PHOTOS:

@@ -1,6 +1,6 @@
 const PORTAL_LOOP_PREFIXES = ['/login', '/setup'] as const
 
-export interface ValidateReturnUrlOptions {
+interface ValidateReturnUrlOptions {
   portalOrigin: string
   allowedOrigins: readonly string[]
 }
@@ -35,11 +35,7 @@ export function validateReturnUrl(
   }
 
   // Reject protocol-relative URLs and backslash tricks before URL parsing.
-  if (
-    trimmed.startsWith('//') ||
-    trimmed.startsWith('/\\') ||
-    trimmed.includes('\\')
-  ) {
+  if (trimmed.startsWith('//') || trimmed.includes('\\')) {
     return null
   }
 

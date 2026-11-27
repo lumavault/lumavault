@@ -16,7 +16,15 @@ import {
 import { TooltipProvider } from '@lumavault/ui/components/ui/tooltip'
 import { Link, useLocation } from '@tanstack/react-router'
 
-import { AppSidebar } from './app-sidebar'
+import {
+  ADMIN_NAV,
+  AppSidebar,
+  isRouteActive,
+  PRIMARY_NAV,
+} from './app-sidebar'
+
+// Account lives in the user menu rather than the sidebar nav.
+const ACCOUNT_PAGE = { title: 'Account', to: '/account' }
 
 interface BreadcrumbTrail {
   parent?: { label: string; to: '/' | '/admin/households' }
@@ -27,34 +35,20 @@ function breadcrumbsFor(pathname: string): BreadcrumbTrail {
   if (pathname === '/' || pathname === '') {
     return { current: 'Home' }
   }
-  if (pathname.startsWith('/household')) {
-    return { parent: { label: 'Portal', to: '/' }, current: 'Household' }
-  }
-  if (pathname.startsWith('/pair')) {
-    return { parent: { label: 'Portal', to: '/' }, current: 'Pair TV' }
-  }
-  if (pathname.startsWith('/account')) {
-    return { parent: { label: 'Portal', to: '/' }, current: 'Account' }
-  }
-  if (pathname.startsWith('/admin/invites')) {
-    return {
-      parent: { label: 'Server Admin', to: '/admin/households' },
-      current: 'Invites',
-    }
-  }
-  if (pathname.startsWith('/admin/users')) {
-    return {
-      parent: { label: 'Server Admin', to: '/admin/households' },
-      current: 'Users',
-    }
-  }
   if (pathname.startsWith('/admin')) {
+    const page = ADMIN_NAV.find((item) => isRouteActive(pathname, item.to))
     return {
       parent: { label: 'Server Admin', to: '/admin/households' },
-      current: 'Households',
+      current: page?.title ?? 'Households',
     }
   }
-  return { parent: { label: 'Portal', to: '/' }, current: 'Portal' }
+  const page = [...PRIMARY_NAV, ACCOUNT_PAGE].find(
+    (item) => item.to !== '/' && isRouteActive(pathname, item.to),
+  )
+  return {
+    parent: { label: 'Portal', to: '/' },
+    current: page?.title ?? 'Portal',
+  }
 }
 
 export interface PortalShellProps {

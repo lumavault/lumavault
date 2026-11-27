@@ -1,4 +1,3 @@
-import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { Badge } from '@lumavault/ui/components/ui/badge'
 import {
   Card,
@@ -15,17 +14,12 @@ import {
   EmptyTitle,
 } from '@lumavault/ui/components/ui/empty'
 import { Progress } from '@lumavault/ui/components/ui/progress'
-import { useViewer, viewerQueryKey } from '@lumavault/ui/household'
+import { useViewer } from '@lumavault/ui/household'
 import {
   computeStorageSummary,
   formatBytes,
   formatStorageCap,
 } from '@lumavault/ui/lib/format-bytes'
-import {
-  createConnectQueryKey,
-  useQuery,
-  useQueryClient,
-} from '@lumavault/ui/rpc'
 import { createFileRoute } from '@tanstack/react-router'
 import { HardDriveIcon, UsersIcon } from 'lucide-react'
 
@@ -34,27 +28,6 @@ import { HouseholdMembersCard } from './-household-members-card'
 
 function HouseholdPage() {
   const viewer = useViewer()
-  const queryClient = useQueryClient()
-
-  const membersQuery = useQuery(IamService.method.listMembers, undefined, {
-    enabled: viewer.hasHousehold,
-  })
-
-  const membersQueryKey = createConnectQueryKey({
-    schema: IamService.method.listMembers,
-    cardinality: 'finite',
-  })
-
-  async function refreshMembers() {
-    await queryClient.invalidateQueries({ queryKey: membersQueryKey })
-  }
-
-  async function refreshHouseholdData() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: membersQueryKey }),
-      queryClient.invalidateQueries({ queryKey: viewerQueryKey() }),
-    ])
-  }
 
   if (!viewer.household) {
     return (
@@ -83,12 +56,9 @@ function HouseholdPage() {
   }
 
   const capBytes = viewer.household.allowance?.storageCapBytes ?? 0n
-  const memberLimit = viewer.household.allowance?.memberLimit ?? 0
   const summary = viewer.usage
     ? computeStorageSummary(viewer.usage, capBytes)
     : null
-  const members = membersQuery.data?.members ?? []
-  const pendingInvites = membersQuery.data?.pendingInvites ?? []
 
   return (
     <div className="flex max-w-4xl flex-col gap-6">
@@ -137,23 +107,9 @@ function HouseholdPage() {
         </Card>
       ) : null}
 
-      <HouseholdMembersCard
-        householdName={viewer.household.name}
-        memberLimit={memberLimit}
-        members={members}
-        pendingCount={pendingInvites.length}
-        isPending={membersQuery.isPending}
-        loadError={membersQuery.error}
-        onRefresh={refreshHouseholdData}
-      />
+      <HouseholdMembersCard />
 
-      {viewer.isHouseholdAdmin ? (
-        <HouseholdInvitesCard
-          pendingInvites={pendingInvites}
-          seatsRemaining={membersQuery.data?.seatsRemaining}
-          onRefreshMembers={refreshMembers}
-        />
-      ) : null}
+      {viewer.isHouseholdAdmin ? <HouseholdInvitesCard /> : null}
     </div>
   )
 }
