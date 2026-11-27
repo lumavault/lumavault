@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { InvitePage } from './-invite-page'
+import { InvitePage, inviteSearch } from './-invite-page'
 
 function MemberInviteRoute() {
   const { id } = Route.useParams()
@@ -15,8 +15,6 @@ function MemberInviteRoute() {
 }
 
 export const Route = createFileRoute('/invite/member/$id')({
-  validateSearch: (search: Record<string, unknown>) => ({
-    error: typeof search.error === 'string' ? search.error : undefined,
-  }),
+  validateSearch: inviteSearch,
   component: MemberInviteRoute,
 })

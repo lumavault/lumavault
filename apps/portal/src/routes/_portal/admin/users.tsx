@@ -130,44 +130,42 @@ function AdminUsersPage() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Access</TableHead>
-                    <TableHead>Joined</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Access</TableHead>
+                  <TableHead>Joined</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      {user.isSuperAdmin ? (
+                        <Badge>Super-Admin</Badge>
+                      ) : (
+                        <Badge variant="secondary">User</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(user.createdAt)}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        {user.isSuperAdmin ? (
-                          <Badge>Super-Admin</Badge>
-                        ) : (
-                          <Badge variant="secondary">User</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(user.createdAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              <CursorPagination
-                hasPrevious={pagination.hasPrevious}
-                nextPageToken={nextPageToken}
-                onPrevious={pagination.goPrevious}
-                onNext={pagination.goNext}
-              />
-            </>
+                ))}
+              </TableBody>
+            </Table>
           )}
+
+          <CursorPagination
+            hasPrevious={pagination.hasPrevious}
+            nextPageToken={nextPageToken}
+            onPrevious={pagination.goPrevious}
+            onNext={pagination.goNext}
+          />
         </CardContent>
       </Card>
     </div>

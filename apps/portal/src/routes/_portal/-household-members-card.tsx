@@ -41,34 +41,46 @@ import {
   TableHeader,
   TableRow,
 } from '@lumavault/ui/components/ui/table'
-import { roleLabel, useViewer } from '@lumavault/ui/household'
-import { useMutation } from '@lumavault/ui/rpc'
+import {
+  ASSIGNABLE_ROLE_ITEMS,
+  roleLabel,
+  useViewer,
+  viewerQueryKey,
+} from '@lumavault/ui/household'
+import {
+  createConnectQueryKey,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@lumavault/ui/rpc'
 import { formatDate, rpcErrorMessage } from '#/lib/format'
 import { AlertCircleIcon, CrownIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
-const ROLE_ITEMS = { admin: 'Admin', member: 'Member' } as const
-
-export interface HouseholdMembersCardProps {
-  householdName: string
-  memberLimit: number
-  members: readonly Member[]
-  pendingCount: number
-  isPending: boolean
-  loadError: unknown
-  onRefresh: () => Promise<void>
+// Invalidates both members and viewer, since role, ownership, and invite changes touch both.
+export function useRefreshHousehold() {
+  const queryClient = useQueryClient()
+  return async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: createConnectQueryKey({
+          schema: IamService.method.listMembers,
+          cardinality: 'finite',
+        }),
+      }),
+      queryClient.invalidateQueries({ queryKey: viewerQueryKey() }),
+    ])
+  }
 }
 
-export function HouseholdMembersCard({
-  householdName,
-  memberLimit,
-  members,
-  pendingCount,
-  isPending,
-  loadError,
-  onRefresh,
-}: HouseholdMembersCardProps) {
+export function HouseholdMembersCard() {
   const viewer = useViewer()
+  const membersQuery = useQuery(IamService.method.listMembers)
+  const onRefresh = useRefreshHousehold()
+  const householdName = viewer.household?.name ?? ''
+  const memberLimit = viewer.household?.allowance?.memberLimit ?? 0
+  const members = membersQuery.data?.members ?? []
+  const pendingCount = membersQuery.data?.pendingInvites.length ?? 0
   const updateRole = useMutation(IamService.method.updateMemberRole)
   const transferOwnership = useMutation(IamService.method.transferOwnership)
 
@@ -78,14 +90,9 @@ export function HouseholdMembersCard({
   )
   const [selfDemoteOpen, setSelfDemoteOpen] = React.useState(false)
 
-  async function handleRoleChange(member: Member, nextValue: string | null) {
-    if (!member.user || (nextValue !== 'admin' && nextValue !== 'member')) {
-      return
-    }
-    const nextRole = nextValue === 'admin' ? Role.ADMIN : Role.MEMBER
-    if (nextRole === member.role) return
+  async function handleRoleChange(member: Member, nextRole: Role | null) {
+    if (!member.user || nextRole === null || nextRole === member.role) return
 
-    // Guard Admin self-demotion behind a confirmation dialog.
     if (
       member.user.id === viewer.user?.id &&
       viewer.role === Role.ADMIN &&
@@ -167,16 +174,16 @@ export function HouseholdMembersCard({
             </Alert>
           ) : null}
 
-          {isPending ? (
+          {membersQuery.isPending ? (
             <div className="flex flex-col gap-2">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : loadError ? (
+          ) : membersQuery.error ? (
             <Alert variant="destructive">
               <AlertCircleIcon />
               <AlertDescription>
-                {rpcErrorMessage(loadError, 'Could not load members.')}
+                {rpcErrorMessage(membersQuery.error, 'Could not load members.')}
               </AlertDescription>
             </Alert>
           ) : (
@@ -197,8 +204,6 @@ export function HouseholdMembersCard({
                   if (!user) return null
                   const isOwner = member.role === Role.OWNER
                   const canEditRole = viewer.isHouseholdAdmin && !isOwner
-                  const roleValue =
-                    member.role === Role.ADMIN ? 'admin' : 'member'
 
                   return (
                     <TableRow key={user.id}>
@@ -216,8 +221,8 @@ export function HouseholdMembersCard({
                       <TableCell>
                         {canEditRole ? (
                           <Select
-                            items={ROLE_ITEMS}
-                            value={roleValue}
+                            items={ASSIGNABLE_ROLE_ITEMS}
+                            value={member.role}
                             onValueChange={(val) =>
                               void handleRoleChange(member, val)
                             }
@@ -231,8 +236,14 @@ export function HouseholdMembersCard({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="member">Member</SelectItem>
+                                {ASSIGNABLE_ROLE_ITEMS.map((item) => (
+                                  <SelectItem
+                                    key={item.value}
+                                    value={item.value}
+                                  >
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
                               </SelectGroup>
                             </SelectContent>
                           </Select>

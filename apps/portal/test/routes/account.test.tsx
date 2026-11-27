@@ -68,33 +68,46 @@ describe('Account route (/account)', () => {
       expect(changePassword).toHaveBeenCalledWith({
         currentPassword: 'old-password',
         newPassword: 'new-secure-password',
-        revokeOtherSessions: false,
+        revokeOtherSessions: true,
       })
     })
-    expect(
-      await screen.findByText('Your password has been updated.'),
-    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Current password')).toHaveValue('')
+    })
   })
 
-  it('hides the password form for passwordless accounts and signs out to /login', async () => {
-    const signOut = vi.fn(async () => ({ data: {} }))
+  it('hides the password form for passwordless accounts', async () => {
     const authClient = createFakeAuthClient({
       listAccounts: vi.fn(async () => ({ data: [] })),
-      signOut,
     })
 
-    const { router } = renderPortal({ initialPath: '/account', authClient })
+    renderPortal({ initialPath: '/account', authClient })
 
     expect(
       await screen.findByText(/does not have a password set/i),
     ).toBeInTheDocument()
     expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    await waitFor(() => {
-      expect(signOut).toHaveBeenCalled()
-      expect(router.state.location.pathname).toBe('/login')
+  it('maps a thrown network error when adding a passkey', async () => {
+    const authClient = createFakeAuthClient({
+      passkey: {
+        listUserPasskeys: vi.fn(async () => ({ data: [] })),
+        addPasskey: vi.fn(async () => {
+          throw new TypeError('Failed to fetch')
+        }),
+        deletePasskey: vi.fn(),
+      },
     })
+
+    renderPortal({ initialPath: '/account', authClient })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add passkey' }))
+    expect(
+      await screen.findByText(
+        'Could not reach the server. Check your connection and try again.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('shows an error alert instead of "no password set" when listAccounts fails', async () => {

@@ -54,19 +54,22 @@ interface NavItem {
   icon: React.ComponentType
 }
 
-const PRIMARY_NAV: readonly NavItem[] = [
+export const PRIMARY_NAV: readonly NavItem[] = [
   { title: 'Home', to: '/', icon: HomeIcon },
   { title: 'Household', to: '/household', icon: UsersIcon },
   { title: 'Pair TV', to: '/pair', icon: TvIcon },
 ]
 
-const ADMIN_NAV: readonly NavItem[] = [
+export const ADMIN_NAV: readonly NavItem[] = [
   { title: 'Households', to: '/admin/households', icon: Building2Icon },
   { title: 'Invites', to: '/admin/invites', icon: MailIcon },
   { title: 'Users', to: '/admin/users', icon: UsersIcon },
 ]
 
-function initialsFor(name: string | undefined, email: string | undefined) {
+export function initialsFor(
+  name: string | undefined,
+  email: string | undefined,
+) {
   const source = name?.trim() || email?.trim() || 'U'
   const parts = source.split(/\s+/).filter(Boolean)
   if (parts.length >= 2) {
@@ -75,7 +78,7 @@ function initialsFor(name: string | undefined, email: string | undefined) {
   return source.slice(0, 2).toUpperCase()
 }
 
-function isRouteActive(pathname: string, target: string): boolean {
+export function isRouteActive(pathname: string, target: string): boolean {
   if (target === '/') {
     return pathname === '/'
   }
@@ -116,7 +119,7 @@ function NavUser() {
   const name = viewer.user?.name || 'Account'
   const email = viewer.user?.email || ''
   const avatar = viewer.user?.imageUrl || ''
-  const initials = initialsFor(name, email)
+  const initials = initialsFor(viewer.user?.name, email)
 
   async function handleSignOut() {
     const ok = await signOut()
@@ -184,9 +187,39 @@ function NavUser() {
   )
 }
 
+function NavGroup({
+  label,
+  items,
+}: {
+  label: string
+  items: readonly NavItem[]
+}) {
+  const location = useLocation()
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item) => (
+            <SidebarMenuItem key={item.to}>
+              <SidebarMenuButton
+                isActive={isRouteActive(location.pathname, item.to)}
+                tooltip={item.title}
+                render={<Link to={item.to} />}
+              >
+                <item.icon />
+                <span>{item.title}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
+
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const viewer = useViewer()
-  const location = useLocation()
   const householdName = viewer.household?.name ?? 'No household'
 
   return (
@@ -210,46 +243,9 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Portal</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {PRIMARY_NAV.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    isActive={isRouteActive(location.pathname, item.to)}
-                    tooltip={item.title}
-                    render={<Link to={item.to} />}
-                  >
-                    <item.icon />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
+        <NavGroup label="Portal" items={PRIMARY_NAV} />
         {viewer.isSuperAdmin ? (
-          <SidebarGroup>
-            <SidebarGroupLabel>Server Admin</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {ADMIN_NAV.map((item) => (
-                  <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton
-                      isActive={isRouteActive(location.pathname, item.to)}
-                      tooltip={item.title}
-                      render={<Link to={item.to} />}
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <NavGroup label="Server Admin" items={ADMIN_NAV} />
         ) : null}
       </SidebarContent>
 

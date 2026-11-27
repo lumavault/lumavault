@@ -9,7 +9,7 @@ import {
 import { describe, expect, it } from 'vitest'
 
 describe('storage cap and member limit helpers', () => {
-  it('converts storage caps to GB, TB, or unlimited drafts', () => {
+  it('converts storage caps to exact drafts so re-saving never shrinks them', () => {
     expect(capBytesToDraft(MAX_STORAGE_CAP_BYTES)).toEqual({
       unlimited: true,
       amount: '100',
@@ -25,6 +25,23 @@ describe('storage cap and member limit helpers', () => {
       amount: '500',
       unit: 'GB',
     })
+    expect(capBytesToDraft(1536n * CAP_UNIT_BYTES.MB)).toEqual({
+      unlimited: false,
+      amount: '1536',
+      unit: 'MB',
+    })
+    expect(capBytesToDraft(1_000_000n)).toEqual({
+      unlimited: false,
+      amount: '1000000',
+      unit: 'B',
+    })
+    for (const cap of [
+      1536n * CAP_UNIT_BYTES.MB,
+      1_000_000n,
+      5n * CAP_UNIT_BYTES.GB,
+    ]) {
+      expect(parseStorageCapDraft(capBytesToDraft(cap))).toBe(cap)
+    }
     expect(capBytesToDraft(0n)).toEqual({
       unlimited: false,
       amount: '1',

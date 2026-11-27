@@ -2,34 +2,13 @@ import { create } from '@bufbuild/protobuf'
 import {
   App,
   CreateHouseholdInviteResponseSchema,
-  GetViewerResponseSchema,
   ListHouseholdInvitesResponseSchema,
   RevokeHouseholdInviteResponseSchema,
-  Role,
 } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderPortal } from '#test/support/render-portal'
+import { superAdminViewer } from '#test/support/viewers'
 import { describe, expect, it } from 'vitest'
-
-const ADMIN_VIEWER = create(GetViewerResponseSchema, {
-  user: {
-    id: 'admin-1',
-    name: 'Server Owner',
-    email: 'admin@example.com',
-    isSuperAdmin: true,
-  },
-  household: {
-    id: 'house-1',
-    name: 'Owner Home',
-    ownerUserId: 'admin-1',
-    allowance: {
-      storageCapBytes: 500n * 1024n ** 3n,
-      enabledApps: [App.PHOTOS],
-      memberLimit: 4,
-    },
-  },
-  role: Role.OWNER,
-})
 
 describe('Super-Admin invites route (/admin/invites)', () => {
   it('creates a household invite showing the one-time link and revokes existing invites', async () => {
@@ -49,7 +28,7 @@ describe('Super-Admin invites route (/admin/invites)', () => {
     renderPortal({
       initialPath: '/admin/invites',
       iamHandlers: {
-        getViewer: () => ADMIN_VIEWER,
+        getViewer: () => superAdminViewer(),
         listHouseholdInvites: () =>
           create(ListHouseholdInvitesResponseSchema, {
             invites: [...openInvites],
@@ -85,7 +64,14 @@ describe('Super-Admin invites route (/admin/invites)', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'New household invite' }),
     )
-    fireEvent.change(await screen.findByLabelText('Email'), {
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create invite' }),
+    )
+    expect(await screen.findByLabelText('Email')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
+    fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'friend@example.com' },
     })
     fireEvent.change(screen.getByLabelText('Note (optional)'), {
