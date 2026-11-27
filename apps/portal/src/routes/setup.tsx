@@ -1,7 +1,7 @@
 import * as React from 'react'
-import { createClient } from '@connectrpc/connect'
+import { createQueryOptions } from '@connectrpc/connect-query'
 import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import { emailSchema, passwordSchema } from '@lumavault/ui/auth'
+import { signUpPasswordSchema } from '@lumavault/ui/auth'
 import {
   Alert,
   AlertDescription,
@@ -24,7 +24,6 @@ import {
 } from '@lumavault/ui/components/ui/field'
 import { Input } from '@lumavault/ui/components/ui/input'
 import { Spinner } from '@lumavault/ui/components/ui/spinner'
-import { viewerQueryKey } from '@lumavault/ui/household'
 import {
   createConnectQueryKey,
   useMutation,
@@ -38,11 +37,8 @@ import { rpcErrorMessage, zodFieldErrors } from '#/lib/format'
 import { AlertCircleIcon, InfoIcon } from 'lucide-react'
 import { z } from 'zod'
 
-const setupSchema = z
-  .object({
-    name: z.string().trim().min(1, 'Enter your name.'),
-    email: emailSchema,
-    password: passwordSchema,
+const setupSchema = signUpPasswordSchema
+  .extend({
     confirmPassword: z.string().min(1, 'Confirm your password.'),
     householdName: z.string().trim().min(1, 'Enter a name for your household.'),
   })
@@ -71,8 +67,7 @@ function SetupPage() {
   const [submitError, setSubmitError] = React.useState<string | null>(null)
   const [isFinishing, setIsFinishing] = React.useState(false)
 
-  const alreadySetUp =
-    !setupQuery.isPending && setupQuery.data?.needsSetup === false
+  const alreadySetUp = setupQuery.data?.needsSetup === false
 
   React.useEffect(() => {
     if (alreadySetUp && !isFinishing) {
@@ -80,7 +75,7 @@ function SetupPage() {
     }
   }, [alreadySetUp, isFinishing, router])
 
-  if (setupQuery.isPending || (alreadySetUp && !isFinishing)) {
+  if (alreadySetUp && !isFinishing) {
     return (
       <AuthLayout>
         <div className="flex justify-center py-8">
@@ -128,12 +123,14 @@ function SetupPage() {
       })
 
       // Verify whether CompleteSetup's best-effort sign-in established a session cookie.
-      const iamClient = createClient(IamService, transport)
       let signedIn = false
       try {
-        const viewerRes = await iamClient.getViewer({})
-        signedIn = Boolean(viewerRes.user)
-        await queryClient.invalidateQueries({ queryKey: viewerQueryKey() })
+        const viewer = await queryClient.fetchQuery(
+          createQueryOptions(IamService.method.getViewer, undefined, {
+            transport,
+          }),
+        )
+        signedIn = Boolean(viewer.user)
       } catch {
         signedIn = false
       }
@@ -154,8 +151,6 @@ function SetupPage() {
       )
     }
   }
-
-  const busy = completeSetup.isPending || isFinishing
 
   return (
     <AuthLayout>
@@ -195,7 +190,7 @@ function SetupPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.name) || undefined}
-                  disabled={busy}
+                  disabled={isFinishing}
                 />
                 {fieldErrors.name ? (
                   <FieldError>{fieldErrors.name}</FieldError>
@@ -211,7 +206,7 @@ function SetupPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.email) || undefined}
-                  disabled={busy}
+                  disabled={isFinishing}
                 />
                 {fieldErrors.email ? (
                   <FieldError>{fieldErrors.email}</FieldError>
@@ -226,7 +221,7 @@ function SetupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.password) || undefined}
-                  disabled={busy}
+                  disabled={isFinishing}
                 />
                 {fieldErrors.password ? (
                   <FieldError>{fieldErrors.password}</FieldError>
@@ -247,7 +242,7 @@ function SetupPage() {
                   aria-invalid={
                     Boolean(fieldErrors.confirmPassword) || undefined
                   }
-                  disabled={busy}
+                  disabled={isFinishing}
                 />
                 {fieldErrors.confirmPassword ? (
                   <FieldError>{fieldErrors.confirmPassword}</FieldError>
@@ -262,19 +257,19 @@ function SetupPage() {
                 </FieldLabel>
                 <Input
                   id="setup-household"
-                  placeholder="For example, Agrawal Home"
+                  placeholder="For example, Smith Family"
                   value={householdName}
                   onChange={(e) => setHouseholdName(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.householdName) || undefined}
-                  disabled={busy}
+                  disabled={isFinishing}
                 />
                 {fieldErrors.householdName ? (
                   <FieldError>{fieldErrors.householdName}</FieldError>
                 ) : null}
               </Field>
 
-              <Button type="submit" disabled={busy} className="w-full">
-                {busy ? <Spinner data-icon="inline-start" /> : null}
+              <Button type="submit" disabled={isFinishing} className="w-full">
+                {isFinishing ? <Spinner data-icon="inline-start" /> : null}
                 Complete setup
               </Button>
             </FieldGroup>
