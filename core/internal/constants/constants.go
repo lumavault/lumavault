@@ -7,4 +7,14 @@ const (
 
 	// SHA256HexLen is the exact character length of a lowercase hex-encoded SHA-256 digest.
 	SHA256HexLen = 64
+
+	// StreamBufferSize is the buffer size (32 KiB) used when streaming chunk data.
+	StreamBufferSize = 32 << 10
+)
+
+// Mutable ObjectMetadata FieldMask paths accepted by UpdateObjectMetadata.
+const (
+	FieldFilename           = "filename"
+	FieldMimeType           = "mime_type"
+	FieldThumbnailChunkHash = "thumbnail_chunk_hash"
 )

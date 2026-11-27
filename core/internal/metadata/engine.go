@@ -9,6 +9,7 @@ import (
 	"time"
 
 	lumavaultv1 "github.com/lumavault/lumavault/core/gen/go/lumavault/v1"
+	"github.com/lumavault/lumavault/core/internal/constants"
 	"github.com/lumavault/lumavault/core/internal/validate"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -339,11 +340,11 @@ func adjustChunkRefsMap(refs map[string]int, obj *lumavaultv1.ObjectMetadata, de
 // applyFieldMaskPath copies a single mutable FieldMask field from src onto updated.
 func applyFieldMaskPath(updated, src *lumavaultv1.ObjectMetadata, path string) error {
 	switch path {
-	case "filename":
+	case constants.FieldFilename:
 		updated.Filename = src.Filename
-	case "mime_type":
+	case constants.FieldMimeType:
 		updated.MimeType = src.MimeType
-	case "thumbnail_chunk_hash":
+	case constants.FieldThumbnailChunkHash:
 		if src.ThumbnailChunkHash != "" {
 			if err := invalidArg(validate.Hash(src.ThumbnailChunkHash)); err != nil {
 				return fmt.Errorf("thumbnail_chunk_hash: %w", err)

@@ -7,11 +7,6 @@ import (
 	"time"
 )
 
-const (
-	// StreamBufferSize is the buffer size (32 KiB) used when streaming chunk uploads to disk.
-	StreamBufferSize int = 32 << 10
-)
-
 var (
 	// ErrChunkNotFound is returned when a requested SHA-256 chunk does not exist in the store.
 	ErrChunkNotFound = errors.New("chunkstore: chunk not found")

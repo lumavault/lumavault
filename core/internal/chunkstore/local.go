@@ -86,7 +86,7 @@ func (s *LocalChunkStore) PutChunk(ctx context.Context, hash string, r io.Reader
 	}()
 
 	hasher := sha256.New()
-	buf := make([]byte, StreamBufferSize)
+	buf := make([]byte, constants.StreamBufferSize)
 	var written int64
 
 	for {

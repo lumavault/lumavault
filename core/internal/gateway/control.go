@@ -6,10 +6,9 @@ import (
 
 	"connectrpc.com/connect/v2"
 	lumavaultv1 "github.com/lumavault/lumavault/core/gen/go/lumavault/v1"
+	"github.com/lumavault/lumavault/core/internal/constants"
 	"github.com/lumavault/lumavault/core/internal/validate"
 )
-
-const updateMaskThumbnail = "thumbnail_chunk_hash"
 
 // HasChunks reports which chunks the client still needs to upload. ChunkStore renews the
 // GC lease on chunks that already exist.
@@ -121,7 +120,7 @@ func (g *gateway) UpdateObjectMetadata(ctx context.Context, req *lumavaultv1.Upd
 		return nil, err
 	}
 	thumb := req.GetObject().GetThumbnailChunkHash()
-	if thumb != "" && slices.Contains(req.GetUpdateMask().GetPaths(), updateMaskThumbnail) {
+	if thumb != "" && slices.Contains(req.GetUpdateMask().GetPaths(), constants.FieldThumbnailChunkHash) {
 		if _, err := g.chunks.StatChunks(ctx, []string{thumb}); err != nil {
 			return nil, toConnectError(ctx, err)
 		}
