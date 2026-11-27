@@ -8,7 +8,7 @@
     "#test/*": "./test/*"
   },
   "scripts": {
-    "dev": "vite --port 3000 --strictPort",
+    "dev": "vite",
     "routes:generate": "tsr generate",
     "build": "tsr generate && vite build",
     "typecheck": "tsr generate && tsc --noEmit",

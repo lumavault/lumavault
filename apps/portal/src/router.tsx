@@ -9,7 +9,7 @@ import {
   RouterProvider,
   type RouterHistory,
 } from '@tanstack/react-router'
-import { portalConfig, type PortalConfig } from '#/config'
+import { portalConfig } from '#/config'
 import { routeTree } from '#/routeTree.gen'
 
 export function createPortalRouter(history?: RouterHistory) {
@@ -26,7 +26,6 @@ declare module '@tanstack/react-router' {
 }
 
 export interface PortalAppProps {
-  config?: PortalConfig
   transport?: Transport
   queryClient?: QueryClient
   authClient?: AuthClient
@@ -34,26 +33,24 @@ export interface PortalAppProps {
 }
 
 export function PortalApp({
-  config = portalConfig,
   transport,
   queryClient,
   authClient,
   router,
 }: PortalAppProps) {
-  const [defaultRouter] = React.useState(() => router ?? createPortalRouter())
-  const resolvedRouter = router ?? defaultRouter
+  const [resolvedRouter] = React.useState(() => router ?? createPortalRouter())
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <RpcProvider
-        apiUrl={config.apiUrl}
+        apiUrl={portalConfig.apiUrl}
         transport={transport}
         queryClient={queryClient}
       >
         <AuthProvider
-          apiUrl={config.apiUrl}
-          portalUrl={config.portalUrl}
-          allowedOrigins={config.allowedOrigins}
+          apiUrl={portalConfig.apiUrl}
+          portalUrl={portalConfig.portalUrl}
+          allowedOrigins={portalConfig.allowedOrigins}
           authClient={authClient}
         >
           <RouterProvider router={resolvedRouter} />

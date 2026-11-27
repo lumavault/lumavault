@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-export const MIN_PASSWORD_LENGTH = 8
-export const MAX_PASSWORD_LENGTH = 128
+const MIN_PASSWORD_LENGTH = 8
+const MAX_PASSWORD_LENGTH = 128
 
 export const emailSchema = z.email('Enter a valid email address.')
 
@@ -42,8 +42,3 @@ export const changePasswordSchema = z
     path: ['confirmPassword'],
     message: 'New passwords do not match.',
   })
-
-export type SignInPasswordInput = z.infer<typeof signInPasswordSchema>
-export type SignUpPasswordInput = z.infer<typeof signUpPasswordSchema>
-export type MagicLinkInput = z.infer<typeof magicLinkSchema>
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>

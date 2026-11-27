@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { viewerQueryKey } from '#household'
 
 import { useAuthClient } from './client'
@@ -16,33 +16,31 @@ export function useRefreshViewer() {
 export function useSignOut() {
   const authClient = useAuthClient()
   const queryClient = useQueryClient()
-  const [isPending, setIsPending] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-
-  const signOut = React.useCallback(async (): Promise<boolean> => {
-    setIsPending(true)
-    setError(null)
-    try {
-      // Cancel in-flight requests before signing out so slow responses cannot repopulate cache.
-      await queryClient.cancelQueries()
+  const mutation = useMutation({
+    // Cancel in-flight requests before signing out so slow responses cannot repopulate cache.
+    onMutate: () => queryClient.cancelQueries(),
+    mutationFn: async () => {
       const result = await authClient.signOut()
       if (result.error) {
-        setError(mapAuthError(result.error))
-        return false
+        throw result.error
       }
-      queryClient.clear()
-      return true
-    } catch (err) {
-      setError(mapAuthError(err))
-      return false
-    } finally {
-      setIsPending(false)
-    }
-  }, [authClient, queryClient])
+    },
+    onSuccess: () => queryClient.clear(),
+  })
+  const { mutateAsync } = mutation
+
+  const signOut = React.useCallback(
+    () =>
+      mutateAsync().then(
+        () => true,
+        () => false,
+      ),
+    [mutateAsync],
+  )
 
   return {
     signOut,
-    isPending,
-    error,
+    isPending: mutation.isPending,
+    error: mutation.error ? mapAuthError(mutation.error) : null,
   }
 }
