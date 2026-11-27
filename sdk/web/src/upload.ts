@@ -39,8 +39,10 @@ export async function upload(
   const report = progressReporter(options.onProgress)
   const signal = options.signal
 
-  const plan = await planChunks(input, (loaded, total) =>
-    report('hashing', loaded, total),
+  const plan = await planChunks(
+    input,
+    (loaded, total) => report('hashing', loaded, total),
+    signal,
   )
   signal?.throwIfAborted()
 

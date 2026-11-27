@@ -31,6 +31,46 @@ import Testing
         #expect(error?.code == .invalidArgument)
     }
 
+    @Test func stopsBeforeHashingWhenTaskIsAlreadyCancelled() async throws {
+        let url = try writeTempFile(Data(count: 2 * ChunkingConstants.minChunkSizeBytes + 1))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let task = Task { () throws -> Int in
+            withUnsafeCurrentTask { $0?.cancel() }
+            var hashedCallbacks = 0
+            do {
+                _ = try planChunks(fileURL: url) { _, _ in hashedCallbacks += 1 }
+                Issue.record("expected planChunks to throw CancellationError")
+            } catch is CancellationError {
+                return hashedCallbacks
+            }
+            return hashedCallbacks
+        }
+
+        #expect(try await task.value == 0)
+    }
+
+    @Test func stopsBetweenChunksWhenCancelledDuringHashing() async throws {
+        let url = try writeTempFile(Data(count: 3 * ChunkingConstants.minChunkSizeBytes + 1))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let task = Task { () throws -> Int in
+            var hashedCallbacks = 0
+            do {
+                _ = try planChunks(fileURL: url) { _, _ in
+                    hashedCallbacks += 1
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+                Issue.record("expected planChunks to throw CancellationError")
+            } catch is CancellationError {
+                return hashedCallbacks
+            }
+            return hashedCallbacks
+        }
+
+        #expect(try await task.value == 1)
+    }
+
     private func writeTempFile(_ data: Data) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("lumavault-chunk-\(UUID().uuidString)")
