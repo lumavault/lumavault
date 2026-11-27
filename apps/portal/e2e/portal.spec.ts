@@ -1,17 +1,13 @@
 import { createClient } from '@connectrpc/connect'
-import { createConnectTransport } from '@connectrpc/connect-web'
 import {
   IamService,
   PairingStatus,
 } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
+import { createRpcTransport } from '@lumavault/ui/rpc'
 import { expect, test } from '@playwright/test'
 
-import { clearMailpit, waitForEmailLink } from './mailpit'
-
-const API_URL = (process.env.E2E_API_URL ?? 'http://localhost:4000').replace(
-  /\/+$/,
-  '',
-)
+const API_URL = 'http://localhost:4000'
+const MAILPIT_URL = 'http://localhost:8025'
 const OWNER_EMAIL = 'owner@example.com'
 const OWNER_PASSWORD = 'owner-password-1234'
 const SECOND_HOUSEHOLD_EMAIL = 'friend@example.com'
@@ -20,10 +16,37 @@ const MEMBER_EMAIL = 'member@example.com'
 const MEMBER_PASSWORD = 'member-password-1234'
 
 function createIamClient() {
-  return createClient(
-    IamService,
-    createConnectTransport({ baseUrl: `${API_URL}/api/rpc` }),
-  )
+  return createClient(IamService, createRpcTransport(API_URL))
+}
+
+// Polls Mailpit for the newest email to recipient and returns the first match of pattern.
+async function waitForEmailLink(
+  recipient: string,
+  pattern: RegExp,
+): Promise<string> {
+  let link = ''
+  await expect
+    .poll(
+      async () => {
+        const query = encodeURIComponent(`to:${recipient}`)
+        const search = await fetch(
+          `${MAILPIT_URL}/api/v1/search?query=${query}`,
+        )
+        const { messages } = (await search.json()) as {
+          messages: { ID: string }[]
+        }
+        if (!messages[0]) return ''
+        const message = await fetch(
+          `${MAILPIT_URL}/api/v1/message/${messages[0].ID}`,
+        )
+        const { Text } = (await message.json()) as { Text: string }
+        link = Text.match(pattern)?.[0] ?? ''
+        return link
+      },
+      { timeout: 15_000 },
+    )
+    .not.toBe('')
+  return link
 }
 
 test.describe.serial('LumaVault Portal end-to-end', () => {
@@ -31,7 +54,7 @@ test.describe.serial('LumaVault Portal end-to-end', () => {
     page,
     context,
   }) => {
-    await clearMailpit()
+    await fetch(`${MAILPIT_URL}/api/v1/messages`, { method: 'DELETE' })
 
     // 1. Fresh install redirects to /setup.
     await page.goto('/')
@@ -112,8 +135,6 @@ test.describe.serial('LumaVault Portal end-to-end', () => {
     browser,
     page,
   }) => {
-    await clearMailpit()
-
     // Sign in as Super-Admin.
     await page.goto('/login')
     await page.getByLabel('Email').fill(OWNER_EMAIL)
@@ -172,8 +193,6 @@ test.describe.serial('LumaVault Portal end-to-end', () => {
     browser,
     page,
   }) => {
-    await clearMailpit()
-
     // Sign in as Friend Owner.
     await page.goto('/login')
     await page.getByLabel('Email').fill(SECOND_HOUSEHOLD_EMAIL)

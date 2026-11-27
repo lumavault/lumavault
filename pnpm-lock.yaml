@@ -360,9 +360,6 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
-      '@connectrpc/connect-web':
-        specifier: ^2.3.0
-        version: 2.3.0(@bufbuild/protobuf@2.17.0)(@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.17.0))
       '@playwright/test':
         specifier: ^1.65.1
         version: 1.65.1

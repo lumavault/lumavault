@@ -1,10 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const apiPort = process.env.E2E_API_PORT ?? '4000'
-const portalPort = process.env.E2E_PORTAL_PORT ?? '3000'
-const apiUrl = process.env.E2E_API_URL ?? `http://localhost:${apiPort}`
-const portalUrl = process.env.E2E_PORTAL_URL ?? `http://localhost:${portalPort}`
-
+// The suite expects an empty database because it runs first-run setup. CI starts from a fresh
+// one; locally, run it against a throwaway database with make dev style settings.
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -13,7 +10,7 @@ export default defineConfig({
   timeout: 60_000,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: portalUrl,
+    baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
   },
   projects: [
@@ -22,42 +19,19 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
+  // Both servers inherit process.env, so the API settings come from CI or the local shell.
   webServer: [
     {
-      command: 'pnpm --dir ../api run start',
-      url: `${apiUrl}/healthz`,
+      command: 'pnpm --dir ../api run dev',
+      url: 'http://localhost:4000/healthz',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
-      env: {
-        PORT: apiPort,
-        DATABASE_URL:
-          process.env.DATABASE_URL ??
-          'postgres://lumavault:lumavault@localhost:5432/lumavault',
-        LUMAVAULT_GATEWAY_URL:
-          process.env.LUMAVAULT_GATEWAY_URL ?? 'http://localhost:8080',
-        LUMAVAULT_TICKET_SECRET:
-          process.env.LUMAVAULT_TICKET_SECRET ??
-          'e2e-only-ticket-secret-0123456789abcdef',
-        LUMAVAULT_SERVICE_KEY:
-          process.env.LUMAVAULT_SERVICE_KEY ??
-          'e2e-only-service-key-0123456789abcdef',
-        BETTER_AUTH_SECRET:
-          process.env.BETTER_AUTH_SECRET ??
-          'e2e-only-better-auth-secret-0123456789abcdef',
-        LUMAVAULT_PORTAL_URL: portalUrl,
-        LUMAVAULT_WEB_ORIGINS: `${portalUrl},http://localhost:3001,http://localhost:3002,http://localhost:3003`,
-        SMTP_URL: process.env.SMTP_URL ?? 'smtp://localhost:1025',
-      },
     },
     {
-      command: `pnpm exec vite --port ${portalPort} --strictPort`,
-      url: portalUrl,
+      command: 'pnpm run dev',
+      url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
-      env: {
-        VITE_API_URL: apiUrl,
-        VITE_PORTAL_URL: portalUrl,
-      },
     },
   ],
 })
