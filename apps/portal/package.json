@@ -1,0 +1,46 @@
+{
+  "name": "@lumavault/portal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#/*": "./src/*",
+    "#test/*": "./test/*"
+  },
+  "scripts": {
+    "dev": "vite",
+    "routes:generate": "tsr generate",
+    "build": "tsr generate && vite build",
+    "typecheck": "tsr generate && tsc --noEmit",
+    "test": "tsr generate && vitest run"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.17.0",
+    "@connectrpc/connect": "^2.3.0",
+    "@connectrpc/connect-query": "^2.3.1",
+    "@lumavault/sdk": "workspace:*",
+    "@lumavault/ui": "workspace:*",
+    "@tanstack/react-query": "^5.108.4",
+    "@tanstack/react-router": "^1.120.0",
+    "lucide-react": "^1.66.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sonner": "^2.0.7",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@tanstack/router-cli": "^1.120.0",
+    "@tanstack/router-plugin": "^1.120.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "jsdom": "^29.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "^7.0.0",
+    "vitest": "^5.1.0"
+  }
+}
