@@ -31,7 +31,7 @@ import type { ApiModule } from '#/server/modules.js'
 import {
   getHouseholdSummaries,
   getHouseholdView,
-} from '#/services/households/index.js'
+} from '#/services/households.js'
 
 import {
   appsFromWire,

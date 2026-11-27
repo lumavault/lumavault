@@ -29,10 +29,7 @@ import type { User } from '#/data/auth/user/types.js'
 import type { HouseholdInvite } from '#/data/iam/household-invite/types.js'
 import type { Household } from '#/data/iam/household/types.js'
 import type { IamApp } from '#/iam/constants.js'
-import type {
-  HouseholdSummary,
-  HouseholdView,
-} from '#/services/households/index.js'
+import type { HouseholdSummary, HouseholdView } from '#/services/households.js'
 
 const APP_TO_WIRE: Record<IamApp, App> = {
   photos: App.PHOTOS,
