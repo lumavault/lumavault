@@ -14,12 +14,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// dedupKey identifies an object by (namespace, sha256_digest) for idempotent CommitObject deduplication.
-type dedupKey struct {
-	namespace lumavaultv1.Namespace
-	sha256    string
-}
-
 // pageCursor encodes the deterministic pagination position for ListObjects.
 type pageCursor struct {
 	CreatedAtNanos int64  `json:"t"`
@@ -29,22 +23,20 @@ type pageCursor struct {
 // Engine is a pure deterministic in-memory metadata state machine for LumaVault Core.
 // All mutating transitions accept explicit objectID and timestamp arguments and perform
 // zero disk or network I/O, allowing LocalMetadataStore (Day 1) and PaxosMetadataStore (Project 6)
-// to share identical validation, deduplication, indexing, and chunk refcounting.
+// to share identical validation, indexing, and chunk refcounting.
 //
 // Callers must synchronize access to Engine externally (e.g., via sync.RWMutex or a single-threaded
 // consensus apply loop).
 type Engine struct {
-	objects    map[string]*lumavaultv1.ObjectMetadata
-	dedupIndex map[dedupKey][]string // object IDs ordered oldest-first (CreatedAt ASC, Id ASC)
-	chunkRefs  map[string]int
+	objects   map[string]*lumavaultv1.ObjectMetadata
+	chunkRefs map[string]int
 }
 
 // NewEngine returns an initialized, empty deterministic metadata Engine.
 func NewEngine() *Engine {
 	return &Engine{
-		objects:    make(map[string]*lumavaultv1.ObjectMetadata),
-		dedupIndex: make(map[dedupKey][]string),
-		chunkRefs:  make(map[string]int),
+		objects:   make(map[string]*lumavaultv1.ObjectMetadata),
+		chunkRefs: make(map[string]int),
 	}
 }
 
@@ -52,43 +44,28 @@ func NewEngine() *Engine {
 // All inputs are validated before replacing the Engine's state; if an error is returned,
 // the existing Engine state remains untouched.
 func (e *Engine) Restore(objects []*lumavaultv1.ObjectMetadata) error {
-	sorted := make([]*lumavaultv1.ObjectMetadata, len(objects))
-	seenIDs := make(map[string]struct{}, len(objects))
-	for i, obj := range objects {
+	newObjects := make(map[string]*lumavaultv1.ObjectMetadata, len(objects))
+	newChunkRefs := make(map[string]int)
+
+	for _, obj := range objects {
 		if obj == nil || validate.ObjectID(obj.Id) != nil {
 			return fmt.Errorf("%w: cannot restore nil or invalid-ID object", ErrInvalidArgument)
 		}
-		if _, dup := seenIDs[obj.Id]; dup {
+		if _, dup := newObjects[obj.Id]; dup {
 			return fmt.Errorf("%w: duplicate object ID %q in Restore", ErrInvalidArgument, obj.Id)
 		}
-		seenIDs[obj.Id] = struct{}{}
-		sorted[i] = cloneObject(obj)
-	}
-
-	// Sort oldest-first (CreatedAt ASC, Id ASC) so deduplication slice order is deterministic.
-	sort.Slice(sorted, func(i, j int) bool {
-		return compareObjectsAsc(sorted[i], sorted[j]) < 0
-	})
-
-	newObjects := make(map[string]*lumavaultv1.ObjectMetadata, len(sorted))
-	newDedup := make(map[dedupKey][]string, len(sorted))
-	newChunkRefs := make(map[string]int)
-
-	for _, obj := range sorted {
-		newObjects[obj.Id] = obj
-		key := dedupKey{namespace: obj.Namespace, sha256: obj.Sha256Digest}
-		newDedup[key] = append(newDedup[key], obj.Id)
-		adjustChunkRefsMap(newChunkRefs, obj, +1)
+		cloned := cloneObject(obj)
+		newObjects[cloned.Id] = cloned
+		adjustChunkRefsMap(newChunkRefs, cloned, +1)
 	}
 
 	e.objects = newObjects
-	e.dedupIndex = newDedup
 	e.chunkRefs = newChunkRefs
 	return nil
 }
 
-// CommitObject validates req and either returns an existing deduplicated object (when !req.SkipDedup)
-// or commits a new ObjectMetadata record with the supplied objectID and timestamp.
+// CommitObject validates req and commits a new ObjectMetadata record with the supplied
+// objectID and timestamp. Every commit creates a fresh manifest (deduplicated is always false).
 func (e *Engine) CommitObject(req *lumavaultv1.CommitObjectRequest, objectID string, now time.Time) (*lumavaultv1.ObjectMetadata, bool, error) {
 	if req == nil {
 		return nil, false, fmt.Errorf("%w: request is nil", ErrInvalidArgument)
@@ -98,13 +75,6 @@ func (e *Engine) CommitObject(req *lumavaultv1.CommitObjectRequest, objectID str
 	}
 	if err := invalidArg(validate.CommitRequest(req)); err != nil {
 		return nil, false, err
-	}
-
-	key := dedupKey{namespace: req.Namespace, sha256: req.Sha256Digest}
-	if !req.SkipDedup {
-		if ids := e.dedupIndex[key]; len(ids) > 0 {
-			return cloneObject(e.objects[ids[0]]), true, nil
-		}
 	}
 
 	if _, exists := e.objects[objectID]; exists {
@@ -127,7 +97,6 @@ func (e *Engine) CommitObject(req *lumavaultv1.CommitObjectRequest, objectID str
 	}
 
 	e.objects[objectID] = obj
-	e.insertDedupID(key, obj)
 	adjustChunkRefsMap(e.chunkRefs, obj, +1)
 
 	return cloneObject(obj), false, nil
@@ -252,7 +221,7 @@ func (e *Engine) UpdateObjectMetadata(req *lumavaultv1.UpdateObjectMetadataReque
 	return cloneObject(updated), nil
 }
 
-// DeleteObject removes objectID from the Engine and updates deduplication and chunk reference indexes.
+// DeleteObject removes objectID from the Engine and decrements its chunk reference counts.
 func (e *Engine) DeleteObject(objectID string) error {
 	if validate.ObjectID(objectID) != nil {
 		return fmt.Errorf("%w: invalid object_id %q", ErrInvalidArgument, objectID)
@@ -263,15 +232,6 @@ func (e *Engine) DeleteObject(objectID string) error {
 	}
 
 	delete(e.objects, objectID)
-
-	// Remove objectID from the oldest-first slice; if others remain, ids[0] is the oldest remaining object.
-	key := dedupKey{namespace: existing.Namespace, sha256: existing.Sha256Digest}
-	if ids := slices.DeleteFunc(e.dedupIndex[key], func(id string) bool { return id == objectID }); len(ids) > 0 {
-		e.dedupIndex[key] = ids
-	} else {
-		delete(e.dedupIndex, key)
-	}
-
 	adjustChunkRefsMap(e.chunkRefs, existing, -1)
 	return nil
 }
@@ -302,15 +262,6 @@ func (e *Engine) putObjectDirect(obj *lumavaultv1.ObjectMetadata) {
 	}
 	e.objects[cloned.Id] = cloned
 	adjustChunkRefsMap(e.chunkRefs, cloned, +1)
-}
-
-// insertDedupID inserts obj.Id into dedupIndex[key] in oldest-first (CreatedAt ASC, Id ASC) order.
-func (e *Engine) insertDedupID(key dedupKey, obj *lumavaultv1.ObjectMetadata) {
-	ids := e.dedupIndex[key]
-	idx, _ := slices.BinarySearchFunc(ids, obj, func(existingID string, target *lumavaultv1.ObjectMetadata) int {
-		return compareObjectsAsc(e.objects[existingID], target)
-	})
-	e.dedupIndex[key] = slices.Insert(ids, idx, obj.Id)
 }
 
 // adjustChunkRefsMap increments or decrements per-object unique chunk reference counts in refs
@@ -354,25 +305,6 @@ func applyFieldMaskPath(updated, src *lumavaultv1.ObjectMetadata, path string) e
 		return fmt.Errorf("%w: unsupported or immutable update_mask path %q", ErrInvalidArgument, path)
 	}
 	return nil
-}
-
-// compareObjectsAsc orders objects oldest-first by (CreatedAt ASC, Id ASC).
-func compareObjectsAsc(a, b *lumavaultv1.ObjectMetadata) int {
-	ta := a.GetCreatedAt().AsTime().UnixNano()
-	tb := b.GetCreatedAt().AsTime().UnixNano()
-	if ta != tb {
-		if ta < tb {
-			return -1
-		}
-		return 1
-	}
-	if a.Id < b.Id {
-		return -1
-	}
-	if a.Id > b.Id {
-		return 1
-	}
-	return 0
 }
 
 // compareObjectsDesc orders objects newest-first by (CreatedAt DESC, Id ASC) for ListObjects.

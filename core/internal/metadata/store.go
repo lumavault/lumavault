@@ -28,17 +28,16 @@ var (
 )
 
 // MetadataStore is the pluggable Control Plane storage contract for content-addressed
-// object manifests, idempotent (namespace, sha256_digest) deduplication, storage-level
-// metadata updates, and chunk reference tracking.
+// object manifests, storage-level metadata updates, and chunk reference tracking.
 //
 // Application-layer data lives in the shared PostgreSQL application database.
 //
 // The Gateway (internal/gateway) interacts exclusively with this interface, allowing seamless
 // upgrades from the Day-1 LocalMetadataStore to the Project 6 Multi-Paxos replicated store.
 type MetadataStore interface {
-	// CommitObject validates and commits an object manifest.
-	// By default it is idempotent on (namespace, sha256_digest), returning the existing
-	// ObjectMetadata with deduplicated=true unless req.SkipDedup is true.
+	// CommitObject validates and commits a new object manifest with a fresh object ID.
+	// Manifest-level deduplication is not performed (deduplicated is always false);
+	// identical chunks are deduplicated on disk via chunk reference tracking.
 	CommitObject(ctx context.Context, req *lumavaultv1.CommitObjectRequest) (obj *lumavaultv1.ObjectMetadata, deduplicated bool, err error)
 
 	// GetObject retrieves a single object's metadata and chunk manifest by ID.

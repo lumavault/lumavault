@@ -92,12 +92,9 @@ func (s *LocalMetadataStore) CommitObject(ctx context.Context, req *lumavaultv1.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	obj, deduplicated, err := s.engine.CommitObject(req, id, now)
+	obj, _, err := s.engine.CommitObject(req, id, now)
 	if err != nil {
 		return nil, false, err
-	}
-	if deduplicated {
-		return obj, true, nil
 	}
 
 	if err := s.writeObjectFile(obj); err != nil {
