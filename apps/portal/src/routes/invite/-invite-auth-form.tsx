@@ -50,7 +50,6 @@ export function InviteAuthForm({
 
   const [name, setName] = React.useState('')
   const [password, setPassword] = React.useState('')
-  const [magicName, setMagicName] = React.useState('')
   const [fieldErrors, setFieldErrors] = React.useState<{
     name?: string
     password?: string
@@ -79,7 +78,7 @@ export function InviteAuthForm({
       }
       await refreshViewer()
       if (!isNewHousehold) {
-        // Better Auth's sign-up hook joins the invited household automatically.
+        // Sign-up joins the newest pending member invite for this email, which may not be this link.
         await router.navigate({ to: '/', replace: true })
       }
     } catch (err) {
@@ -99,7 +98,7 @@ export function InviteAuthForm({
     try {
       const result = await authClient.signIn.magicLink({
         email,
-        name: magicName.trim() || undefined,
+        name: name.trim() || undefined,
         callbackURL: inviteFullUrl,
         newUserCallbackURL: isNewHousehold ? inviteFullUrl : `${portalBase}/`,
         errorCallbackURL: inviteFullUrl,
@@ -125,6 +124,28 @@ export function InviteAuthForm({
         </Alert>
       ) : null}
 
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="invite-email">Email</FieldLabel>
+          <Input id="invite-email" type="email" value={email} disabled />
+        </Field>
+
+        <Field data-invalid={Boolean(fieldErrors.name) || undefined}>
+          <FieldLabel htmlFor="invite-name">Your name</FieldLabel>
+          <Input
+            id="invite-name"
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-invalid={Boolean(fieldErrors.name) || undefined}
+            disabled={authPending !== null}
+          />
+          {fieldErrors.name ? (
+            <FieldError>{fieldErrors.name}</FieldError>
+          ) : null}
+        </Field>
+      </FieldGroup>
+
       <Tabs defaultValue="password">
         <TabsList className="w-full">
           <TabsTrigger value="password" className="flex-1">
@@ -138,32 +159,6 @@ export function InviteAuthForm({
         <TabsContent value="password" className="pt-4">
           <form onSubmit={(e) => void handlePasswordSignUp(e)} noValidate>
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="invite-email">Email</FieldLabel>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={email}
-                  readOnly
-                  disabled
-                />
-              </Field>
-
-              <Field data-invalid={Boolean(fieldErrors.name) || undefined}>
-                <FieldLabel htmlFor="invite-name">Your name</FieldLabel>
-                <Input
-                  id="invite-name"
-                  autoComplete="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.name) || undefined}
-                  disabled={authPending !== null}
-                />
-                {fieldErrors.name ? (
-                  <FieldError>{fieldErrors.name}</FieldError>
-                ) : null}
-              </Field>
-
               <Field data-invalid={Boolean(fieldErrors.password) || undefined}>
                 <FieldLabel htmlFor="invite-password">Password</FieldLabel>
                 <PasswordInput
@@ -206,28 +201,6 @@ export function InviteAuthForm({
           ) : (
             <form onSubmit={(e) => void handleMagicLinkSignUp(e)} noValidate>
               <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="invite-magic-email">Email</FieldLabel>
-                  <Input
-                    id="invite-magic-email"
-                    type="email"
-                    value={email}
-                    readOnly
-                    disabled
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="invite-magic-name">Your name</FieldLabel>
-                  <Input
-                    id="invite-magic-name"
-                    autoComplete="name"
-                    value={magicName}
-                    onChange={(e) => setMagicName(e.target.value)}
-                    disabled={authPending !== null}
-                  />
-                </Field>
-
                 <Button
                   type="submit"
                   disabled={authPending !== null}

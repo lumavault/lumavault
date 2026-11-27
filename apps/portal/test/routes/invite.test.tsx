@@ -187,8 +187,8 @@ describe('Invite redemption routes', () => {
     })
   })
 
-  it('prompts mismatched emails to sign out and blocks users already in a household', async () => {
-    renderPortal({
+  it('prompts a signed-in user with a different email to switch accounts', async () => {
+    const { router } = renderPortal({
       initialPath: '/invite/member/inv-wrong',
       iamHandlers: {
         getInvite: () =>
@@ -204,6 +204,14 @@ describe('Invite redemption routes', () => {
     })
 
     expect(await screen.findByText('Wrong account')).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Sign out and switch account' }),
+    )
+    await waitFor(() => {
+      expect(router.state.location.href).toBe(
+        '/login?returnTo=%2Finvite%2Fmember%2Finv-wrong',
+      )
+    })
   })
 
   it('shows moving-not-supported when signed-in user already belongs to a household', async () => {

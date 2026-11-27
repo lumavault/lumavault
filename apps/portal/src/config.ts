@@ -7,34 +7,19 @@ export interface PortalConfig {
   allowedOrigins: string[]
 }
 
-const DEFAULT_API_URL = 'http://localhost:4000'
-const DEFAULT_PORTAL_URL = 'http://localhost:3000'
-const DEFAULT_PHOTOS_URL = 'http://localhost:3001'
-const DEFAULT_CINEMA_URL = 'http://localhost:3002'
-const DEFAULT_ARCADE_URL = 'http://localhost:3003'
+const env = import.meta.env
+const portalUrl = env.VITE_PORTAL_URL?.trim() || 'http://localhost:3000'
+const photosUrl = env.VITE_PHOTOS_URL?.trim() || 'http://localhost:3001'
+const cinemaUrl = env.VITE_CINEMA_URL?.trim() || 'http://localhost:3002'
+const arcadeUrl = env.VITE_ARCADE_URL?.trim() || 'http://localhost:3003'
 
-function readEnv(key: string, fallback: string): string {
-  const value = (import.meta.env as Record<string, string | undefined>)[key]
-  return value?.trim() ? value.trim() : fallback
+export const portalConfig: PortalConfig = {
+  apiUrl: env.VITE_API_URL?.trim() || 'http://localhost:4000',
+  portalUrl,
+  appUrls: {
+    [App.PHOTOS]: photosUrl,
+    [App.CINEMA]: cinemaUrl,
+    [App.ARCADE]: arcadeUrl,
+  },
+  allowedOrigins: [portalUrl, photosUrl, cinemaUrl, arcadeUrl],
 }
-
-export function loadPortalConfig(): PortalConfig {
-  const apiUrl = readEnv('VITE_API_URL', DEFAULT_API_URL)
-  const portalUrl = readEnv('VITE_PORTAL_URL', DEFAULT_PORTAL_URL)
-  const photosUrl = readEnv('VITE_PHOTOS_URL', DEFAULT_PHOTOS_URL)
-  const cinemaUrl = readEnv('VITE_CINEMA_URL', DEFAULT_CINEMA_URL)
-  const arcadeUrl = readEnv('VITE_ARCADE_URL', DEFAULT_ARCADE_URL)
-
-  return {
-    apiUrl,
-    portalUrl,
-    appUrls: {
-      [App.PHOTOS]: photosUrl,
-      [App.CINEMA]: cinemaUrl,
-      [App.ARCADE]: arcadeUrl,
-    },
-    allowedOrigins: [portalUrl, photosUrl, cinemaUrl, arcadeUrl],
-  }
-}
-
-export const portalConfig = loadPortalConfig()

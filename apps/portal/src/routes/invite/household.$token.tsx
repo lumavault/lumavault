@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { InvitePage } from './-invite-page'
+import { InvitePage, inviteSearch } from './-invite-page'
 
 function HouseholdInviteRoute() {
   const { token } = Route.useParams()
@@ -15,8 +15,6 @@ function HouseholdInviteRoute() {
 }
 
 export const Route = createFileRoute('/invite/household/$token')({
-  validateSearch: (search: Record<string, unknown>) => ({
-    error: typeof search.error === 'string' ? search.error : undefined,
-  }),
+  validateSearch: inviteSearch,
   component: HouseholdInviteRoute,
 })

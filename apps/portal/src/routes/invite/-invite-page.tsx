@@ -38,9 +38,14 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { AuthLayout } from '#/layout/auth-layout'
 import { formatDate, rpcErrorMessage } from '#/lib/format'
 import { AlertCircleIcon, LogOutIcon } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { InviteAuthForm } from './-invite-auth-form'
+
+export function inviteSearch(search: Record<string, unknown>) {
+  return {
+    error: typeof search.error === 'string' ? search.error : undefined,
+  }
+}
 
 export interface InvitePageProps {
   inviteRef: InviteRef['invite']
@@ -73,19 +78,7 @@ export function InvitePage({
     ? rpcErrorMessage(inviteQuery.error, 'Could not load this invite.')
     : null
 
-  const alreadyUsedMemberInvite =
-    inviteRef.case === 'memberInviteId' &&
-    Boolean(inviteErrorMessage?.toLowerCase().includes('already used')) &&
-    viewer.isAuthenticated &&
-    viewer.hasHousehold
-
-  React.useEffect(() => {
-    if (alreadyUsedMemberInvite) {
-      void router.navigate({ to: '/', replace: true })
-    }
-  }, [alreadyUsedMemberInvite, router])
-
-  if (inviteQuery.isPending || viewer.isPending || alreadyUsedMemberInvite) {
+  if (inviteQuery.isPending || viewer.isPending) {
     return (
       <AuthLayout>
         <div className="flex justify-center py-8">
@@ -129,6 +122,9 @@ export function InvitePage({
 
   const invite = inviteQuery.data
   const isNewHousehold = invite.kind === InviteKind.NEW_HOUSEHOLD
+  const title = isNewHousehold
+    ? 'Create your household'
+    : `Join ${invite.householdName || 'household'}`
   const expiryText = invite.expiresAt ? formatDate(invite.expiresAt, '') : ''
   const mappedUrlError = mapMagicLinkUrlError(urlError)
 
@@ -156,9 +152,8 @@ export function InvitePage({
   }
 
   async function handleSignOut() {
-    const ok = await signOutAuth.signOut()
-    if (!ok) {
-      toast.error('Could not sign out. Please try again.')
+    if (await signOutAuth.signOut()) {
+      await router.navigate({ to: '/login', search: { returnTo: invitePath } })
     }
   }
 
@@ -170,11 +165,7 @@ export function InvitePage({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle>
-              {isNewHousehold
-                ? 'Create your household'
-                : `Join ${invite.householdName || 'household'}`}
-            </CardTitle>
+            <CardTitle>{title}</CardTitle>
             <Badge variant="secondary">{roleLabel(invite.role)}</Badge>
           </div>
           <CardDescription>
@@ -279,9 +270,7 @@ export function InvitePage({
                   {joinHousehold.isPending ? (
                     <Spinner data-icon="inline-start" />
                   ) : null}
-                  {isNewHousehold
-                    ? 'Create household'
-                    : `Join ${invite.householdName || 'household'}`}
+                  {isNewHousehold ? 'Create household' : title}
                 </Button>
               </FieldGroup>
             </form>
