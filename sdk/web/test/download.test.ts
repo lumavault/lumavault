@@ -4,7 +4,7 @@ import { planChunks } from '#/chunking/plan.js'
 import { verifiedStream, type ChunkFetcher } from '#/download.js'
 import { ObjectMetadataSchema } from '#/gen/lumavault/v1/storage_pb.js'
 import { patternBytes } from '#test/support/vectors.js'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const CHUNK = 4 * 1024 * 1024
 
@@ -32,6 +32,8 @@ async function readAll(
 }
 
 describe('verifiedStream', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
   it('returns the original bytes when every hash matches', async () => {
     const { bytes, meta, chunks } = await fixture(2 * CHUNK + 7)
     const fetchChunk: ChunkFetcher = async (h) => chunks.get(h)!
@@ -74,5 +76,15 @@ describe('verifiedStream', () => {
     ).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ConnectError)
     expect((err as ConnectError).code).toBe(Code.DataLoss)
+  })
+
+  it('verifies chunks and whole-file hash when crypto.subtle is unavailable', async () => {
+    vi.stubGlobal('crypto', { subtle: undefined })
+    const { bytes, meta, chunks } = await fixture(2 * CHUNK + 7)
+    expect(
+      await readAll(
+        verifiedStream(Promise.resolve(meta), async (h) => chunks.get(h)!),
+      ),
+    ).toEqual(bytes)
   })
 })
