@@ -15,6 +15,12 @@ import {
 } from '#/data/iam/pairing-request/update-pairing-request.js'
 import { isUniqueViolation } from '#/db/errors.js'
 import { requireHouseholdMember } from '#/guards.js'
+import { RateLimiter } from '#/lib/rate-limit.js'
+import { hashSecret, newSecret } from '#/lib/secrets.js'
+import type { ApiModule } from '#/server/modules.js'
+import { clientIpKey } from '#/server/request.js'
+
+import { required } from './convert.js'
 import {
   PAIRING_APPROVALS_PER_WINDOW,
   PAIRING_CODE_ALPHABET,
@@ -27,13 +33,7 @@ import {
   PAIRING_RATE_WINDOW_MS,
   PAIRING_STARTS_PER_WINDOW,
   PAIRING_TTL_MS,
-} from '#/iam/constants.js'
-import { RateLimiter } from '#/lib/rate-limit.js'
-import { hashSecret, newSecret } from '#/lib/secrets.js'
-import type { ApiModule } from '#/server/modules.js'
-import { clientIpKey } from '#/server/request.js'
-
-import { required } from './convert.js'
+} from './pairing-constants.js'
 
 /** A random code from the lookalike-free alphabet. */
 export function newPairingCode(): string {

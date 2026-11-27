@@ -9,7 +9,7 @@ import {
   PAIRING_MAX_FAILED_ATTEMPTS,
   PAIRING_POLLS_PER_WINDOW,
   PAIRING_STARTS_PER_WINDOW,
-} from '#/iam/constants.js'
+} from '#/routers/iam/pairing-constants.js'
 import { newPairingCode } from '#/routers/iam/pairing.js'
 import { createApp } from '#/server/app.js'
 import { loadModules, type ModuleContext } from '#/server/modules.js'

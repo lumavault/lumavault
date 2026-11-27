@@ -74,7 +74,7 @@ export function createTestContext(
     secret: config.authSecret,
     baseURL: config.apiUrl,
     trustedOrigins: config.webOrigins,
-    passkeyRpID: 'localhost',
+    passkeyRpID: new URL(config.portalUrl).hostname,
     sendMagicLink: ({ email: to, url }) => email.sendMagicLink(to, { url }),
   })
   const gateway =

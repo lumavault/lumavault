@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { SHA256_HEX } from '#/constants.js'
 
 import {
   READ_TICKET_TTL_SECONDS,
@@ -26,8 +27,6 @@ export type TicketClaims =
   | { kind: 'up'; exp: number; namespace: number; maxSizeBytes: bigint }
   | { kind: 'rd'; exp: number; objectId: string }
   | { kind: 'rd'; exp: number; chunkSha256: string }
-
-const SHA256_HEX = /^[0-9a-f]{64}$/
 
 /** Signs a 24-hour ticket for HasChunks, chunk uploads, and one commit into a namespace. */
 export function signUploadTicket(

@@ -162,7 +162,7 @@ export const module: ApiModule = {
         })
       })
 
-      const inviteUrl = `${ctx.config.portalUrl.replace(/\/+$/, '')}${HOUSEHOLD_INVITE_PATH}${token}`
+      const inviteUrl = `${ctx.config.portalUrl}${HOUSEHOLD_INVITE_PATH}${token}`
       // The link is returned below either way, so a mail failure must not lose it.
       try {
         await ctx.email.sendHouseholdInvite(email, {
