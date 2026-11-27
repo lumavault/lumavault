@@ -161,6 +161,46 @@ describe('AuthGuard', () => {
     expect(await screen.findByText('admin-only')).toBeInTheDocument()
     expect(screen.queryByText('console')).not.toBeInTheDocument()
   })
+
+  it('shows a retryable error instead of redirecting on server errors', async () => {
+    const onRedirect = vi.fn()
+    let fail = true
+    const transport = createRouterTransport(({ service }) => {
+      service(IamService, {
+        getViewer: () => {
+          if (fail) {
+            throw new ConnectError('api restarting', Code.Unavailable)
+          }
+          return create(GetViewerResponseSchema, {
+            user: { id: 'u1', name: 'Alice', email: 'a@example.com' },
+            household: { id: 'h1', name: 'Home', ownerUserId: 'u1' },
+            role: Role.OWNER,
+          })
+        },
+      })
+    })
+
+    render(
+      <RpcProvider apiUrl="http://localhost:4000" transport={transport}>
+        <AuthProvider
+          apiUrl="http://localhost:4000"
+          portalUrl="http://localhost:3000"
+          authClient={makeFakeAuthClient()}
+        >
+          <AuthGuard onRedirect={onRedirect}>
+            <div>protected-content</div>
+          </AuthGuard>
+        </AuthProvider>
+      </RpcProvider>,
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('api restarting')
+    expect(onRedirect).not.toHaveBeenCalled()
+
+    fail = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('protected-content')).toBeInTheDocument()
+  })
 })
 
 describe('useAuthClient, useRefreshViewer, and useSignOut', () => {

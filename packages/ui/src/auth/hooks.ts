@@ -5,12 +5,11 @@ import { viewerQueryKey } from '#household'
 import { useAuthClient } from './client'
 import { mapAuthError } from './errors'
 
-// Invalidates and refetches GetViewer after sign-in or sign-up so guards see the new session.
+// Invalidates GetViewer after sign-in or sign-up so guards refetch the new session.
 export function useRefreshViewer() {
   const queryClient = useQueryClient()
   return React.useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: viewerQueryKey() })
-    await queryClient.refetchQueries({ queryKey: viewerQueryKey() })
   }, [queryClient])
 }
 

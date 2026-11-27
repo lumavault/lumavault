@@ -76,6 +76,12 @@ describe('mapAuthError', () => {
     expect(
       mapAuthError({ status: 403, message: 'sign-up is by invite only' }),
     ).toContain('invite only')
+    expect(mapAuthError({ status: 403, message: 'Invalid origin' })).toBe(
+      'Invalid origin',
+    )
+    expect(mapAuthError({ status: 401 })).toBe(
+      'Your session expired. Sign in again.',
+    )
     expect(mapAuthError({ status: 429 })).toContain('Too many attempts')
     expect(mapAuthError({ code: 'USER_ALREADY_EXISTS' })).toContain(
       'Sign in instead',

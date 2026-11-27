@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { Button } from '#components/ui/button'
 import { useViewer } from '#household'
 
 import { useAuthConfig } from './client'
@@ -32,7 +33,8 @@ export function AuthGuard({
   const viewer = useViewer()
   const config = useAuthConfig()
 
-  const shouldRedirectToLogin = !viewer.isPending && !viewer.isAuthenticated
+  const shouldRedirectToLogin =
+    !viewer.isPending && !viewer.error && !viewer.isAuthenticated
   const shouldRedirectNoHousehold =
     !viewer.isPending &&
     viewer.isAuthenticated &&
@@ -74,6 +76,28 @@ export function AuthGuard({
 
   if (viewer.isPending) {
     return <>{loadingFallback}</>
+  }
+
+  if (viewer.error) {
+    return (
+      <div
+        role="alert"
+        className="flex min-h-40 flex-col items-center justify-center gap-3 p-6 text-center text-sm"
+      >
+        <p className="text-destructive">
+          {viewer.error.rawMessage ||
+            'Could not reach the server. Please try again.'}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void viewer.refetch()}
+        >
+          Retry
+        </Button>
+      </div>
+    )
   }
 
   if (!viewer.isAuthenticated) {

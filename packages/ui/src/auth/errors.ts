@@ -55,10 +55,7 @@ function isCancelledPasskey(shape: AuthErrorShape): boolean {
 
 function isInviteOnlyError(shape: AuthErrorShape): boolean {
   const msg = shape.message?.toLowerCase() ?? ''
-  if (msg.includes('sign-up is by invite only')) {
-    return true
-  }
-  return shape.status === 403 && !shape.code
+  return msg.includes('sign-up is by invite only')
 }
 
 export function mapAuthError(error: unknown): string {
@@ -85,7 +82,9 @@ export function mapAuthError(error: unknown): string {
   }
 
   if (shape.status === 401) {
-    return 'Invalid email or password.'
+    return shape.message?.toLowerCase().includes('password')
+      ? 'Invalid email or password.'
+      : 'Your session expired. Sign in again.'
   }
 
   const msg = shape.message?.trim() ?? ''
