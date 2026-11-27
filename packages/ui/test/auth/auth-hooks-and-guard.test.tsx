@@ -76,6 +76,40 @@ describe('AuthGuard', () => {
     expect(screen.queryByText('secret')).not.toBeInTheDocument()
   })
 
+  it('redirects once when rerendered with an inline onRedirect and default allowedOrigins', async () => {
+    const onRedirect = vi.fn()
+    const transport = createRouterTransport(({ service }) => {
+      service(IamService, {
+        getViewer: () => {
+          throw new ConnectError('sign in required', Code.Unauthenticated)
+        },
+      })
+    })
+    const client = makeFakeAuthClient()
+    const tree = () => (
+      <RpcProvider apiUrl="http://localhost:4000" transport={transport}>
+        <AuthProvider
+          apiUrl="http://localhost:4000"
+          portalUrl="http://localhost:3000"
+          authClient={client}
+        >
+          <AuthGuard
+            currentUrl="http://localhost:3000/household"
+            onRedirect={(url) => onRedirect(url)}
+          >
+            <div>secret</div>
+          </AuthGuard>
+        </AuthProvider>
+      </RpcProvider>
+    )
+
+    const { rerender } = render(tree())
+    await waitFor(() => expect(onRedirect).toHaveBeenCalled())
+    rerender(tree())
+    rerender(tree())
+    expect(onRedirect).toHaveBeenCalledTimes(1)
+  })
+
   it('redirects zero-household users unless allowNoHousehold is true', async () => {
     const onRedirect = vi.fn()
     const transport = createRouterTransport(({ service }) => {
