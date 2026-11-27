@@ -1,5 +1,6 @@
 import * as React from 'react'
 import {
+  buildPortalLoginUrl,
   isSameOriginReturnUrl,
   magicLinkSchema,
   mapAuthError,
@@ -56,19 +57,6 @@ interface LoginSearch {
   notice?: string
 }
 
-export function navigateToReturnTarget(
-  target: string,
-  routerNavigate: (opts: { href: string; replace: boolean }) => Promise<void>,
-  externalRedirect: (url: string) => void = (url) =>
-    window.location.assign(url),
-) {
-  if (isSameOriginReturnUrl(target)) {
-    void routerNavigate({ href: target, replace: true })
-  } else {
-    externalRedirect(target)
-  }
-}
-
 function LoginPage() {
   const search = Route.useSearch()
   const router = useRouter()
@@ -104,15 +92,16 @@ function LoginPage() {
   const destination = validatedReturn ?? '/'
   const urlError = mapMagicLinkUrlError(search.error)
 
-  const goToDestination = React.useCallback(() => {
-    navigateToReturnTarget(destination, (opts) => router.navigate(opts))
-  }, [destination, router])
-
   React.useEffect(() => {
-    if (!viewer.isPending && viewer.isAuthenticated) {
-      goToDestination()
+    if (viewer.isPending || !viewer.isAuthenticated) {
+      return
     }
-  }, [viewer.isPending, viewer.isAuthenticated, goToDestination])
+    if (isSameOriginReturnUrl(destination)) {
+      void router.navigate({ href: destination, replace: true })
+    } else {
+      window.location.assign(destination)
+    }
+  }, [viewer.isPending, viewer.isAuthenticated, destination, router])
 
   async function handlePasswordSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -131,7 +120,6 @@ function LoginPage() {
         return
       }
       await refreshViewer()
-      goToDestination()
     } catch (err) {
       setSubmitError(mapAuthError(err))
     } finally {
@@ -157,12 +145,10 @@ function LoginPage() {
     const callbackURL = isSameOriginReturnUrl(destination)
       ? `${portalBase}${destination}`
       : destination
-    const errorParams = new URLSearchParams()
-    if (validatedReturn) {
-      errorParams.set('returnTo', validatedReturn)
-    }
-    const errorQuery = errorParams.toString()
-    const errorCallbackURL = `${portalBase}/login${errorQuery ? `?${errorQuery}` : ''}`
+    const errorCallbackURL = buildPortalLoginUrl(
+      authConfig.portalUrl,
+      validatedReturn,
+    )
 
     try {
       const result = await authClient.signIn.magicLink({
@@ -192,7 +178,6 @@ function LoginPage() {
         return
       }
       await refreshViewer()
-      goToDestination()
     } catch (err) {
       setSubmitError(mapAuthError(err))
     } finally {
@@ -200,7 +185,8 @@ function LoginPage() {
     }
   }
 
-  const activeError = submitError ?? urlError
+  const activeError =
+    submitError ?? (pendingAction || magicLinkSent ? null : urlError)
 
   return (
     <AuthLayout>
