@@ -40,6 +40,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { unwrap } from './-auth-result'
+
 const PASSKEYS_QUERY_KEY = ['auth', 'passkeys'] as const
 
 export function PasskeysCard() {
@@ -48,80 +50,61 @@ export function PasskeysCard() {
 
   const passkeysQuery = useQuery({
     queryKey: PASSKEYS_QUERY_KEY,
-    queryFn: async () => {
-      const res = await authClient.passkey.listUserPasskeys()
-      if (res?.error) {
-        throw new Error(mapAuthError(res.error))
-      }
-      return res?.data ?? []
-    },
+    queryFn: async () =>
+      unwrap(await authClient.passkey.listUserPasskeys()) ?? [],
   })
 
   const addPasskeyMutation = useMutation({
-    mutationFn: async (input?: { name?: string }) => {
-      const res = await authClient.passkey.addPasskey(input)
-      if (res?.error) {
-        throw new Error(mapAuthError(res.error))
-      }
-      return res?.data
-    },
+    mutationFn: async (input?: { name?: string }) =>
+      unwrap(await authClient.passkey.addPasskey(input)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY })
     },
   })
 
   const deletePasskeyMutation = useMutation({
-    mutationFn: async (input: { id: string }) => {
-      const res = await authClient.passkey.deletePasskey(input)
-      if (res?.error) {
-        throw new Error(mapAuthError(res.error))
-      }
-      return res?.data
-    },
+    mutationFn: async (input: { id: string }) =>
+      unwrap(await authClient.passkey.deletePasskey(input)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY })
     },
   })
 
   const [passkeyName, setPasskeyName] = React.useState('')
-  const [actionError, setActionError] = React.useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = React.useState<{
     id: string
     name?: string | null
   } | null>(null)
 
   const passkeys = passkeysQuery.data ?? []
-  const errorMessage = actionError ?? passkeysQuery.error?.message ?? null
+  const error =
+    addPasskeyMutation.error ??
+    deletePasskeyMutation.error ??
+    passkeysQuery.error
+  const errorMessage = error ? mapAuthError(error) : null
 
-  async function handleAddPasskey(event: React.FormEvent) {
+  function handleAddPasskey(event: React.FormEvent) {
     event.preventDefault()
-    setActionError(null)
-    try {
-      await addPasskeyMutation.mutateAsync(
-        passkeyName.trim() ? { name: passkeyName.trim() } : undefined,
-      )
-      setPasskeyName('')
-      toast.success('Passkey registered.')
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : 'Could not add passkey.',
-      )
-    }
+    deletePasskeyMutation.reset()
+    const name = passkeyName.trim()
+    addPasskeyMutation.mutate(name ? { name } : undefined, {
+      onSuccess: () => {
+        setPasskeyName('')
+        toast.success('Passkey registered.')
+      },
+    })
   }
 
-  async function handleConfirmDeletePasskey() {
+  function handleConfirmDeletePasskey() {
     if (!deleteTarget) return
-    setActionError(null)
-    try {
-      await deletePasskeyMutation.mutateAsync({ id: deleteTarget.id })
-      setDeleteTarget(null)
-      toast.success('Passkey removed.')
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : 'Could not delete passkey.',
-      )
-      setDeleteTarget(null)
-    }
+    addPasskeyMutation.reset()
+    deletePasskeyMutation.mutate(
+      { id: deleteTarget.id },
+      {
+        onSuccess: () => toast.success('Passkey removed.'),
+        onSettled: () => setDeleteTarget(null),
+      },
+    )
   }
 
   return (
@@ -142,7 +125,7 @@ export function PasskeysCard() {
           ) : null}
 
           <form
-            onSubmit={(e) => void handleAddPasskey(e)}
+            onSubmit={handleAddPasskey}
             className="flex flex-wrap items-end gap-2"
           >
             <Field className="min-w-48 flex-1">
@@ -218,7 +201,7 @@ export function PasskeysCard() {
       <AlertDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null)
+          if (!open && !deletePasskeyMutation.isPending) setDeleteTarget(null)
         }}
       >
         <AlertDialogContent>
@@ -234,7 +217,7 @@ export function PasskeysCard() {
             <AlertDialogAction
               variant="destructive"
               disabled={deletePasskeyMutation.isPending}
-              onClick={() => void handleConfirmDeletePasskey()}
+              onClick={handleConfirmDeletePasskey}
             >
               Delete
             </AlertDialogAction>
