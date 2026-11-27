@@ -41,7 +41,7 @@ export DATABASE_URL PORT LUMAVAULT_TICKET_SECRET LUMAVAULT_SERVICE_KEY BETTER_AU
   LUMAVAULT_GATEWAY_URL LUMAVAULT_PORTAL_URL LUMAVAULT_WEB_ORIGINS SMTP_URL
 
 # Generated stubs, dependencies, and the web SDK build, each only if out of date.
-make gen/.proto-stamp node_modules/.modules.yaml sdk/web/dist/index.js
+make core/gen/.proto-stamp node_modules/.modules.yaml sdk/web/dist/index.js
 
 # Each service runs in its own process group, so stopping it also stops what it started
 # (go run's binary, tsx watch, vite).
