@@ -23,10 +23,11 @@ import {
   ALL_APPS,
   MAX_MEMBER_LIMIT,
   toggleEnabledApp,
+  type CapUnit,
   type StorageCapDraft,
 } from './-storage-cap'
 
-const UNIT_ITEMS = { GB: 'GB', TB: 'TB' } as const
+const UNIT_ITEMS = { B: 'B', MB: 'MB', GB: 'GB', TB: 'TB' } as const
 
 export interface AllowanceFieldsProps {
   idPrefix: string
@@ -84,8 +85,8 @@ export function AllowanceFields({
               items={UNIT_ITEMS}
               value={capDraft.unit}
               onValueChange={(val) => {
-                if (val === 'GB' || val === 'TB') {
-                  onCapChange({ ...capDraft, unit: val })
+                if (val && val in UNIT_ITEMS) {
+                  onCapChange({ ...capDraft, unit: val as CapUnit })
                 }
               }}
             >
@@ -94,8 +95,11 @@ export function AllowanceFields({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="GB">GB</SelectItem>
-                  <SelectItem value="TB">TB</SelectItem>
+                  {Object.entries(UNIT_ITEMS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>

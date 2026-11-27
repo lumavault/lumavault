@@ -2,30 +2,21 @@ import * as React from 'react'
 import { Button } from '@lumavault/ui/components/ui/button'
 
 export function useCursorPagination() {
-  const [pageToken, setPageToken] = React.useState('')
-  const [pageHistory, setPageHistory] = React.useState<string[]>([])
+  // Stack of page tokens visited; the top is the current page and '' is the first page.
+  const [stack, setStack] = React.useState<string[]>([''])
 
   const goPrevious = React.useCallback(() => {
-    setPageHistory((prev) => {
-      if (prev.length === 0) return prev
-      const next = prev.slice(0, -1)
-      setPageToken(prev[prev.length - 1] ?? '')
-      return next
-    })
+    setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev))
   }, [])
 
-  const goNext = React.useCallback(
-    (nextToken: string) => {
-      if (!nextToken) return
-      setPageHistory((prev) => [...prev, pageToken])
-      setPageToken(nextToken)
-    },
-    [pageToken],
-  )
+  const goNext = React.useCallback((nextToken: string) => {
+    if (!nextToken) return
+    setStack((prev) => [...prev, nextToken])
+  }, [])
 
   return {
-    pageToken,
-    hasPrevious: pageHistory.length > 0,
+    pageToken: stack.at(-1) ?? '',
+    hasPrevious: stack.length > 1,
     goPrevious,
     goNext,
   }
