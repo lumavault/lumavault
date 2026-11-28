@@ -169,7 +169,7 @@ func TestCommitObject_Validation(t *testing.T) {
 	}
 }
 
-func TestCommitObject_DeduplicationSkipDedupChunkRefsAndPersistenceReload(t *testing.T) {
+func TestCommitObject_DistinctManifestsChunkRefsAndPersistenceReload(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	rootDir := t.TempDir()
@@ -199,20 +199,37 @@ func TestCommitObject_DeduplicationSkipDedupChunkRefsAndPersistenceReload(t *tes
 		t.Fatalf("first CommitObject: dedup=%v err=%v", dedup, err)
 	}
 
-	// Second commit with same (NAMESPACE_PHOTOS, sha256_digest) must deduplicate.
+	// Second commit with same (NAMESPACE_PHOTOS, sha256_digest) creates a distinct manifest
+	// while still sharing chunk references on disk.
 	second, dedup, err := store.CommitObject(ctx, req)
-	if err != nil || !dedup || second.Id != first.Id {
-		t.Fatalf("expected second commit deduplicated=true with ID %q, got dedup=%v id=%q err=%v", first.Id, dedup, second.Id, err)
+	if err != nil || dedup || second.Id == first.Id {
+		t.Fatalf("expected second commit deduplicated=false with distinct ID (not %q), got dedup=%v id=%q err=%v", first.Id, dedup, second.Id, err)
 	}
 
-	// Reload LocalMetadataStore on the same directory and verify deduplication and chunkRefs survive restart.
+	// Reload LocalMetadataStore on the same directory and verify manifests and chunkRefs survive restart.
 	store, err = NewLocalMetadataStore(rootDir)
 	if err != nil {
 		t.Fatalf("NewLocalMetadataStore reload: %v", err)
 	}
-	third, dedup, err := store.CommitObject(ctx, req)
-	if err != nil || !dedup || third.Id != first.Id {
-		t.Fatalf("expected post-reload commit deduplicated=true with ID %q, got dedup=%v id=%q err=%v", first.Id, dedup, third.Id, err)
+	for _, id := range []string{first.Id, second.Id} {
+		if _, err := store.GetObject(ctx, id); err != nil {
+			t.Fatalf("expected object %q to survive reload, got err=%v", id, err)
+		}
+	}
+	for _, h := range []string{sharedChunk, thumbChunk} {
+		if ref, err := store.IsChunkReferenced(ctx, h); err != nil || !ref {
+			t.Fatalf("expected chunk %s to stay referenced after reload, got ref=%v err=%v", h, ref, err)
+		}
+	}
+
+	// Deleting second leaves first and its chunk references intact.
+	if err := store.DeleteObject(ctx, second.Id); err != nil {
+		t.Fatalf("DeleteObject second: %v", err)
+	}
+	for _, h := range []string{sharedChunk, thumbChunk} {
+		if ref, err := store.IsChunkReferenced(ctx, h); err != nil || !ref {
+			t.Fatalf("expected chunk %s to remain referenced by first, got ref=%v err=%v", h, ref, err)
+		}
 	}
 
 	// Commit with SkipDedup=true (e.g. versioned game saves sharing identical bytes) creates distinct objects.
@@ -257,7 +274,7 @@ func TestCommitObject_DeduplicationSkipDedupChunkRefsAndPersistenceReload(t *tes
 		t.Fatalf("expected sharedChunk to remain referenced by save1, got ref=%v err=%v", ref, err)
 	}
 
-	// Re-committing the photo after deletion must create a new object (deduplicated=false).
+	// Re-committing the photo after deletion creates a new object with deduplicated=false.
 	recommitted, dedup, err := store.CommitObject(ctx, req)
 	if err != nil || dedup || recommitted.Id == first.Id {
 		t.Fatalf("expected recommit after delete to create new object, got dedup=%v id=%s err=%v", dedup, recommitted.Id, err)
@@ -491,7 +508,7 @@ func TestUpdateObjectMetadata_FieldMask(t *testing.T) {
 	}
 }
 
-func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
+func TestEngine_RestoreAndDeepCloneIsolation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	store, err := NewLocalMetadataStore(t.TempDir())
@@ -527,7 +544,8 @@ func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
 		t.Fatalf("caller mutation leaked into store state: %+v", fetched)
 	}
 
-	// Test Engine.Restore validation and deterministic DeleteObject fallback when two restored objects share (namespace, sha256_digest).
+	// Test Engine.Restore validation, atomic failure handling, and chunk reference counting
+	// when multiple restored objects share the same (namespace, sha256_digest) and chunk.
 	eng := NewEngine()
 	sharedDigest := testHash("dup-photo-digest")
 	t1 := timestamppb.New(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -563,7 +581,7 @@ func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
 		t.Fatalf("Engine.Restore: %v", err)
 	}
 
-	// Failed Restore (duplicate ID) must not wipe existing state in eng.
+	// Failed Restore (duplicate ID or nil object) must not wipe existing state in eng.
 	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{objA, objA}); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("expected ErrInvalidArgument on duplicate ID in Restore, got %v", err)
 	}
@@ -571,53 +589,39 @@ func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
 		t.Fatalf("expected ErrInvalidArgument on nil object in Restore, got %v", err)
 	}
 
-	// Deleting "obj-a" must deterministically promote "obj-b" (not "obj-c").
-	if err := eng.DeleteObject("obj-a"); err != nil {
-		t.Fatalf("eng.DeleteObject(obj-a): %v", err)
+	// Existing restored objects and chunk refcounts must remain intact after failed Restore calls.
+	for _, id := range []string{"obj-a", "obj-b", "obj-c"} {
+		if _, err := eng.GetObject(id); err != nil {
+			t.Fatalf("expected %s to remain present after failed Restore, got %v", id, err)
+		}
 	}
-	dedupObj, dedup, err := eng.CommitObject(&lumavaultv1.CommitObjectRequest{
+
+	// Committing the same digest creates a fresh manifest (deduplicated=false) with the supplied ID.
+	freshObj, dedup, err := eng.CommitObject(&lumavaultv1.CommitObjectRequest{
 		Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
 		SizeBytes:      100,
 		ChunkSizeBytes: 4 << 20,
 		Sha256Digest:   sharedDigest,
 		ChunkHashes:    []string{chunk},
 	}, "new-id", time.Now())
-	if err != nil || !dedup || dedupObj.Id != "obj-b" {
-		t.Fatalf("expected deterministic fallback to 'obj-b', got dedup=%v id=%q err=%v", dedup, dedupObj.Id, err)
+	if err != nil || dedup || freshObj.Id != "new-id" {
+		t.Fatalf("expected fresh manifest 'new-id' with dedup=false, got dedup=%v id=%q err=%v", dedup, freshObj.Id, err)
 	}
 
-	// Verify SkipDedup commits inserted out-of-order maintain oldest-first dedupIndex slice order.
-	skipDigest := testHash("skip-dedup-slice-order")
-	baseTime := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	skipReq := &lumavaultv1.CommitObjectRequest{
-		Namespace:      lumavaultv1.Namespace_NAMESPACE_GAMES,
-		SizeBytes:      100,
-		ChunkSizeBytes: 4 << 20,
-		Sha256Digest:   skipDigest,
-		ChunkHashes:    []string{chunk},
-		SkipDedup:      true,
+	// Deleting objects decrements chunk refcounts until the last referencing manifest is removed.
+	for _, id := range []string{"obj-a", "obj-b", "obj-c"} {
+		if err := eng.DeleteObject(id); err != nil {
+			t.Fatalf("eng.DeleteObject(%s): %v", id, err)
+		}
+		if ref, err := eng.IsChunkReferenced(chunk); err != nil || !ref {
+			t.Fatalf("expected chunk to remain referenced after deleting %s, got ref=%v err=%v", id, ref, err)
+		}
 	}
-	if _, _, err := eng.CommitObject(skipReq, "newer-id", baseTime.Add(10*time.Second)); err != nil {
-		t.Fatalf("CommitObject newer-id: %v", err)
+	if err := eng.DeleteObject("new-id"); err != nil {
+		t.Fatalf("eng.DeleteObject(new-id): %v", err)
 	}
-	if _, _, err := eng.CommitObject(skipReq, "oldest-id", baseTime); err != nil {
-		t.Fatalf("CommitObject oldest-id: %v", err)
-	}
-	checkReq := &lumavaultv1.CommitObjectRequest{
-		Namespace:      lumavaultv1.Namespace_NAMESPACE_GAMES,
-		SizeBytes:      100,
-		ChunkSizeBytes: 4 << 20,
-		Sha256Digest:   skipDigest,
-		ChunkHashes:    []string{chunk},
-	}
-	if got, dedup, err := eng.CommitObject(checkReq, "unused-1", baseTime); err != nil || !dedup || got.Id != "oldest-id" {
-		t.Fatalf("expected oldest-id from dedupIndex slice, got dedup=%v id=%q err=%v", dedup, got.Id, err)
-	}
-	if err := eng.DeleteObject("oldest-id"); err != nil {
-		t.Fatalf("DeleteObject oldest-id: %v", err)
-	}
-	if got, dedup, err := eng.CommitObject(checkReq, "unused-2", baseTime); err != nil || !dedup || got.Id != "newer-id" {
-		t.Fatalf("expected newer-id after deleting oldest-id, got dedup=%v id=%q err=%v", dedup, got.Id, err)
+	if ref, err := eng.IsChunkReferenced(chunk); err != nil || ref {
+		t.Fatalf("expected chunk to be unreferenced after all objects deleted, got ref=%v err=%v", ref, err)
 	}
 }
 

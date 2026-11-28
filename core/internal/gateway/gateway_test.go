@@ -241,8 +241,8 @@ func TestUploadLifecycle(t *testing.T) {
 	}
 	obj := committed.GetObject()
 	again, err := h.client.CommitObject(ctx, commitReq(data, 1000, hashes))
-	if err != nil || !again.GetDeduplicated() || again.GetObject().GetId() != obj.GetId() {
-		t.Fatalf("second commit should dedup to %s: %v %v", obj.GetId(), again, err)
+	if err != nil || again.GetDeduplicated() || again.GetObject().GetId() == obj.GetId() {
+		t.Fatalf("second commit should create distinct manifest (not %s): %v %v", obj.GetId(), again, err)
 	}
 
 	got, err := h.client.GetObject(ctx, &lumavaultv1.GetObjectRequest{ObjectId: obj.GetId()})
@@ -250,7 +250,7 @@ func TestUploadLifecycle(t *testing.T) {
 		t.Fatalf("GetObject: %v %v", got, err)
 	}
 	list, err := h.client.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{Namespace: lumavaultv1.Namespace_NAMESPACE_CINEMA})
-	if err != nil || len(list.GetObjects()) != 1 {
+	if err != nil || len(list.GetObjects()) != 2 {
 		t.Fatalf("ListObjects: %v %v", list, err)
 	}
 
@@ -269,6 +269,9 @@ func TestUploadLifecycle(t *testing.T) {
 	}
 	_, err = h.client.GetObject(ctx, &lumavaultv1.GetObjectRequest{ObjectId: obj.GetId()})
 	wantCode(t, err, connect.CodeNotFound)
+	if _, err := h.client.GetObject(ctx, &lumavaultv1.GetObjectRequest{ObjectId: again.GetObject().GetId()}); err != nil {
+		t.Fatalf("deleting first manifest must not affect second manifest: %v", err)
+	}
 }
 
 func TestGRPCWebProtocol(t *testing.T) {
