@@ -67,6 +67,76 @@ jobs:
           go build -o bin/lumavault ./core/cmd/lumavault
           pnpm -r --if-present run build
 
+  portal-e2e:
+    name: Portal End-to-End (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lumavault
+          POSTGRES_PASSWORD: lumavault
+          POSTGRES_DB: lumavault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lumavault -d lumavault"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mailpit:
+        image: axllent/mailpit:v1.34
+        ports:
+          - 1025:1025
+          - 8025:8025
+    # API settings, matching the scripts/dev.sh defaults. The Gateway is not started; the
+    # suite never uploads.
+    env:
+      DATABASE_URL: postgres://lumavault:lumavault@localhost:5432/lumavault
+      LUMAVAULT_GATEWAY_URL: http://localhost:8080
+      LUMAVAULT_TICKET_SECRET: ci-only-ticket-secret-0123456789abcdef
+      LUMAVAULT_SERVICE_KEY: ci-only-service-key-0123456789abcdef
+      BETTER_AUTH_SECRET: ci-only-better-auth-secret-0123456789abcdef
+      LUMAVAULT_PORTAL_URL: http://localhost:3000
+      LUMAVAULT_WEB_ORIGINS: http://localhost:3000
+      SMTP_URL: smtp://localhost:1025
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: pnpm
+
+      - name: Generate Protobuf stubs
+        run: make proto
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: pnpm --filter @lumavault/sdk run build
+
+      # The API config sets strict, which prompts for confirmation; CI has no TTY, so force it.
+      # The last command checks that the tables really exist.
+      - name: Push database schema
+        run: |
+          pnpm --filter @lumavault/api exec tsx src/db/ensure-schemas.ts
+          pnpm --filter @lumavault/api exec drizzle-kit push --force
+          psql "$DATABASE_URL" -c 'SELECT 1 FROM iam.upload_reservations LIMIT 0'
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @lumavault/portal exec playwright install --with-deps chromium
+
+      - name: Run Portal E2E tests
+        run: pnpm --filter @lumavault/portal run test:e2e
+
   swift:
     name: Swift SDK
     runs-on: macos-latest

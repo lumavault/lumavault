@@ -12,7 +12,8 @@
     "routes:generate": "tsr generate",
     "build": "tsr generate && vite build",
     "typecheck": "tsr generate && tsc --noEmit",
-    "test": "tsr generate && vitest run"
+    "test": "tsr generate && vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.17.0",
@@ -29,6 +30,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.1.0",
     "@tanstack/router-cli": "^1.120.0",
     "@tanstack/router-plugin": "^1.120.0",
