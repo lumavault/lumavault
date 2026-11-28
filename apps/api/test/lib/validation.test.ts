@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { Code, ConnectError } from '@connectrpc/connect'
-import { MAX_PG_BIGINT } from '#/db/constants.js'
+import { MAX_PG_BIGINT, MAX_PG_INT } from '#/db/constants.js'
 import {
   nonNegativeBigintSchema,
+  nonNegativeIntSchema,
   parseInput,
   parseNonNegativeBigint,
+  positiveIntSchema,
   requiredObjectIdSchema,
   requiredUuidSchema,
   uuidSchema,
@@ -75,6 +77,36 @@ describe('lib/validation', () => {
         const ce = ConnectError.from(err)
         expect(ce.code).toBe(Code.InvalidArgument)
         expect(ce.rawMessage).toBe(expected)
+      }
+    }
+  })
+
+  it('validates positive and non-negative Postgres integers with Zod', () => {
+    const positive = positiveIntSchema('tmdb_movie_id')
+    expect(parseInput(positive, 1)).toBe(1)
+    expect(parseInput(positive, MAX_PG_INT)).toBe(MAX_PG_INT)
+    for (const bad of [0, -5, 1.5, MAX_PG_INT + 1]) {
+      try {
+        parseInput(positive, bad)
+        expect.unreachable()
+      } catch (err) {
+        const ce = ConnectError.from(err)
+        expect(ce.code).toBe(Code.InvalidArgument)
+        expect(ce.rawMessage).toContain('tmdb_movie_id')
+      }
+    }
+
+    const nonNegative = nonNegativeIntSchema('season_number')
+    expect(parseInput(nonNegative, 0)).toBe(0)
+    expect(parseInput(nonNegative, MAX_PG_INT)).toBe(MAX_PG_INT)
+    for (const bad of [-1, 2.5, MAX_PG_INT + 1]) {
+      try {
+        parseInput(nonNegative, bad)
+        expect.unreachable()
+      } catch (err) {
+        const ce = ConnectError.from(err)
+        expect(ce.code).toBe(Code.InvalidArgument)
+        expect(ce.rawMessage).toContain('season_number')
       }
     }
   })

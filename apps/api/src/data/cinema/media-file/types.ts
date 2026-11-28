@@ -28,3 +28,14 @@ export interface MediaFileDetails {
   episode: typeof cinemaEpisodes.$inferSelect | null
   series: typeof cinemaSeries.$inferSelect | null
 }
+
+/** Catalog movie or episode target to link a media file to. */
+export type MediaFileMatchTarget =
+  { kind: 'movie'; movieId: string } | { kind: 'episode'; episodeId: string }
+
+/** Outcome of linking a media file to a movie or episode inside a transaction. */
+export type LinkMediaFileResult =
+  | { status: 'not_found' }
+  | { status: 'already_matched' }
+  | { status: 'target_occupied' }
+  | { status: 'linked'; file: MediaFileRow; replacedObjectId: string | null }
