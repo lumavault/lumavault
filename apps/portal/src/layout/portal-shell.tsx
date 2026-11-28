@@ -27,7 +27,7 @@ import {
 const ACCOUNT_PAGE = { title: 'Account', to: '/account' }
 
 interface BreadcrumbTrail {
-  parent?: { label: string; to: string }
+  parent?: { label: string; to: '/' | '/admin/households' }
   current: string
 }
 
@@ -76,9 +76,7 @@ export function PortalShell({ children }: PortalShellProps) {
                   {trail.parent ? (
                     <>
                       <BreadcrumbItem className="hidden md:block">
-                        <BreadcrumbLink
-                          render={<Link to={trail.parent.to as never} />}
-                        >
+                        <BreadcrumbLink render={<Link to={trail.parent.to} />}>
                           {trail.parent.label}
                         </BreadcrumbLink>
                       </BreadcrumbItem>
