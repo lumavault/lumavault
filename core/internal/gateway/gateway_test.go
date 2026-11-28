@@ -57,6 +57,7 @@ type harness struct {
 	client    lumavaultv1connect.StorageServiceClient
 	chunks    *countingChunks
 	chunkRoot string
+	metaRoot  string
 }
 
 // newHarness starts a gateway over fresh stores with ticket checks off. Any seed manifests
@@ -86,7 +87,7 @@ func newHarnessWith(t *testing.T, opts []Option, seed ...*lumavaultv1.ObjectMeta
 	t.Cleanup(srv.Close)
 	client := lumavaultv1connect.NewStorageServiceClient(
 		connect.NewClient(connecthttp.NewTransport(srv.Client(), srv.URL)))
-	return &harness{t: t, srv: srv, client: client, chunks: counting, chunkRoot: chunkRoot}
+	return &harness{t: t, srv: srv, client: client, chunks: counting, chunkRoot: chunkRoot, metaRoot: metaRoot}
 }
 
 func seedObjects(t *testing.T, dir string, objs []*lumavaultv1.ObjectMetadata) {
@@ -248,10 +249,6 @@ func TestUploadLifecycle(t *testing.T) {
 	got, err := h.client.GetObject(ctx, &lumavaultv1.GetObjectRequest{ObjectId: obj.GetId()})
 	if err != nil || got.GetObject().GetSha256Digest() != sha(data) {
 		t.Fatalf("GetObject: %v %v", got, err)
-	}
-	list, err := h.client.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{Namespace: lumavaultv1.Namespace_NAMESPACE_CINEMA})
-	if err != nil || len(list.GetObjects()) != 1 {
-		t.Fatalf("ListObjects: %v %v", list, err)
 	}
 
 	thumb := []byte("thumbnail")

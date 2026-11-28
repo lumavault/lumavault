@@ -120,18 +120,6 @@ func (s *LocalMetadataStore) GetObject(ctx context.Context, objectID string) (*l
 	return s.engine.GetObject(objectID)
 }
 
-// ListObjects lists objects within a namespace with deterministic cursor pagination.
-func (s *LocalMetadataStore) ListObjects(ctx context.Context, req *lumavaultv1.ListObjectsRequest) (*lumavaultv1.ListObjectsResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.engine.ListObjects(req)
-}
-
 // UpdateObjectMetadata partially updates mutable storage-level metadata fields
 // (filename, mime_type, thumbnail_chunk_hash) using a FieldMask and atomically persists
 // the updated ObjectMetadata to disk.

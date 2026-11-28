@@ -10,14 +10,6 @@ import (
 	lumavaultv1 "github.com/lumavault/lumavault/core/gen/go/lumavault/v1"
 )
 
-const (
-	// DefaultPageSize is the default number of objects returned by ListObjects when page_size is 0.
-	DefaultPageSize = 50
-
-	// MaxPageSize is the maximum number of objects returned in a single ListObjects response.
-	MaxPageSize = 200
-)
-
 var (
 	// ErrObjectNotFound is returned when a requested object_id does not exist.
 	ErrObjectNotFound = errors.New("metadata: object not found")
@@ -44,9 +36,6 @@ type MetadataStore interface {
 	// GetObject retrieves a single object's metadata and chunk manifest by ID.
 	// Returns ErrObjectNotFound if the object does not exist.
 	GetObject(ctx context.Context, objectID string) (*lumavaultv1.ObjectMetadata, error)
-
-	// ListObjects lists objects within a required namespace with deterministic cursor pagination.
-	ListObjects(ctx context.Context, req *lumavaultv1.ListObjectsRequest) (*lumavaultv1.ListObjectsResponse, error)
 
 	// UpdateObjectMetadata partially updates mutable storage-level metadata fields
 	// (filename, mime_type, thumbnail_chunk_hash) according to a required, non-empty FieldMask.

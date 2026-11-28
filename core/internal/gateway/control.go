@@ -102,18 +102,6 @@ func (g *gateway) GetObject(ctx context.Context, req *lumavaultv1.GetObjectReque
 	return &lumavaultv1.GetObjectResponse{Object: obj}, nil
 }
 
-// ListObjects returns one page of objects in a namespace.
-func (g *gateway) ListObjects(ctx context.Context, req *lumavaultv1.ListObjectsRequest) (*lumavaultv1.ListObjectsResponse, error) {
-	if err := g.requireService(ctx, "ListObjects"); err != nil {
-		return nil, err
-	}
-	res, err := g.meta.ListObjects(ctx, req)
-	if err != nil {
-		return nil, toConnectError(ctx, err)
-	}
-	return res, nil
-}
-
 // UpdateObjectMetadata applies a FieldMask update. A new non-empty thumbnail must already
 // be uploaded so the object never points at a missing chunk.
 func (g *gateway) UpdateObjectMetadata(ctx context.Context, req *lumavaultv1.UpdateObjectMetadataRequest) (*lumavaultv1.UpdateObjectMetadataResponse, error) {
