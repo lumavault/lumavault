@@ -33,13 +33,12 @@ public final class LumaVaultClient: Sendable {
         concurrency: Int? = nil,
         ticket: String? = nil,
         progress: (@Sendable (UploadProgress) -> Void)? = nil
-    ) async throws -> UploadResult {
-        let object = try await uploadFile(
+    ) async throws -> ObjectMetadata {
+        try await uploadFile(
             rpc: rpc, dataPlane: dataPlane, fileURL: fileURL, namespace: namespace,
             filename: filename, mimeType: mimeType, concurrency: concurrency ?? defaultUploadConcurrency,
             ticket: ticket, progress: progress
         )
-        return UploadResult(object: object, url: streamURL(objectID: object.id))
     }
 
     /// Writes the object to destination, failing with dataLoss if any chunk or the whole file mismatches.

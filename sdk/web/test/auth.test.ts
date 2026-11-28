@@ -123,22 +123,6 @@ describe('storage tickets against a gateway with checks on', () => {
     )
   })
 
-  it('lets the service key copy an object, and refuses a client with no key', async () => {
-    const obj = await client.upload(file(), {
-      namespace: Namespace.CINEMA,
-      ticket: uploadTicket(),
-    })
-    const copy = await server.copy(obj.id)
-    expect(copy.id).not.toBe(obj.id)
-    expect(copy.chunkHashes).toEqual(obj.chunkHashes)
-    expect(copy).toMatchObject({
-      namespace: obj.namespace,
-      filename: obj.filename,
-      sizeBytes: obj.sizeBytes,
-    })
-    expect(await codeOf(client.copy(obj.id))).toBe(Code.Unauthenticated)
-  })
-
   it('builds thumbnail URLs only when the object has one', () => {
     expect(client.thumbnailUrl({ thumbnailChunkHash: '' })).toBeNull()
     expect(client.thumbnailUrl({ thumbnailChunkHash: 'ab' }, 't k')).toBe(

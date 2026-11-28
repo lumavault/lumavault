@@ -35,16 +35,15 @@ private final class ProgressLog: @unchecked Sendable {
         let file = try tempFile(named: "movie.mp4", bytes: bytes)
         let log = ProgressLog()
 
-        let result = try await client.upload(fileURL: file, namespace: .cinema, progress: { log.append($0) })
-        #expect(result.object.filename == "movie.mp4")
-        #expect(result.object.mimeType == "video/mp4")
-        #expect(result.object.chunkHashes.count == 3)
-        #expect(result.url == client.streamURL(objectID: result.object.id))
+        let object = try await client.upload(fileURL: file, namespace: .cinema, progress: { log.append($0) })
+        #expect(object.filename == "movie.mp4")
+        #expect(object.mimeType == "video/mp4")
+        #expect(object.chunkHashes.count == 3)
         #expect(log.all.first?.phase == .hashing)
         #expect(log.all.last == UploadProgress(phase: .uploading, loaded: UInt64(9 * mib), total: UInt64(9 * mib)))
 
         let destination = file.deletingLastPathComponent().appending(component: "copy.mp4")
-        try await client.download(objectID: result.object.id, to: destination)
+        try await client.download(objectID: object.id, to: destination)
         #expect(try Data(contentsOf: destination) == bytes)
     }
 
@@ -59,14 +58,14 @@ private final class ProgressLog: @unchecked Sendable {
         // Every chunk PUT reports one event, so a single event already at 100 percent means none were sent.
         #expect(uploading.count == 1)
         #expect(uploading.first?.percentage == 100)
-        #expect(second.object.id != first.object.id)
+        #expect(second.id != first.id)
     }
 
     @Test func getsUpdatesListsAndDeletes() async throws {
         var ids: [String] = []
         for n in 1...3 {
             let file = try tempFile(named: "save\(n).sav", bytes: ChunkVectors.patternBytes(count: 100 + n))
-            ids.append(try await client.upload(fileURL: file, namespace: .games).object.id)
+            ids.append(try await client.upload(fileURL: file, namespace: .games).id)
         }
 
         let updated = try await client.update(objectID: ids[0], filename: "renamed.sav")
