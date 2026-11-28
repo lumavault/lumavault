@@ -1,5 +1,14 @@
+import { HOUSEHOLD_MEMBER_ROLE } from '#/auth/constants.js'
 import { isLockedAuthPath } from '#/auth/org-lockdown.js'
 import { createHouseholdFor, mintBearerSession } from '#/auth/server-helpers.js'
+import { joinFromMemberInvite } from '#/auth/sign-up-gate.js'
+import { createInvitation } from '#/data/auth/invitation/create-invitation.js'
+import { getInvitationForUpdate } from '#/data/auth/invitation/get-invitation.js'
+import {
+  cancelInvitation,
+  markInvitationAccepted,
+} from '#/data/auth/invitation/update-invitation.js'
+import { createHousehold } from '#/data/iam/household/create-household.js'
 import { invitation, member, user } from '#/db/schemas/auth.js'
 import { iamHouseholdInvites } from '#/db/schemas/iam.js'
 import { hashSecret, newSecret } from '#/lib/secrets.js'
@@ -124,6 +133,182 @@ describe('sign-up gate', () => {
       .from(invitation)
       .where(eq(invitation.email, 'joiner@example.com'))
     expect(invite?.status).toBe('accepted')
+  })
+
+  it('does not accept a canceled or expired member invite during joinFromMemberInvite', async () => {
+    const household = await createHouseholdFor(ctx, owner.id, 'Closed')
+    await createHousehold(database.db, {
+      householdId: household.id,
+      storageCapBytes: 10n ** 9n,
+      enabledApps: ['photos'],
+      memberLimit: 4,
+    })
+    const now = new Date()
+
+    const canceledUser = await signUp(ctx, 'canceled-invite@example.com')
+    const canceled = await createInvitation(database.db, {
+      organizationId: household.id,
+      email: canceledUser.email,
+      role: HOUSEHOLD_MEMBER_ROLE,
+      inviterId: owner.id,
+      expiresAt: new Date(now.getTime() + 3_600_000),
+    })
+    await cancelInvitation(database.db, canceled.id)
+    await joinFromMemberInvite(
+      database.db,
+      canceledUser.id,
+      canceledUser.email,
+      now,
+    )
+    expect(
+      await markInvitationAccepted(database.db, canceled.id, now),
+    ).toBeNull()
+    expect(
+      await database.db
+        .select()
+        .from(member)
+        .where(eq(member.userId, canceledUser.id)),
+    ).toEqual([])
+    const [canceledRow] = await database.db
+      .select()
+      .from(invitation)
+      .where(eq(invitation.id, canceled.id))
+    expect(canceledRow?.status).toBe('canceled')
+
+    const expiredUser = await signUp(ctx, 'expired-invite@example.com')
+    const expired = await createInvitation(database.db, {
+      organizationId: household.id,
+      email: expiredUser.email,
+      role: HOUSEHOLD_MEMBER_ROLE,
+      inviterId: owner.id,
+      expiresAt: new Date(now.getTime() - 1000),
+    })
+    await joinFromMemberInvite(
+      database.db,
+      expiredUser.id,
+      expiredUser.email,
+      now,
+    )
+    expect(
+      await markInvitationAccepted(database.db, expired.id, now),
+    ).toBeNull()
+    expect(
+      await database.db
+        .select()
+        .from(member)
+        .where(eq(member.userId, expiredUser.id)),
+    ).toEqual([])
+    const [expiredRow] = await database.db
+      .select()
+      .from(invitation)
+      .where(eq(invitation.id, expired.id))
+    expect(expiredRow?.status).toBe('pending')
+  })
+
+  it('does not admit a member when a pending invite is canceled concurrently', async () => {
+    const household = await createHouseholdFor(ctx, owner.id, 'Raced')
+    await createHousehold(database.db, {
+      householdId: household.id,
+      storageCapBytes: 10n ** 9n,
+      enabledApps: ['photos'],
+      memberLimit: 4,
+    })
+    const racer = await signUp(ctx, 'racer@example.com')
+    const invite = await createInvitation(database.db, {
+      organizationId: household.id,
+      email: racer.email,
+      role: HOUSEHOLD_MEMBER_ROLE,
+      inviterId: owner.id,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    })
+
+    let releaseLock!: () => void
+    const inviteLocked = new Promise<void>((resolve) => {
+      releaseLock = resolve
+    })
+    // Hold the row lock while joinFromMemberInvite reads the pending invite, then cancel it.
+    const cancelTx = database.db.transaction(async (tx) => {
+      await getInvitationForUpdate(tx, invite.id)
+      releaseLock()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await cancelInvitation(tx, invite.id)
+    })
+
+    await inviteLocked
+    await Promise.all([
+      cancelTx,
+      joinFromMemberInvite(database.db, racer.id, racer.email),
+    ])
+
+    expect(
+      await database.db
+        .select()
+        .from(member)
+        .where(eq(member.userId, racer.id)),
+    ).toEqual([])
+    const [inviteRow] = await database.db
+      .select()
+      .from(invitation)
+      .where(eq(invitation.id, invite.id))
+    expect(inviteRow?.status).toBe('canceled')
+  })
+
+  it('enforces memberLimit and defaults a null invite role to member', async () => {
+    const fullHousehold = await createHouseholdFor(ctx, owner.id, 'Full')
+    await createHousehold(database.db, {
+      householdId: fullHousehold.id,
+      storageCapBytes: 10n ** 9n,
+      enabledApps: ['photos'],
+      memberLimit: 1,
+    })
+    const overflow = await signUp(ctx, 'overflow@example.com')
+    const fullInvite = await createInvitation(database.db, {
+      organizationId: fullHousehold.id,
+      email: overflow.email,
+      role: HOUSEHOLD_MEMBER_ROLE,
+      inviterId: owner.id,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    })
+    await joinFromMemberInvite(database.db, overflow.id, overflow.email)
+    expect(
+      await database.db
+        .select()
+        .from(member)
+        .where(eq(member.userId, overflow.id)),
+    ).toEqual([])
+    const [stillPending] = await database.db
+      .select()
+      .from(invitation)
+      .where(eq(invitation.id, fullInvite.id))
+    expect(stillPending?.status).toBe('pending')
+
+    const openHousehold = await createHouseholdFor(ctx, owner.id, 'DefaultRole')
+    await createHousehold(database.db, {
+      householdId: openHousehold.id,
+      storageCapBytes: 10n ** 9n,
+      enabledApps: ['photos'],
+      memberLimit: 4,
+    })
+    const newcomer = await signUp(ctx, 'default-role@example.com')
+    await createInvitation(database.db, {
+      organizationId: openHousehold.id,
+      email: newcomer.email,
+      role: null,
+      inviterId: owner.id,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    })
+    await joinFromMemberInvite(database.db, newcomer.id, newcomer.email)
+    expect(
+      await database.db
+        .select()
+        .from(member)
+        .where(eq(member.userId, newcomer.id)),
+    ).toEqual([
+      expect.objectContaining({
+        organizationId: openHousehold.id,
+        role: HOUSEHOLD_MEMBER_ROLE,
+      }),
+    ])
   })
 
   it('does not let a magic link create an account for an uninvited email', async () => {
