@@ -4,14 +4,14 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lumavault/lumavault/core/internal/chunkstore"
+	"github.com/lumavault/lumavault/core/internal/constants"
 )
 
 // copyBufPool shares 32 KiB buffers across data plane streams so each active stream
 // costs about one buffer of heap.
 var copyBufPool = sync.Pool{
 	New: func() any {
-		b := make([]byte, chunkstore.StreamBufferSize)
+		b := make([]byte, constants.StreamBufferSize)
 		return &b
 	},
 }
