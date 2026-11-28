@@ -1,13 +1,50 @@
+// Read models that combine several household queries for IamService.
 import { countPendingInvitationsByOrganizationIds } from '#/data/auth/invitation/get-invitation.js'
 import {
   countMembersByOrganizationIds,
   getOwnersByOrganizationIds,
+  getOwnerUserId,
 } from '#/data/auth/member/get-member.js'
+import { getOrganizationById } from '#/data/auth/organization/get-organization.js'
+import type { Organization } from '#/data/auth/organization/types.js'
+import type { User } from '#/data/auth/user/types.js'
 import { getHouseholdPage } from '#/data/iam/household/get-household.js'
+import type { Household } from '#/data/iam/household/types.js'
 import type { PageCursor } from '#/data/sql.js'
 import type { DbOrTx } from '#/db/index.js'
 
-import type { HouseholdSummary } from './types.js'
+/** A household with its name and Owner, everything an IamService Household needs. */
+export interface HouseholdView {
+  organization: Organization
+  household: Household
+  /** Empty when the household has no Owner, which only a broken transfer could cause. */
+  ownerUserId: string
+}
+
+/** One row of the Super-Admin household list. */
+export interface HouseholdSummary {
+  organization: Organization
+  household: Household
+  /** Null when the household has no Owner. */
+  owner: User | null
+  memberCount: number
+  /** Member invites still pending and not expired. They hold seats under the member limit. */
+  pendingInviteCount: number
+}
+
+/** Adds a household's name and Owner to its row. Null when its organization is gone. */
+export async function getHouseholdView(
+  db: DbOrTx,
+  household: Household,
+): Promise<HouseholdView | null> {
+  const [organization, ownerUserId] = await Promise.all([
+    getOrganizationById(db, household.householdId),
+    getOwnerUserId(db, household.householdId),
+  ])
+  return organization
+    ? { organization, household, ownerUserId: ownerUserId ?? '' }
+    : null
+}
 
 /**
  * A page of households in creation order with their Owner, member count, pending member
