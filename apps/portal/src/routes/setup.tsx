@@ -1,29 +1,7 @@
 import * as React from 'react'
 import { createQueryOptions } from '@connectrpc/connect-query'
 import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import { signUpPasswordSchema } from '@lumavault/ui/auth'
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from '@lumavault/ui/components/ui/alert'
-import { Button } from '@lumavault/ui/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@lumavault/ui/components/ui/card'
-import { PasswordInput } from '@lumavault/ui/components/ui/custom/inputs/password-input'
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@lumavault/ui/components/ui/field'
-import { Input } from '@lumavault/ui/components/ui/input'
-import { Spinner } from '@lumavault/ui/components/ui/spinner'
+import { FullScreenSpinner } from '@lumavault/ui/components/ui/custom/page-states'
 import {
   createConnectQueryKey,
   useMutation,
@@ -32,24 +10,9 @@ import {
   useTransport,
 } from '@lumavault/ui/rpc'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { AuthLayout } from '#/layout/auth-layout'
-import { rpcErrorMessage, zodFieldErrors } from '#/lib/format'
-import { AlertCircleIcon, InfoIcon } from 'lucide-react'
-import { z } from 'zod'
-
-const setupSchema = signUpPasswordSchema
-  .extend({
-    confirmPassword: z.string().min(1, 'Confirm your password.'),
-    householdName: z.string().trim().min(1, 'Enter a name for your household.'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    path: ['confirmPassword'],
-    message: 'Passwords do not match.',
-  })
-
-type SetupFieldErrors = Partial<
-  Record<keyof z.infer<typeof setupSchema>, string>
->
+import { AuthCard } from '#/components/auth/auth-card'
+import { SetupForm, type SetupFormValues } from '#/components/auth/setup-form'
+import { rpcErrorMessage } from '#/lib/format'
 
 function SetupPage() {
   const router = useRouter()
@@ -58,12 +21,6 @@ function SetupPage() {
   const setupQuery = useQuery(IamService.method.getSetupStatus)
   const completeSetup = useMutation(IamService.method.completeSetup)
 
-  const [name, setName] = React.useState('')
-  const [email, setEmail] = React.useState('')
-  const [password, setPassword] = React.useState('')
-  const [confirmPassword, setConfirmPassword] = React.useState('')
-  const [householdName, setHouseholdName] = React.useState('')
-  const [fieldErrors, setFieldErrors] = React.useState<SetupFieldErrors>({})
   const [submitError, setSubmitError] = React.useState<string | null>(null)
   const [isFinishing, setIsFinishing] = React.useState(false)
 
@@ -76,44 +33,15 @@ function SetupPage() {
   }, [alreadySetUp, isFinishing, router])
 
   if (alreadySetUp && !isFinishing) {
-    return (
-      <AuthLayout>
-        <div className="flex justify-center py-8">
-          <Spinner className="size-6" />
-        </div>
-      </AuthLayout>
-    )
+    return <FullScreenSpinner />
   }
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  async function handleSubmit(values: SetupFormValues) {
     setSubmitError(null)
-
-    const parsed = setupSchema.safeParse({
-      name,
-      email,
-      password,
-      confirmPassword,
-      householdName,
-    })
-
-    if (!parsed.success) {
-      setFieldErrors(
-        zodFieldErrors<keyof z.infer<typeof setupSchema>>(parsed.error),
-      )
-      return
-    }
-
-    setFieldErrors({})
     setIsFinishing(true)
 
     try {
-      await completeSetup.mutateAsync({
-        name: parsed.data.name,
-        email: parsed.data.email,
-        password: parsed.data.password,
-        householdName: parsed.data.householdName,
-      })
+      await completeSetup.mutateAsync(values)
 
       await queryClient.invalidateQueries({
         queryKey: createConnectQueryKey({
@@ -153,130 +81,17 @@ function SetupPage() {
   }
 
   return (
-    <AuthLayout>
-      <Card>
-        <CardHeader>
-          <CardTitle>Set up LumaVault</CardTitle>
-          <CardDescription>
-            Create the first Super-Admin account and your initial household.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {setupQuery.data?.adminEmailRequired ? (
-            <Alert>
-              <InfoIcon />
-              <AlertTitle>Admin email required</AlertTitle>
-              <AlertDescription>
-                This server is configured to accept only its preset admin email
-                address during setup.
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {submitError ? (
-            <Alert variant="destructive">
-              <AlertCircleIcon />
-              <AlertDescription>{submitError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          <form onSubmit={(e) => void handleSubmit(e)} noValidate>
-            <FieldGroup>
-              <Field data-invalid={Boolean(fieldErrors.name) || undefined}>
-                <FieldLabel htmlFor="setup-name">Your name</FieldLabel>
-                <Input
-                  id="setup-name"
-                  autoComplete="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.name) || undefined}
-                  disabled={isFinishing}
-                />
-                {fieldErrors.name ? (
-                  <FieldError>{fieldErrors.name}</FieldError>
-                ) : null}
-              </Field>
-
-              <Field data-invalid={Boolean(fieldErrors.email) || undefined}>
-                <FieldLabel htmlFor="setup-email">Email</FieldLabel>
-                <Input
-                  id="setup-email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.email) || undefined}
-                  disabled={isFinishing}
-                />
-                {fieldErrors.email ? (
-                  <FieldError>{fieldErrors.email}</FieldError>
-                ) : null}
-              </Field>
-
-              <Field data-invalid={Boolean(fieldErrors.password) || undefined}>
-                <FieldLabel htmlFor="setup-password">Password</FieldLabel>
-                <PasswordInput
-                  id="setup-password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.password) || undefined}
-                  disabled={isFinishing}
-                />
-                {fieldErrors.password ? (
-                  <FieldError>{fieldErrors.password}</FieldError>
-                ) : null}
-              </Field>
-
-              <Field
-                data-invalid={Boolean(fieldErrors.confirmPassword) || undefined}
-              >
-                <FieldLabel htmlFor="setup-confirm-password">
-                  Confirm password
-                </FieldLabel>
-                <PasswordInput
-                  id="setup-confirm-password"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  aria-invalid={
-                    Boolean(fieldErrors.confirmPassword) || undefined
-                  }
-                  disabled={isFinishing}
-                />
-                {fieldErrors.confirmPassword ? (
-                  <FieldError>{fieldErrors.confirmPassword}</FieldError>
-                ) : null}
-              </Field>
-
-              <Field
-                data-invalid={Boolean(fieldErrors.householdName) || undefined}
-              >
-                <FieldLabel htmlFor="setup-household">
-                  Household name
-                </FieldLabel>
-                <Input
-                  id="setup-household"
-                  placeholder="For example, Smith Family"
-                  value={householdName}
-                  onChange={(e) => setHouseholdName(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.householdName) || undefined}
-                  disabled={isFinishing}
-                />
-                {fieldErrors.householdName ? (
-                  <FieldError>{fieldErrors.householdName}</FieldError>
-                ) : null}
-              </Field>
-
-              <Button type="submit" disabled={isFinishing} className="w-full">
-                {isFinishing ? <Spinner data-icon="inline-start" /> : null}
-                Complete setup
-              </Button>
-            </FieldGroup>
-          </form>
-        </CardContent>
-      </Card>
-    </AuthLayout>
+    <AuthCard
+      title="Set up LumaVault"
+      description="Create the first Super-Admin account and your initial household."
+    >
+      <SetupForm
+        adminEmailRequired={setupQuery.data?.adminEmailRequired}
+        isSubmitting={isFinishing}
+        error={submitError}
+        onSubmit={handleSubmit}
+      />
+    </AuthCard>
   )
 }
 
