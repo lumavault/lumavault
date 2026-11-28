@@ -32,10 +32,3 @@ public struct UploadResult: Sendable {
     public let object: ObjectMetadata
     public let url: URL
 }
-
-public struct ListPage: Sendable {
-    public let objects: [ObjectMetadata]
-    /// Pass to the next list call. Nil on the last page.
-    public let cursor: String?
-    public let hasMore: Bool
-}
