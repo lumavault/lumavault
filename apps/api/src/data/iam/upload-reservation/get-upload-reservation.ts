@@ -1,7 +1,8 @@
+import { uuid } from '#/data/sql.js'
 import { noRowsOnBadUuid } from '#/db/errors.js'
 import type { DbOrTx } from '#/db/index.js'
 import { iamUploadReservations } from '#/db/schemas/iam.js'
-import { and, asc, eq, lt, sql } from 'drizzle-orm'
+import { and, asc, eq, lt } from 'drizzle-orm'
 
 import type { UploadReservation } from './types.js'
 
@@ -13,7 +14,7 @@ export async function getUploadReservation(
   const [reservation] = await db
     .select()
     .from(iamUploadReservations)
-    .where(eq(iamUploadReservations.id, sql`${reservationId}::uuid`))
+    .where(eq(iamUploadReservations.id, uuid(reservationId)))
     .catch(noRowsOnBadUuid)
   return reservation ?? null
 }
@@ -26,7 +27,7 @@ export async function getUploadReservationForUpdate(
   const [reservation] = await db
     .select()
     .from(iamUploadReservations)
-    .where(eq(iamUploadReservations.id, sql`${reservationId}::uuid`))
+    .where(eq(iamUploadReservations.id, uuid(reservationId)))
     .for('update')
     .catch(noRowsOnBadUuid)
   return reservation ?? null

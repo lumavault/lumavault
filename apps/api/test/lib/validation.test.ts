@@ -5,13 +5,71 @@ import {
   nonNegativeBigintSchema,
   parseInput,
   parseNonNegativeBigint,
+  required,
   requiredObjectIdSchema,
   requiredUuidSchema,
+  requireEmail,
+  requireUuid,
   uuidSchema,
 } from '#/lib/validation.js'
 import { describe, expect, it } from 'vitest'
 
 describe('lib/validation', () => {
+  it('trims required strings and rejects blank values', () => {
+    expect(required('  hello  ', 'name')).toBe('hello')
+
+    for (const bad of ['', '   ']) {
+      try {
+        required(bad, 'name')
+        expect.unreachable()
+      } catch (err) {
+        const ce = ConnectError.from(err)
+        expect(ce.code).toBe(Code.InvalidArgument)
+        expect(ce.rawMessage).toBe('name is required')
+      }
+    }
+  })
+
+  it('trims, lowercases, and validates email addresses', () => {
+    expect(requireEmail('  Ada@Example.com  ')).toBe('ada@example.com')
+
+    for (const [value, field, expected] of [
+      ['', undefined, 'email is required'],
+      ['   ', 'contact_email', 'contact_email is required'],
+      ['not-an-email', undefined, 'email is not a valid address'],
+      ['bad@', 'contact_email', 'contact_email is not a valid address'],
+    ] as const) {
+      try {
+        requireEmail(value, field)
+        expect.unreachable()
+      } catch (err) {
+        const ce = ConnectError.from(err)
+        expect(ce.code).toBe(Code.InvalidArgument)
+        expect(ce.rawMessage).toBe(expected)
+      }
+    }
+  })
+
+  it('trims and validates UUIDs with requireUuid', () => {
+    const id = randomUUID()
+    expect(requireUuid(`  ${id}  `, 'invite_id')).toBe(id)
+
+    for (const [value, expected] of [
+      ['', 'invite_id is required'],
+      ['   ', 'invite_id is required'],
+      ['not-a-uuid', 'invite_id is not a valid ID'],
+    ] as const) {
+      try {
+        requireUuid(value, 'invite_id')
+        expect.unreachable()
+      } catch (err) {
+        const ce = ConnectError.from(err)
+        expect(ce.code).toBe(Code.InvalidArgument)
+        expect(ce.rawMessage).toBe(expected)
+      }
+    }
+  })
+
   it('validates non-negative Postgres bigints with Zod', () => {
     expect(parseNonNegativeBigint(0n, 'position_ms')).toBe(0n)
     expect(parseNonNegativeBigint(MAX_PG_BIGINT, 'position_ms')).toBe(

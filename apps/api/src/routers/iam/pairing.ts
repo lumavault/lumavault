@@ -30,10 +30,9 @@ import {
 } from '#/iam/constants.js'
 import { RateLimiter } from '#/lib/rate-limit.js'
 import { hashSecret, newSecret } from '#/lib/secrets.js'
+import { required, requireUuid } from '#/lib/validation.js'
 import type { ApiModule } from '#/server/modules.js'
 import { clientIpKey } from '#/server/request.js'
-
-import { required } from './convert.js'
 
 /** A random code from the lookalike-free alphabet. */
 export function newPairingCode(): string {
@@ -139,7 +138,7 @@ export const module: ApiModule = {
       }
       const pairing = await getPairingRequest(
         ctx.db,
-        required(req.pairingId, 'pairing_id'),
+        requireUuid(req.pairingId, 'pairing_id'),
       )
       if (!pairing) {
         throw new ConnectError('no such pairing', Code.NotFound)

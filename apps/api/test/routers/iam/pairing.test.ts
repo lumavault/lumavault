@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { Code, ConnectError } from '@connectrpc/connect'
 import { PairingStatus } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { createHouseholdFor } from '#/auth/server-helpers.js'
@@ -234,10 +235,18 @@ describe('Apple TV pairing', () => {
     ).toBe(Code.InvalidArgument)
   })
 
-  it('returns NotFound for an unknown pairing ID', async () => {
+  it('rejects a missing or malformed pairing ID and returns NotFound for an unknown UUID', async () => {
+    expect(
+      await codeOf(tv().pollPairing({ pairingId: ' ', deviceSecret: 's' })),
+    ).toBe(Code.InvalidArgument)
     expect(
       await codeOf(
         tv().pollPairing({ pairingId: 'not-a-uuid', deviceSecret: 's' }),
+      ),
+    ).toBe(Code.InvalidArgument)
+    expect(
+      await codeOf(
+        tv().pollPairing({ pairingId: randomUUID(), deviceSecret: 's' }),
       ),
     ).toBe(Code.NotFound)
   })

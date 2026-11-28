@@ -78,15 +78,6 @@ export function assignableRoleFromWire(
   throw new ConnectError('role must be Admin or Member', Code.InvalidArgument)
 }
 
-/** A required string field, trimmed. */
-export function required(value: string, field: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    throw new ConnectError(`${field} is required`, Code.InvalidArgument)
-  }
-  return trimmed
-}
-
 /** A user row as an IamService User. */
 export function userToWire(u: User): MessageInitShape<typeof UserSchema> {
   return {

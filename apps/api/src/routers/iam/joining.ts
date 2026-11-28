@@ -46,9 +46,10 @@ import {
 import type { DbOrTx } from '#/db/index.js'
 import { requireSignedIn } from '#/guards.js'
 import { hashSecret } from '#/lib/secrets.js'
+import { required } from '#/lib/validation.js'
 import type { ApiModule } from '#/server/modules.js'
 
-import { householdToWire, required, roleToWire } from './convert.js'
+import { householdToWire, roleToWire } from './convert.js'
 
 type ResolvedInvite =
   | { kind: 'household'; invite: HouseholdInvite }

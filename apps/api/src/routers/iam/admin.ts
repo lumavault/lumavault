@@ -25,7 +25,7 @@ import {
 } from '#/iam/constants.js'
 import { paged } from '#/lib/paging.js'
 import { hashSecret, newSecret } from '#/lib/secrets.js'
-import { emailSchema, uuidSchema } from '#/lib/validation.js'
+import { required, requireEmail, requireUuid } from '#/lib/validation.js'
 import { HOUSEHOLD_INVITE_PATH } from '#/routes.js'
 import type { ApiModule } from '#/server/modules.js'
 import {
@@ -38,7 +38,6 @@ import {
   householdInviteToWire,
   householdSummaryToWire,
   householdViewToWire,
-  required,
   userToWire,
 } from './convert.js'
 
@@ -128,13 +127,7 @@ export const module: ApiModule = {
   rpc(router, ctx) {
     router.rpc(IamService.method.createHouseholdInvite, async (req, call) => {
       const viewer = await requireSuperAdmin(call, ctx)
-      const email = required(req.email, 'email').toLowerCase()
-      if (!emailSchema.safeParse(email).success) {
-        throw new ConnectError(
-          'email is not a valid address',
-          Code.InvalidArgument,
-        )
-      }
+      const email = requireEmail(req.email)
       if (!req.allowance) {
         throw new ConnectError('allowance is required', Code.InvalidArgument)
       }
@@ -186,14 +179,9 @@ export const module: ApiModule = {
 
     router.rpc(IamService.method.revokeHouseholdInvite, async (req, call) => {
       await requireSuperAdmin(call, ctx)
-      if (!uuidSchema.safeParse(req.inviteId).success) {
-        throw new ConnectError(
-          'invite_id is not a valid ID',
-          Code.InvalidArgument,
-        )
-      }
+      const inviteId = requireUuid(req.inviteId, 'invite_id')
       await ctx.db.transaction(async (tx) => {
-        const invite = await getHouseholdInviteForUpdate(tx, req.inviteId)
+        const invite = await getHouseholdInviteForUpdate(tx, inviteId)
         if (!invite) {
           throw new ConnectError('invite not found', Code.NotFound)
         }
