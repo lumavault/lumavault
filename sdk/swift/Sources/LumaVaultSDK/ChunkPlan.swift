@@ -18,6 +18,7 @@ func planChunks(
     fileURL: URL,
     onHashed: ((_ hashedBytes: UInt64, _ totalBytes: UInt64) -> Void)? = nil
 ) throws -> ChunkPlan {
+    try Task.checkCancellation()
     let handle = try FileHandle(forReadingFrom: fileURL)
     defer { try? handle.close() }
 
@@ -35,6 +36,7 @@ func planChunks(
     var hashedBytes: UInt64 = 0
 
     while true {
+        try Task.checkCancellation()
         let wanted = min(ChunkingConstants.readBufferBytes, chunkSizeBytes - bytesInChunk)
         guard let piece = try handle.read(upToCount: wanted), !piece.isEmpty else { break }
         fileHasher.update(data: piece)

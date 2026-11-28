@@ -22,7 +22,9 @@ export interface ChunkPlan {
 export async function planChunks(
   input: UploadInput,
   onHashed?: (hashedBytes: number, totalBytes: number) => void,
+  signal?: AbortSignal,
 ): Promise<ChunkPlan> {
+  signal?.throwIfAborted()
   const source = toByteSource(input)
   if (source.size === 0) {
     throw new ConnectError(
@@ -37,14 +39,16 @@ export async function planChunks(
   const chunkHashes: string[] = []
 
   for (let pos = 0; pos < source.size; pos += chunkSizeBytes) {
+    signal?.throwIfAborted()
     const bytes = await source.read(
       pos,
       Math.min(pos + chunkSizeBytes, source.size),
     )
+    signal?.throwIfAborted()
     fileHasher.update(bytes)
-    chunkHashes.push(
-      toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))),
-    )
+    const digest = await crypto.subtle.digest('SHA-256', bytes)
+    signal?.throwIfAborted()
+    chunkHashes.push(toHex(new Uint8Array(digest)))
     onHashed?.(pos + bytes.byteLength, source.size)
   }
 

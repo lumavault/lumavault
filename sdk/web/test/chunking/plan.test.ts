@@ -33,13 +33,11 @@ describe('planChunks', () => {
     }
   })
 
-  it('never reads more than one chunk at a time', async () => {
-    const chunk = 4 * 1024 * 1024
-    const size = 3 * chunk + 5
+  function lazyBlob(size: number) {
     let largestRead = 0
     let reads = 0
     // Stands in for a disk-backed File: bytes exist only for the slice being read.
-    const lazyBlob = {
+    const blob = {
       size,
       slice: (start: number, end: number) => ({
         arrayBuffer: async () => {
@@ -49,10 +47,55 @@ describe('planChunks', () => {
         },
       }),
     } as unknown as Blob
+    return {
+      blob,
+      get reads() {
+        return reads
+      },
+      get largestRead() {
+        return largestRead
+      },
+    }
+  }
 
-    const plan = await planChunks(lazyBlob)
+  it('never reads more than one chunk at a time', async () => {
+    const chunk = 4 * 1024 * 1024
+    const input = lazyBlob(3 * chunk + 5)
+
+    const plan = await planChunks(input.blob)
     expect(plan.chunkHashes).toHaveLength(4)
-    expect(reads).toBe(4)
-    expect(largestRead).toBe(chunk)
+    expect(input.reads).toBe(4)
+    expect(input.largestRead).toBe(chunk)
+  })
+
+  it('stops before reading when the signal is already aborted', async () => {
+    const chunk = 4 * 1024 * 1024
+    const input = lazyBlob(3 * chunk + 5)
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      planChunks(input.blob, undefined, controller.signal),
+    ).rejects.toBe(controller.signal.reason)
+    expect(input.reads).toBe(0)
+  })
+
+  it('stops between chunks when aborted during hashing', async () => {
+    const chunk = 4 * 1024 * 1024
+    const input = lazyBlob(3 * chunk + 5)
+    const controller = new AbortController()
+    let hashedEvents = 0
+
+    const err = await planChunks(
+      input.blob,
+      () => {
+        hashedEvents++
+        controller.abort()
+      },
+      controller.signal,
+    ).catch((e: unknown) => e)
+    expect(err).toBe(controller.signal.reason)
+    expect(input.reads).toBe(1)
+    expect(hashedEvents).toBe(1)
   })
 })
