@@ -1,9 +1,11 @@
 import * as React from 'react'
 import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import { Alert, AlertDescription } from '@lumavault/ui/components/ui/alert'
-import { Button } from '@lumavault/ui/components/ui/button'
+import {
+  FullScreenError,
+  FullScreenMessage,
+  FullScreenSpinner,
+} from '@lumavault/ui/components/ui/custom/page-states'
 import { Toaster } from '@lumavault/ui/components/ui/sonner'
-import { Spinner } from '@lumavault/ui/components/ui/spinner'
 import { useQuery } from '@lumavault/ui/rpc'
 import {
   createRootRoute,
@@ -12,7 +14,6 @@ import {
   useRouter,
 } from '@tanstack/react-router'
 import { rpcErrorMessage } from '#/lib/format'
-import { AlertCircleIcon } from 'lucide-react'
 
 function RootComponent() {
   const location = useLocation()
@@ -32,36 +33,18 @@ function RootComponent() {
   }, [needsSetup, onSetupRoute, router])
 
   if (setupQuery.isPending) {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Spinner className="size-6" />
-      </div>
-    )
+    return <FullScreenSpinner />
   }
 
   if (setupQuery.isError) {
     return (
-      <div className="flex min-h-svh items-center justify-center p-6">
-        <div className="flex w-full max-w-md flex-col items-center gap-3">
-          <Alert variant="destructive">
-            <AlertCircleIcon />
-            <AlertDescription>
-              {rpcErrorMessage(
-                setupQuery.error,
-                'Could not reach the LumaVault server.',
-              )}
-            </AlertDescription>
-          </Alert>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void setupQuery.refetch()}
-          >
-            Retry
-          </Button>
-        </div>
-      </div>
+      <FullScreenError
+        message={rpcErrorMessage(
+          setupQuery.error,
+          'Could not reach the LumaVault server.',
+        )}
+        onRetry={() => void setupQuery.refetch()}
+      />
     )
   }
 
@@ -78,11 +61,7 @@ function RootComponent() {
 }
 
 function NotFoundPage() {
-  return (
-    <div className="flex min-h-svh items-center justify-center p-6">
-      <p className="text-sm text-muted-foreground">Page not found.</p>
-    </div>
-  )
+  return <FullScreenMessage>Page not found.</FullScreenMessage>
 }
 
 export const Route = createRootRoute({

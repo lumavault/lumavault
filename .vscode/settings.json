@@ -3,6 +3,7 @@
     "chunkserver",
     "chunkstore",
     "Lumavault",
+    "permille",
     "Tmdb"
   ]
 }

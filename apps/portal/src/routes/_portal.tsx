@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { AuthGuard, useAuthConfig } from '@lumavault/ui/auth'
-import { Spinner } from '@lumavault/ui/components/ui/spinner'
+import { FullScreenSpinner } from '@lumavault/ui/components/ui/custom/page-states'
 import {
   createFileRoute,
   Outlet,
@@ -41,11 +41,7 @@ function PortalLayoutRoute() {
       allowNoHousehold
       currentUrl={currentUrl}
       onRedirect={handleRedirect}
-      loadingFallback={
-        <div className="flex min-h-svh items-center justify-center">
-          <Spinner className="size-6" />
-        </div>
-      }
+      loadingFallback={<FullScreenSpinner />}
     >
       <PortalShell>
         <Outlet />
