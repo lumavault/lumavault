@@ -1,4 +1,5 @@
 import {
+  activeClaimOn,
   keysetAfterTz,
   keysetOrder,
   uuid,
@@ -15,7 +16,12 @@ import {
 import { iamObjectClaims } from '#/db/schemas/iam.js'
 import { and, eq, isNotNull, isNull, or, type SQL } from 'drizzle-orm'
 
-import type { MediaFileDetails, MediaFileFilterMode } from './types.js'
+import type {
+  MediaFileDetails,
+  MediaFileFilterMode,
+  MediaFileTarget,
+  PlayableOriginalLookup,
+} from './types.js'
 
 function selectMediaFiles(db: DbOrTx) {
   return db
@@ -99,4 +105,65 @@ export async function getMediaFilePage(
     )
     .orderBy(...keysetOrder(cinemaMediaFiles.addedAt, cinemaMediaFiles.id))
     .limit(page.limit)
+}
+
+async function lookupOriginalForTarget(
+  db: DbOrTx,
+  targetTable: typeof cinemaMovies | typeof cinemaEpisodes,
+  fileTargetColumn:
+    typeof cinemaMediaFiles.movieId | typeof cinemaMediaFiles.episodeId,
+  targetId: string,
+): Promise<PlayableOriginalLookup> {
+  const [row] = await db
+    .select({
+      targetId: targetTable.id,
+      file: cinemaMediaFiles,
+      claim: { bytes: iamObjectClaims.bytes },
+    })
+    .from(targetTable)
+    .leftJoin(
+      cinemaMediaFiles,
+      and(
+        eq(fileTargetColumn, targetTable.id),
+        eq(cinemaMediaFiles.kind, 'original'),
+      ),
+    )
+    .leftJoin(
+      iamObjectClaims,
+      activeClaimOn(iamObjectClaims, cinemaMediaFiles.objectId),
+    )
+    .where(eq(targetTable.id, uuid(targetId)))
+    .limit(1)
+    .catch(noRowsOnBadUuid)
+
+  if (!row) {
+    return { status: 'missing_target' }
+  }
+  if (!row.file || !row.claim) {
+    return { status: 'no_file' }
+  }
+  return {
+    status: 'ok',
+    source: { file: row.file, sizeBytes: row.claim.bytes },
+  }
+}
+
+/** Resolves a movie or episode and its active original media file with claimed byte size. */
+export function getOriginalMediaFileByTarget(
+  db: DbOrTx,
+  target: MediaFileTarget,
+): Promise<PlayableOriginalLookup> {
+  return target.kind === 'movie'
+    ? lookupOriginalForTarget(
+        db,
+        cinemaMovies,
+        cinemaMediaFiles.movieId,
+        target.id,
+      )
+    : lookupOriginalForTarget(
+        db,
+        cinemaEpisodes,
+        cinemaMediaFiles.episodeId,
+        target.id,
+      )
 }
