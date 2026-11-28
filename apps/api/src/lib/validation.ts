@@ -1,6 +1,6 @@
 // Input schemas and parsers shared by every RPC handler, so each field has one rule.
 import { Code, ConnectError } from '@connectrpc/connect'
-import { MAX_PG_BIGINT } from '#/db/constants.js'
+import { MAX_PG_BIGINT, MAX_PG_INT } from '#/db/constants.js'
 import { z } from 'zod'
 
 export const emailSchema = z.email()
@@ -29,6 +29,24 @@ export function requiredObjectIdSchema(field = 'object_id') {
       (value) => value !== '.' && value !== '..' && !/[/\\]/.test(value),
       `${field} is not valid`,
     )
+}
+
+/** Schema for a positive signed 32-bit Postgres integer field. */
+export function positiveIntSchema(field: string) {
+  return z
+    .number({ error: `${field} must be a whole number` })
+    .int(`${field} must be a whole number`)
+    .min(1, `${field} must be positive`)
+    .max(MAX_PG_INT, `${field} must be at most ${MAX_PG_INT}`)
+}
+
+/** Schema for a non-negative signed 32-bit Postgres integer field. */
+export function nonNegativeIntSchema(field: string) {
+  return z
+    .number({ error: `${field} must be a whole number` })
+    .int(`${field} must be a whole number`)
+    .min(0, `${field} must be non-negative`)
+    .max(MAX_PG_INT, `${field} must be at most ${MAX_PG_INT}`)
 }
 
 /** Parses value with schema or throws an InvalidArgument ConnectError. */

@@ -6,6 +6,7 @@ import * as authTables from '#/db/schemas/auth.js'
 import { createEmailService } from '#/email/emails.js'
 import { createMailer } from '#/email/mailer.js'
 import { createStorageGateway } from '#/lib/storage-gateway.js'
+import { createTmdbClient } from '#/lib/tmdb/index.js'
 import { createApp } from '#/server/app.js'
 import {
   appDataHooks,
@@ -40,6 +41,7 @@ const gateway = createStorageGateway({
   baseUrl: config.gatewayUrl,
   serviceKey: config.serviceKey,
 })
+const tmdb = createTmdbClient({ apiKey: config.tmdbApiKey })
 const modules = await loadModules()
 const ctx: ModuleContext = {
   config,
@@ -47,6 +49,7 @@ const ctx: ModuleContext = {
   auth,
   email,
   gateway,
+  tmdb,
   apps: appDataHooks(modules),
 }
 const app = createApp(ctx, modules)

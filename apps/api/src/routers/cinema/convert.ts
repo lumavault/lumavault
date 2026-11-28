@@ -5,13 +5,20 @@ import { timestampFromDate } from '@bufbuild/protobuf/wkt'
 import { Code, ConnectError } from '@connectrpc/connect'
 import { LumaVaultClient } from '@lumavault/sdk'
 import {
+  CatalogErrorReason,
+  CatalogErrorSchema,
+  CatalogKind,
   MediaContainer,
   MediaFileFilter,
   MediaFileKind,
   UnsupportedMediaFormatErrorSchema,
   type CatalogItemSchema,
+  type CatalogSearchResultSchema,
   type ContinueWatchingItemSchema,
   type EpisodeSchema,
+  type GetCatalogSeasonResponseSchema,
+  type GetCatalogSeriesResponseSchema,
+  type MatchMediaFileRequest,
   type MediaFileSchema,
   type MovieSchema,
   type PlayableRef,
@@ -42,7 +49,21 @@ import type {
 } from '#/data/cinema/watch-progress/types.js'
 import type { PageCursor } from '#/data/sql.js'
 import { requireApp } from '#/guards.js'
-import { parseInput, requiredUuidSchema, uuidSchema } from '#/lib/validation.js'
+import {
+  TmdbError,
+  type TmdbErrorReason,
+  type TmdbMediaKind,
+  type TmdbSearchResult,
+  type TmdbSeasonDetails,
+  type TmdbSeriesDetails,
+} from '#/lib/tmdb/index.js'
+import {
+  nonNegativeIntSchema,
+  parseInput,
+  positiveIntSchema,
+  requiredUuidSchema,
+  uuidSchema,
+} from '#/lib/validation.js'
 import type { ModuleContext } from '#/server/modules.js'
 import { z } from 'zod'
 
@@ -374,5 +395,171 @@ export function continueWatchingItemToWire(
     progress: entry.item.progress
       ? progressToWire(entry.item.progress)
       : undefined,
+  }
+}
+
+/** Validated catalog match target parsed from a MatchMediaFileRequest. */
+export type CatalogMatchTarget =
+  | { kind: 'movie'; tmdbMovieId: number }
+  | {
+      kind: 'episode'
+      tmdbSeriesId: number
+      seasonNumber: number
+      episodeNumber: number
+    }
+
+const matchTargetSchema = z.discriminatedUnion(
+  'case',
+  [
+    z.object({
+      case: z.literal('tmdbMovieId'),
+      value: positiveIntSchema('tmdb_movie_id'),
+    }),
+    z.object({
+      case: z.literal('episode'),
+      value: z.object({
+        tmdbSeriesId: positiveIntSchema('tmdb_series_id'),
+        seasonNumber: nonNegativeIntSchema('season_number'),
+        episodeNumber: positiveIntSchema('episode_number'),
+      }),
+    }),
+  ],
+  { error: 'target tmdb_movie_id or episode is required' },
+)
+
+const CATALOG_KIND_TO_WIRE: Record<TmdbMediaKind, CatalogKind> = {
+  movie: CatalogKind.MOVIE,
+  series: CatalogKind.SERIES,
+}
+
+const CATALOG_ERROR_MAP: Record<
+  TmdbErrorReason,
+  { code: Code; reason: CatalogErrorReason; message: string }
+> = {
+  not_configured: {
+    code: Code.FailedPrecondition,
+    reason: CatalogErrorReason.NOT_CONFIGURED,
+    message: 'metadata catalog is not configured',
+  },
+  rate_limited: {
+    code: Code.ResourceExhausted,
+    reason: CatalogErrorReason.RATE_LIMITED,
+    message: 'metadata catalog rate limit exceeded',
+  },
+  unavailable: {
+    code: Code.Unavailable,
+    reason: CatalogErrorReason.UNAVAILABLE,
+    message: 'metadata catalog is unavailable',
+  },
+}
+
+/** Converts a wire CatalogKind filter to a TMDB kind, or undefined to search both. */
+export function catalogKindFromWire(
+  kind: CatalogKind,
+): TmdbMediaKind | undefined {
+  switch (kind) {
+    case CatalogKind.UNSPECIFIED:
+      return undefined
+    case CatalogKind.MOVIE:
+      return 'movie'
+    case CatalogKind.SERIES:
+      return 'series'
+    default:
+      throw new ConnectError('kind is not valid', Code.InvalidArgument)
+  }
+}
+
+export function catalogKindToWire(kind: TmdbMediaKind): CatalogKind {
+  return CATALOG_KIND_TO_WIRE[kind]
+}
+
+/** A TMDB search hit as a metadata-only CatalogSearchResult wire message. */
+export function catalogSearchResultToWire(
+  result: TmdbSearchResult,
+): MessageInitShape<typeof CatalogSearchResultSchema> {
+  return {
+    tmdbId: result.tmdbId,
+    kind: catalogKindToWire(result.kind),
+    title: result.title,
+    overview: result.overview,
+    releaseYear: result.releaseYear ?? 0,
+  }
+}
+
+/** TMDB series metadata and season summaries as a GetCatalogSeriesResponse wire message. */
+export function catalogSeriesToWire(
+  series: TmdbSeriesDetails,
+): MessageInitShape<typeof GetCatalogSeriesResponseSchema> {
+  const seasons = [...series.seasons]
+    .sort((a, b) => a.seasonNumber - b.seasonNumber)
+    .map((season) => ({
+      seasonNumber: season.seasonNumber,
+      name: season.name,
+      episodeCount: season.episodeCount,
+      airDate: season.airDate ?? '',
+    }))
+  return {
+    tmdbSeriesId: series.tmdbId,
+    title: series.title,
+    firstAirYear: series.firstAirYear ?? 0,
+    seasons,
+  }
+}
+
+/** TMDB season episode summaries as a GetCatalogSeasonResponse wire message. */
+export function catalogSeasonToWire(
+  season: TmdbSeasonDetails,
+): MessageInitShape<typeof GetCatalogSeasonResponseSchema> {
+  const episodes = [...season.episodes]
+    .sort((a, b) => a.episodeNumber - b.episodeNumber)
+    .map((ep) => ({
+      episodeNumber: ep.episodeNumber,
+      title: ep.title,
+      overview: ep.overview,
+      airDate: ep.airDate ?? '',
+    }))
+  return {
+    tmdbSeriesId: season.tmdbSeriesId,
+    seasonNumber: season.seasonNumber,
+    episodes,
+  }
+}
+
+/** Validates a MatchMediaFileRequest target oneof into a typed movie or episode target. */
+export function matchTargetFromWire(
+  target: MatchMediaFileRequest['target'],
+): CatalogMatchTarget {
+  const parsed = parseInput(matchTargetSchema, target)
+  if (parsed.case === 'tmdbMovieId') {
+    return { kind: 'movie', tmdbMovieId: parsed.value }
+  }
+  return {
+    kind: 'episode',
+    tmdbSeriesId: parsed.value.tmdbSeriesId,
+    seasonNumber: parsed.value.seasonNumber,
+    episodeNumber: parsed.value.episodeNumber,
+  }
+}
+
+/** ConnectError carrying a typed CatalogError detail for TMDB lookup failures. */
+export function catalogErrorFromTmdb(err: TmdbError): ConnectError {
+  const mapped = CATALOG_ERROR_MAP[err.reason]
+  return new ConnectError(mapped.message, mapped.code, undefined, [
+    {
+      desc: CatalogErrorSchema,
+      value: create(CatalogErrorSchema, { reason: mapped.reason }),
+    },
+  ])
+}
+
+/** Runs a TMDB call and converts any TmdbError into a ConnectError with CatalogError details. */
+export async function withCatalogErrors<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    if (err instanceof TmdbError) {
+      throw catalogErrorFromTmdb(err)
+    }
+    throw err
   }
 }

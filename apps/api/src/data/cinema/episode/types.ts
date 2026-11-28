@@ -1,4 +1,21 @@
 import type { WatchProgressRow } from '#/data/cinema/watch-progress/types.js'
+import type { cinemaEpisodes } from '#/db/schemas/cinema.js'
+
+/** An episode row in cinema.episodes. */
+export type EpisodeRow = typeof cinemaEpisodes.$inferSelect
+
+/** TMDB metadata fields written when creating or refreshing an episode row. */
+export interface UpsertEpisodeInput {
+  seriesId: string
+  tmdbId: number
+  seasonNumber: number
+  episodeNumber: number
+  title: string
+  overview: string
+  runtimeMinutes: number | null
+  airDate: string | null
+  stillPath: string | null
+}
 
 /** An episode with at least one playable media file, active still art, and the caller's progress. */
 export interface PlayableEpisode {

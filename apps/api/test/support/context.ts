@@ -11,6 +11,7 @@ import {
   createStorageGateway,
   type StorageGateway,
 } from '#/lib/storage-gateway.js'
+import { createTmdbClient, type TmdbClient } from '#/lib/tmdb/index.js'
 import type { ModuleContext } from '#/server/modules.js'
 import { requestKey } from '#/server/request.js'
 import type { TestDatabase } from '#test/support/db.js'
@@ -61,6 +62,7 @@ export function createTestContext(
     env?: Record<string, string>
     email?: EmailService
     gateway?: StorageGateway
+    tmdb?: TmdbClient
     apps?: AppDataHooks[]
   } = {},
 ): ModuleContext {
@@ -83,12 +85,14 @@ export function createTestContext(
       baseUrl: config.gatewayUrl,
       serviceKey: config.serviceKey,
     })
+  const tmdb = options.tmdb ?? createTmdbClient({ apiKey: config.tmdbApiKey })
   return {
     config,
     db: database.db,
     auth,
     email,
     gateway,
+    tmdb,
     apps: options.apps ?? [],
   }
 }

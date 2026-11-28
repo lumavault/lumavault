@@ -8,13 +8,14 @@ import type { Db } from '#/db/index.js'
 import type { EmailService } from '#/email/emails.js'
 import type { AppDataHooks } from '#/iam/app-data.js'
 import type { StorageGateway } from '#/lib/storage-gateway.js'
+import type { TmdbClient } from '#/lib/tmdb/index.js'
 import type { Hono } from 'hono'
 
 import { listSourceFiles } from './source-files.js'
 
 /**
- * What every module gets: config, the database, Better Auth, email, the Storage Gateway, and
- * the data hooks of every media app module.
+ * What every module gets: config, the database, Better Auth, email, the Storage Gateway,
+ * optional TMDB client, and the data hooks of every media app module.
  */
 export interface ModuleContext {
   config: Config
@@ -22,6 +23,7 @@ export interface ModuleContext {
   auth: Auth
   email: EmailService
   gateway: StorageGateway
+  tmdb?: TmdbClient
   apps: AppDataHooks[]
 }
 
