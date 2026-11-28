@@ -148,7 +148,7 @@ export const module: ApiModule = {
         return { invite: created, householdName: org?.name ?? '' }
       })
 
-      const inviteUrl = `${ctx.config.portalUrl.replace(/\/+$/, '')}${MEMBER_INVITE_PATH}${invite.id}`
+      const inviteUrl = `${ctx.config.portalUrl}${MEMBER_INVITE_PATH}${invite.id}`
       // The link is returned below either way, so a mail failure must not lose it.
       try {
         await ctx.email.sendMemberInvite(email, {

@@ -28,3 +28,6 @@ export const CORS_EXPOSE_HEADERS = [
 
 // Client address used for rate limits when the server cannot tell who is calling.
 export const UNKNOWN_CLIENT_IP = 'unknown'
+
+// Lowercase hex SHA-256 digest format, used for chunk hashes and stored secret hashes.
+export const SHA256_HEX = /^[0-9a-f]{64}$/

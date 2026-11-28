@@ -251,6 +251,19 @@ describe('loadConfig', () => {
     expect(config.apiUrl).toBe('http://localhost:4000')
   })
 
+  it('strips trailing slashes from the portal URL', () => {
+    expect(
+      loadConfig({ ...testEnv, LUMAVAULT_PORTAL_URL: `${ALLOWED}///` })
+        .portalUrl,
+    ).toBe(ALLOWED)
+    expect(
+      loadConfig({
+        ...testEnv,
+        LUMAVAULT_PORTAL_URL: 'https://vault.example/portal/',
+      }).portalUrl,
+    ).toBe('https://vault.example/portal')
+  })
+
   it('requires 32-byte secrets outside tests and lists every problem', () => {
     const env = {
       ...testEnv,

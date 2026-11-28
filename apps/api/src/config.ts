@@ -58,6 +58,7 @@ export interface Config {
   apiUrl: string
   /** Web app origins allowed to call the API with cookies. */
   webOrigins: string[]
+  /** Public base URL of the Portal, without trailing slashes. */
   portalUrl: string
   adminEmail?: string
   cookieDomain?: string
@@ -90,7 +91,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     authSecret: e.BETTER_AUTH_SECRET,
     apiUrl: new URL(e.LUMAVAULT_API_URL ?? `http://localhost:${e.PORT}`).origin,
     webOrigins: e.LUMAVAULT_WEB_ORIGINS,
-    portalUrl: e.LUMAVAULT_PORTAL_URL,
+    portalUrl: e.LUMAVAULT_PORTAL_URL.replace(/\/+$/, ''),
     adminEmail: e.LUMAVAULT_ADMIN_EMAIL?.toLowerCase(),
     cookieDomain: e.LUMAVAULT_COOKIE_DOMAIN,
     smtpUrl: e.SMTP_URL,

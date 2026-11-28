@@ -1,8 +1,8 @@
+import { SHA256_HEX } from '#/constants.js'
 import {
   DEFAULT_MEMBER_LIMIT,
   IAM_APPS,
   INSTANCE_SETTINGS_ID,
-  SECRET_HASH_PATTERN,
   type IamApp,
 } from '#/iam/constants.js'
 import { sql, type SQL } from 'drizzle-orm'
@@ -161,7 +161,7 @@ export const iamHouseholdInvites = iamSchema.table(
     enabledAppsCheck('household_invites', t.enabledApps),
     check(
       'household_invites_token_hash_is_sha256',
-      sql`${t.tokenHash} ~ ${sql.raw(`'${SECRET_HASH_PATTERN}'`)}`,
+      sql`${t.tokenHash} ~ ${sql.raw(`'${SHA256_HEX.source}'`)}`,
     ),
     check(
       'household_invites_storage_cap_bytes_nonnegative',
@@ -270,7 +270,7 @@ export const iamPairingRequests = iamSchema.table(
   (t) => [
     check(
       'pairing_requests_device_secret_hash_is_sha256',
-      sql`${t.deviceSecretHash} ~ ${sql.raw(`'${SECRET_HASH_PATTERN}'`)}`,
+      sql`${t.deviceSecretHash} ~ ${sql.raw(`'${SHA256_HEX.source}'`)}`,
     ),
     check(
       'pairing_requests_failed_attempts_nonnegative',
