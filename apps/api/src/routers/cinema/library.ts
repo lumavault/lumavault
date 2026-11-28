@@ -1,7 +1,9 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
 import { createMediaFile } from '#/data/cinema/media-file/create-media-file.js'
+import { deleteMediaFile } from '#/data/cinema/media-file/delete-media-file.js'
 import {
+  getMediaFileById,
   getMediaFileByObjectId,
   getMediaFilePage,
 } from '#/data/cinema/media-file/get-media-file.js'
@@ -28,6 +30,7 @@ import {
 
 const reservationIdSchema = requiredUuidSchema('reservation_id')
 const objectIdSchema = requiredObjectIdSchema('object_id')
+const mediaFileIdSchema = requiredUuidSchema('media_file_id')
 
 export const module: ApiModule = {
   name: 'cinema-library',
@@ -128,6 +131,21 @@ export const module: ApiModule = {
         files: rows.map(mediaFileToWire),
         nextPageToken,
       }
+    })
+
+    router.rpc(CinemaService.method.deleteMediaFile, async (req, call) => {
+      await requireSuperAdmin(call, ctx)
+      const mediaFileId = parseInput(mediaFileIdSchema, req.mediaFileId)
+
+      const existing = await getMediaFileById(ctx.db, mediaFileId)
+      if (!existing) {
+        return {}
+      }
+
+      // Release before deleting the row so a failed Gateway delete stays retryable.
+      await releaseObject(ctx, existing.file.objectId)
+      await deleteMediaFile(ctx.db, mediaFileId)
+      return {}
     })
   },
 }
