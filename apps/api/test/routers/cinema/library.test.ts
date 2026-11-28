@@ -6,6 +6,7 @@ import {
   type Client,
 } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
+import { LumaVaultClient, Namespace } from '@lumavault/sdk'
 import {
   CinemaService,
   MediaContainer,
@@ -16,6 +17,7 @@ import {
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
 import { createHouseholdFor } from '#/auth/server-helpers.js'
+import { deleteMediaFile } from '#/data/cinema/media-file/delete-media-file.js'
 import { getMediaFileById } from '#/data/cinema/media-file/get-media-file.js'
 import { user } from '#/db/schemas/auth.js'
 import {
@@ -23,21 +25,24 @@ import {
   cinemaMediaFiles,
   cinemaMovies,
   cinemaSeries,
+  cinemaWatchProgress,
 } from '#/db/schemas/cinema.js'
 import { iamHouseholds, iamObjectClaims } from '#/db/schemas/iam.js'
 import { MAX_PAGE_SIZE } from '#/lib/constants.js'
-import type {
-  StorageGateway,
-  StoredObject,
-  UploadObjectInput,
+import {
+  createStorageGateway,
+  type StorageGateway,
+  type StoredObject,
+  type UploadObjectInput,
 } from '#/lib/storage-gateway.js'
 import { RPC_PREFIX } from '#/routes.js'
 import { createApp } from '#/server/app.js'
 import { loadModules, type ModuleContext } from '#/server/modules.js'
-import { APP_NAMESPACE } from '#/services/quotas/index.js'
+import { APP_NAMESPACE, signObjectReadTicket } from '#/services/quotas/index.js'
 import {
   createTestContext,
   signUp,
+  TEST_ENV,
   type TestUser,
 } from '#test/support/context.js'
 import {
@@ -45,10 +50,19 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { startTestGateway, type TestGateway } from '#test/support/gateway.js'
 import { iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 
 interface FakeObject {
   stored: StoredObject
@@ -249,6 +263,7 @@ beforeAll(async () => {
 })
 
 beforeEach(async () => {
+  await database.db.delete(cinemaWatchProgress)
   await database.db.delete(cinemaMediaFiles)
   await database.db.delete(cinemaEpisodes)
   await database.db.delete(cinemaSeries)
@@ -297,6 +312,10 @@ describe('Super-Admin access', () => {
       (c) => c.addMediaFile({ reservationId: randomUUID(), objectId: 'obj-1' }),
     ],
     ['ListMediaFiles', (c) => c.listMediaFiles({})],
+    [
+      'DeleteMediaFile',
+      (c) => c.deleteMediaFile({ mediaFileId: randomUUID() }),
+    ],
   ]
 
   it.each(calls)('%s rejects unauthenticated callers', async (_name, call) => {
@@ -794,5 +813,390 @@ describe('ListMediaFiles', () => {
     expect(
       await codeOf(client.listMediaFiles({ filter: 99 as MediaFileFilter })),
     ).toBe(Code.InvalidArgument)
+  })
+})
+
+describe('DeleteMediaFile', () => {
+  async function addMp4(filename: string, sizeBytes = 512n) {
+    const upload = await prepareSharedCinemaUpload(
+      superAdmin,
+      ftypBytes('isom', ['isom', 'iso2', 'avc1', 'mp41'], 512),
+      { filename, sizeBytes },
+    )
+    const res = await cinemaClient(app, superAdmin.headers).addMediaFile(upload)
+    return res.file!
+  }
+
+  it('deletes an unmatched file, releases its claim, and removes it from Gateway and ListMediaFiles', async () => {
+    const file = await addMp4('unmatched.mp4', 1024n)
+
+    // A Super-Admin without a household can also delete shared library files.
+    await cinemaClient(app, otherSuperAdmin.headers).deleteMediaFile({
+      mediaFileId: file.id,
+    })
+
+    expect(gateway.deleted).toContain(file.objectId)
+    expect(gateway.objects.has(file.objectId)).toBe(false)
+    expect(await getMediaFileById(database.db, file.id)).toBeNull()
+
+    const [claim] = await database.db
+      .select()
+      .from(iamObjectClaims)
+      .where(eq(iamObjectClaims.objectId, file.objectId))
+    expect(claim?.releasedAt).toBeInstanceOf(Date)
+
+    const listed = await cinemaClient(app, superAdmin.headers).listMediaFiles(
+      {},
+    )
+    expect(listed.files).toHaveLength(0)
+
+    const [hh] = await database.db
+      .select()
+      .from(iamHouseholds)
+      .where(eq(iamHouseholds.householdId, householdId))
+    expect(hh?.usedBytes).toBe(0n)
+  })
+
+  it('succeeds when deleting an already-deleted or unknown file ID and rejects bad IDs', async () => {
+    const file = await addMp4('twice.mp4')
+    const client = cinemaClient(app, superAdmin.headers)
+
+    await client.deleteMediaFile({ mediaFileId: file.id })
+    await expect(
+      client.deleteMediaFile({ mediaFileId: file.id }),
+    ).resolves.toEqual(expect.objectContaining({}))
+    await expect(
+      client.deleteMediaFile({ mediaFileId: randomUUID() }),
+    ).resolves.toEqual(expect.objectContaining({}))
+
+    expect(await codeOf(client.deleteMediaFile({ mediaFileId: '' }))).toBe(
+      Code.InvalidArgument,
+    )
+    expect(await codeOf(client.deleteMediaFile({ mediaFileId: '   ' }))).toBe(
+      Code.InvalidArgument,
+    )
+    expect(
+      await codeOf(client.deleteMediaFile({ mediaFileId: 'not-a-uuid' })),
+    ).toBe(Code.InvalidArgument)
+    expect(await deleteMediaFile(database.db, 'not-a-uuid')).toBeNull()
+  })
+
+  it('keeps the media file row when Gateway deletion fails so a retry completes cleanly', async () => {
+    const file = await addMp4('retry-delete.mp4')
+    const client = cinemaClient(app, superAdmin.headers)
+    const deleteSpy = vi
+      .spyOn(gateway, 'delete')
+      .mockRejectedValueOnce(
+        new ConnectError('gateway unavailable', Code.Unavailable),
+      )
+
+    try {
+      expect(
+        await codeOf(client.deleteMediaFile({ mediaFileId: file.id })),
+      ).toBe(Code.Unavailable)
+      expect(await getMediaFileById(database.db, file.id)).not.toBeNull()
+      expect(gateway.objects.has(file.objectId)).toBe(true)
+
+      await client.deleteMediaFile({ mediaFileId: file.id })
+      expect(await getMediaFileById(database.db, file.id)).toBeNull()
+      expect(gateway.objects.has(file.objectId)).toBe(false)
+
+      const [claim] = await database.db
+        .select()
+        .from(iamObjectClaims)
+        .where(eq(iamObjectClaims.objectId, file.objectId))
+      expect(claim?.releasedAt).toBeInstanceOf(Date)
+    } finally {
+      deleteSpy.mockRestore()
+    }
+  })
+
+  it('hides a movie from browse after deleting its file while keeping its catalog row and watch progress', async () => {
+    const file = await addMp4('Dune.Part.Two.2024.mp4', 4_000n)
+    const [movie] = await database.db
+      .insert(cinemaMovies)
+      .values({
+        tmdbId: 693134,
+        title: 'Dune: Part Two',
+        releaseYear: 2024,
+      })
+      .returning()
+    await database.db
+      .update(cinemaMediaFiles)
+      .set({ movieId: movie!.id })
+      .where(eq(cinemaMediaFiles.id, file.id))
+
+    const viewer = cinemaClient(app, householdMember.headers)
+    await viewer.reportProgress({
+      target: { target: { case: 'movieId', value: movie!.id } },
+      positionMs: 1_800_000n,
+      durationMs: 7_200_000n,
+    })
+
+    const beforeHome = await viewer.getHome({})
+    expect(beforeHome.movies.map((m) => m.id)).toEqual([movie!.id])
+    expect(beforeHome.continueWatching).toHaveLength(1)
+
+    await cinemaClient(app, superAdmin.headers).deleteMediaFile({
+      mediaFileId: file.id,
+    })
+
+    expect(gateway.objects.has(file.objectId)).toBe(false)
+
+    // Browse hides the movie once no files remain.
+    const afterHome = await viewer.getHome({})
+    expect(afterHome.heroes).toHaveLength(0)
+    expect(afterHome.continueWatching).toHaveLength(0)
+    expect(afterHome.recentlyAdded).toHaveLength(0)
+    expect(afterHome.movies).toHaveLength(0)
+    expect((await viewer.listMovies({})).movies).toHaveLength(0)
+    expect(await codeOf(viewer.getMovie({ movieId: movie!.id }))).toBe(
+      Code.NotFound,
+    )
+
+    // Catalog row and watch progress both survive.
+    const [catalogMovie] = await database.db
+      .select()
+      .from(cinemaMovies)
+      .where(eq(cinemaMovies.id, movie!.id))
+    expect(catalogMovie?.title).toBe('Dune: Part Two')
+
+    const [savedProgress] = await database.db
+      .select()
+      .from(cinemaWatchProgress)
+      .where(eq(cinemaWatchProgress.movieId, movie!.id))
+    expect(savedProgress).toMatchObject({
+      userId: householdMember.id,
+      positionMs: 1_800_000n,
+      durationMs: 7_200_000n,
+      finished: false,
+      watchCount: 0,
+    })
+
+    // Adding a replacement file brings the movie back with its saved watch progress.
+    const replacement = await addMp4('Dune.Part.Two.2024.Remux.mp4', 8_000n)
+    await database.db
+      .update(cinemaMediaFiles)
+      .set({ movieId: movie!.id })
+      .where(eq(cinemaMediaFiles.id, replacement.id))
+
+    const restored = await viewer.getMovie({ movieId: movie!.id })
+    expect(restored.movie?.progress).toMatchObject({
+      positionMs: 1_800_000n,
+      durationMs: 7_200_000n,
+      finished: false,
+      watchCount: 0,
+    })
+    const restoredHome = await viewer.getHome({})
+    expect(restoredHome.continueWatching).toHaveLength(1)
+  })
+
+  it('hides an episode and then its series as files are deleted while keeping catalog rows and watch progress', async () => {
+    const [series] = await database.db
+      .insert(cinemaSeries)
+      .values({
+        tmdbId: 95396,
+        title: 'Severance',
+        firstAirYear: 2022,
+      })
+      .returning()
+    const [ep1] = await database.db
+      .insert(cinemaEpisodes)
+      .values({
+        seriesId: series!.id,
+        tmdbId: 3328759,
+        seasonNumber: 1,
+        episodeNumber: 1,
+        title: 'Good News About Hell',
+      })
+      .returning()
+    const [ep2] = await database.db
+      .insert(cinemaEpisodes)
+      .values({
+        seriesId: series!.id,
+        tmdbId: 3328760,
+        seasonNumber: 1,
+        episodeNumber: 2,
+        title: 'Half Loop',
+      })
+      .returning()
+
+    const file1 = await addMp4('Severance.S01E01.mp4', 1_000n)
+    const file2 = await addMp4('Severance.S01E02.mp4', 1_200n)
+    await database.db
+      .update(cinemaMediaFiles)
+      .set({ episodeId: ep1!.id })
+      .where(eq(cinemaMediaFiles.id, file1.id))
+    await database.db
+      .update(cinemaMediaFiles)
+      .set({ episodeId: ep2!.id })
+      .where(eq(cinemaMediaFiles.id, file2.id))
+
+    const viewer = cinemaClient(app, householdMember.headers)
+    const admin = cinemaClient(app, superAdmin.headers)
+
+    await viewer.setWatched({
+      target: { target: { case: 'episodeId', value: ep1!.id } },
+      watched: true,
+    })
+    await viewer.reportProgress({
+      target: { target: { case: 'episodeId', value: ep2!.id } },
+      positionMs: 600_000n,
+      durationMs: 3_000_000n,
+    })
+
+    // Deleting episode 2 hides only episode 2 while the series stays visible.
+    await admin.deleteMediaFile({ mediaFileId: file2.id })
+    const partial = await viewer.getSeries({ seriesId: series!.id })
+    expect(partial.series?.totalEpisodeCount).toBe(1)
+    expect(partial.series?.watchedEpisodeCount).toBe(1)
+    expect(
+      partial.series?.seasons.flatMap((s) => s.episodes.map((e) => e.id)),
+    ).toEqual([ep1!.id])
+
+    // Deleting the last episode hides the entire series from browse.
+    await admin.deleteMediaFile({ mediaFileId: file1.id })
+    const afterHome = await viewer.getHome({})
+    expect(afterHome.heroes).toHaveLength(0)
+    expect(afterHome.continueWatching).toHaveLength(0)
+    expect(afterHome.recentlyAdded).toHaveLength(0)
+    expect(afterHome.series).toHaveLength(0)
+    expect((await viewer.listSeries({})).series).toHaveLength(0)
+    expect(await codeOf(viewer.getSeries({ seriesId: series!.id }))).toBe(
+      Code.NotFound,
+    )
+
+    // Series, episode, and watch progress rows survive.
+    const seriesRows = await database.db
+      .select()
+      .from(cinemaSeries)
+      .where(eq(cinemaSeries.id, series!.id))
+    expect(seriesRows).toHaveLength(1)
+
+    const episodeRows = await database.db
+      .select()
+      .from(cinemaEpisodes)
+      .where(eq(cinemaEpisodes.seriesId, series!.id))
+    expect(episodeRows).toHaveLength(2)
+
+    const [ep2Progress] = await database.db
+      .select()
+      .from(cinemaWatchProgress)
+      .where(eq(cinemaWatchProgress.episodeId, ep2!.id))
+    expect(ep2Progress).toMatchObject({
+      userId: householdMember.id,
+      positionMs: 600_000n,
+      durationMs: 3_000_000n,
+      finished: false,
+    })
+
+    // Re-attaching a file to episode 2 restores the series and its saved progress.
+    const replacement = await addMp4('Severance.S01E02.v2.mp4', 1_500n)
+    await database.db
+      .update(cinemaMediaFiles)
+      .set({ episodeId: ep2!.id })
+      .where(eq(cinemaMediaFiles.id, replacement.id))
+
+    const restored = await viewer.getSeries({ seriesId: series!.id })
+    const restoredEp2 = restored.series?.seasons[0]?.episodes[0]
+    expect(restoredEp2?.id).toBe(ep2!.id)
+    expect(restoredEp2?.progress).toMatchObject({
+      positionMs: 600_000n,
+      durationMs: 3_000_000n,
+      finished: false,
+    })
+  })
+})
+
+describe('DeleteMediaFile against a running Gateway', () => {
+  let gwDatabase: TestDatabase
+  let gw: TestGateway
+  let gwCtx: ModuleContext
+  let gwApp: Hono
+  let gwAdmin: TestUser
+
+  beforeAll(async () => {
+    ;[gwDatabase, gw] = await Promise.all([
+      createTestDatabase(),
+      startTestGateway(),
+    ])
+    await pushAllSchemas(gwDatabase)
+    const storage = createStorageGateway({
+      baseUrl: gw.baseUrl,
+      serviceKey: TEST_ENV.LUMAVAULT_SERVICE_KEY,
+    })
+    gwCtx = createTestContext(gwDatabase, {
+      env: { LUMAVAULT_GATEWAY_URL: gw.baseUrl },
+      gateway: storage,
+    })
+    gwApp = createApp(gwCtx, await loadModules())
+
+    gwAdmin = await signUp(gwCtx, 'gw-super@example.com')
+    await gwDatabase.db
+      .update(user)
+      .set({ role: SUPER_ADMIN_ROLE })
+      .where(eq(user.id, gwAdmin.id))
+  }, 120_000)
+
+  afterAll(async () => {
+    gw?.stop()
+    await gwDatabase?.drop()
+  })
+
+  it('deletes the object from the Storage Gateway and stays idempotent on repeat calls', async () => {
+    const mp4 = ftypBytes('isom', ['isom', 'iso2', 'avc1', 'mp41'], 512)
+    const { reservationId, uploadTicket } = await iamClient(
+      gwApp,
+      gwAdmin.headers,
+    ).prepareUpload({
+      app: App.CINEMA,
+      sizeBytes: BigInt(mp4.byteLength),
+      sharedLibrary: true,
+    })
+
+    const sdk = new LumaVaultClient({ baseUrl: gw.baseUrl })
+    const uploaded = await sdk.upload(mp4, {
+      namespace: Namespace.CINEMA,
+      filename: 'gateway-delete.mp4',
+      mimeType: 'video/mp4',
+      ticket: uploadTicket,
+    })
+
+    const cinema = cinemaClient(gwApp, gwAdmin.headers)
+    const added = await cinema.addMediaFile({
+      reservationId,
+      objectId: uploaded.id,
+    })
+    const mediaFileId = added.file!.id
+
+    expect(await gwCtx.gateway.stat(uploaded.id)).not.toBeNull()
+    const { ticket: readTicket } = await signObjectReadTicket(
+      gwCtx,
+      uploaded.id,
+    )
+    const streamUrl = sdk.streamUrl(uploaded.id, readTicket)
+    const beforeStream = await fetch(streamUrl)
+    expect(beforeStream.status).toBe(200)
+    expect(new Uint8Array(await beforeStream.arrayBuffer())).toEqual(mp4)
+
+    await cinema.deleteMediaFile({ mediaFileId })
+
+    expect(await gwCtx.gateway.stat(uploaded.id)).toBeNull()
+    expect((await fetch(streamUrl)).status).toBe(404)
+    expect(await getMediaFileById(gwDatabase.db, mediaFileId)).toBeNull()
+
+    const [claim] = await gwDatabase.db
+      .select()
+      .from(iamObjectClaims)
+      .where(eq(iamObjectClaims.objectId, uploaded.id))
+    expect(claim?.releasedAt).toBeInstanceOf(Date)
+    expect(await codeOf(signObjectReadTicket(gwCtx, uploaded.id))).toBe(
+      Code.NotFound,
+    )
+
+    // Deleting the same file ID a second time succeeds.
+    await expect(cinema.deleteMediaFile({ mediaFileId })).resolves.toEqual(
+      expect.objectContaining({}),
+    )
   })
 })
