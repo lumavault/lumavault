@@ -3,18 +3,18 @@ import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
 import {
   getContinueWatchingEpisodes,
   getPlayableEpisodesBySeriesId,
-} from '#/data/cinema/episode/get-episode.js'
+} from '#/data/cinema/episode.js'
 import {
   getContinueWatchingMovies,
   getPlayableMovieById,
   getPlayableMoviesPage,
   getRecentlyAddedMovies,
-} from '#/data/cinema/movie/get-movie.js'
+} from '#/data/cinema/movie.js'
 import {
   getPlayableSeriesById,
   getPlayableSeriesPage,
   getRecentlyAddedSeries,
-} from '#/data/cinema/series/get-series.js'
+} from '#/data/cinema/series.js'
 import { paged } from '#/lib/paging.js'
 import { parseInput, requiredUuidSchema } from '#/lib/validation.js'
 import type { ApiModule } from '#/server/modules.js'

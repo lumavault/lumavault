@@ -1,12 +1,9 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { IamService } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import { getOwnerUserId } from '#/data/auth/member/get-member.js'
-import { getOrganizationById } from '#/data/auth/organization/get-organization.js'
-import { getUserById } from '#/data/auth/user/get-user.js'
-import {
-  getHouseholdById,
-  getHouseholdByUserId,
-} from '#/data/iam/household/get-household.js'
+import { getOwnerUserId } from '#/data/auth/member.js'
+import { getOrganizationById } from '#/data/auth/organization.js'
+import { getUserById } from '#/data/auth/user.js'
+import { getHouseholdById, getHouseholdByUserId } from '#/data/iam/household.js'
 import { requireSignedIn } from '#/guards.js'
 import type { ApiModule } from '#/server/modules.js'
 

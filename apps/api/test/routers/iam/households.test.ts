@@ -6,10 +6,10 @@ import {
   HOUSEHOLD_OWNER_ROLE,
   type HouseholdRole,
 } from '#/auth/constants.js'
-import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
-import { createObjectClaim } from '#/data/iam/object-claim/create-object-claim.js'
+import { createMember } from '#/data/auth/member.js'
+import { createOrganization } from '#/data/auth/organization.js'
+import { createHousehold } from '#/data/iam/household.js'
+import { createObjectClaim } from '#/data/iam/object-claim.js'
 import { member } from '#/db/schemas/auth.js'
 import { iamObjectClaims } from '#/db/schemas/iam.js'
 import type { AppDataHooks } from '#/iam/app-data.js'

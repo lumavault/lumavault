@@ -16,7 +16,7 @@ import {
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
 import { createHouseholdFor } from '#/auth/server-helpers.js'
-import { getMediaFileById } from '#/data/cinema/media-file/get-media-file.js'
+import { getMediaFileById } from '#/data/cinema/media-file.js'
 import { user } from '#/db/schemas/auth.js'
 import {
   cinemaEpisodes,

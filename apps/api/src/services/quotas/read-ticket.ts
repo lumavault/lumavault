@@ -1,6 +1,6 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { signReadTicket, type SignedTicket } from '#/auth/tickets.js'
-import { getActiveObjectClaim } from '#/data/iam/object-claim/get-object-claim.js'
+import { getActiveObjectClaim } from '#/data/iam/object-claim.js'
 import type { ModuleContext } from '#/server/modules.js'
 
 /**

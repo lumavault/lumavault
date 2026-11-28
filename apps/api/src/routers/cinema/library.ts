@@ -1,11 +1,11 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
-import { createMediaFile } from '#/data/cinema/media-file/create-media-file.js'
 import {
+  createMediaFile,
   getMediaFileByObjectId,
   getMediaFilePage,
-} from '#/data/cinema/media-file/get-media-file.js'
-import { getUploadReservation } from '#/data/iam/upload-reservation/get-upload-reservation.js'
+} from '#/data/cinema/media-file.js'
+import { getUploadReservation } from '#/data/iam/upload-reservation.js'
 import { isUniqueViolation } from '#/db/errors.js'
 import { requireSuperAdmin } from '#/guards.js'
 import { MEDIA_CONTAINER_HEAD_BYTES } from '#/lib/constants.js'

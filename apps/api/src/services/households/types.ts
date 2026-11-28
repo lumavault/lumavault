@@ -1,6 +1,6 @@
-import type { Organization } from '#/data/auth/organization/types.js'
-import type { User } from '#/data/auth/user/types.js'
-import type { Household } from '#/data/iam/household/types.js'
+import type { Organization } from '#/data/auth/organization.js'
+import type { User } from '#/data/auth/user.js'
+import type { Household } from '#/data/iam/household.js'
 
 /** A household with its name and Owner, everything an IamService Household needs. */
 export interface HouseholdView {

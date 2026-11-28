@@ -1,9 +1,9 @@
-import { countPendingInvitationsByOrganizationIds } from '#/data/auth/invitation/get-invitation.js'
+import { countPendingInvitationsByOrganizationIds } from '#/data/auth/invitation.js'
 import {
   countMembersByOrganizationIds,
   getOwnersByOrganizationIds,
-} from '#/data/auth/member/get-member.js'
-import { getHouseholdPage } from '#/data/iam/household/get-household.js'
+} from '#/data/auth/member.js'
+import { getHouseholdPage } from '#/data/iam/household.js'
 import type { PageCursor } from '#/data/sql.js'
 import type { DbOrTx } from '#/db/index.js'
 

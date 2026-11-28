@@ -6,13 +6,13 @@ import {
   PairingStatus,
 } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { mintBearerSession } from '#/auth/server-helpers.js'
-import { createPairingRequest } from '#/data/iam/pairing-request/create-pairing-request.js'
-import { getPairingRequest } from '#/data/iam/pairing-request/get-pairing-request.js'
 import {
   approvePairingRequestByCode,
   claimPairingRequest,
+  createPairingRequest,
+  getPairingRequest,
   recordFailedPairingAttempt,
-} from '#/data/iam/pairing-request/update-pairing-request.js'
+} from '#/data/iam/pairing-request.js'
 import { isUniqueViolation } from '#/db/errors.js'
 import { requireHouseholdMember } from '#/guards.js'
 import {
