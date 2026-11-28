@@ -29,7 +29,12 @@ import {
   useSidebar,
 } from '@lumavault/ui/components/ui/sidebar'
 import { useViewer } from '@lumavault/ui/household'
-import { Link, useLocation, useRouter } from '@tanstack/react-router'
+import {
+  Link,
+  useLocation,
+  useRouter,
+  type LinkProps,
+} from '@tanstack/react-router'
 import {
   Building2Icon,
   ChevronsUpDownIcon,
@@ -43,19 +48,25 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface NavItem {
+interface PrimaryNavItem {
+  title: string
+  to: NonNullable<LinkProps['to']>
+  icon: React.ComponentType
+}
+
+interface AdminNavItem {
   title: string
   to: string
   icon: React.ComponentType
 }
 
-export const PRIMARY_NAV: readonly NavItem[] = [
+export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
   { title: 'Home', to: '/', icon: HomeIcon },
   { title: 'Household', to: '/household', icon: UsersIcon },
   { title: 'Pair TV', to: '/pair', icon: TvIcon },
 ]
 
-export const ADMIN_NAV: readonly NavItem[] = [
+export const ADMIN_NAV: readonly AdminNavItem[] = [
   { title: 'Households', to: '/admin/households', icon: Building2Icon },
   { title: 'Invites', to: '/admin/invites', icon: MailIcon },
   { title: 'Users', to: '/admin/users', icon: UsersIcon },
@@ -187,7 +198,7 @@ function NavGroup({
   items,
 }: {
   label: string
-  items: readonly NavItem[]
+  items: readonly (PrimaryNavItem | AdminNavItem)[]
 }) {
   const location = useLocation()
   return (
