@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { verifyTicket } from '#/auth/tickets.js'
 import { organization, user } from '#/db/schemas/auth.js'
 import {
@@ -28,6 +28,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { codeOf } from '#test/support/rpc.js'
 import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -84,15 +85,6 @@ let ctx: ModuleContext
 let gateway: FakeGateway
 let userId: string
 let householdId: string
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
 
 async function usage() {
   const [h] = await database.db

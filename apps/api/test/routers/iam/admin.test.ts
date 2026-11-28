@@ -1,13 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import {
-  HOUSEHOLD_MEMBER_ROLE,
-  HOUSEHOLD_OWNER_ROLE,
-} from '#/auth/constants.js'
-import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
+import { HOUSEHOLD_MEMBER_ROLE } from '#/auth/constants.js'
 import { invitation } from '#/db/schemas/auth.js'
 import { iamHouseholdInvites, iamHouseholds } from '#/db/schemas/iam.js'
 import { DEFAULT_MEMBER_LIMIT } from '#/iam/constants.js'
@@ -18,6 +12,7 @@ import { createApp } from '#/server/app.js'
 import { loadModules, type ModuleContext } from '#/server/modules.js'
 import {
   createTestContext,
+  makeHousehold,
   recordingEmail,
   signUp,
   TEST_WEB_ORIGIN,
@@ -28,7 +23,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
-import { iamClient } from '#test/support/rpc.js'
+import { codeOf, iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -42,41 +37,10 @@ let adminId: string
 let owner: TestUser
 let householdId: string
 
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
-
 const allowance = {
   storageCapBytes: 10n * 2n ** 30n,
   enabledApps: [App.PHOTOS, App.CINEMA],
   memberLimit: 6,
-}
-
-/** A household owned by a new user, created straight in the database. */
-async function makeHousehold(
-  name: string,
-  ownerEmail: string,
-): Promise<{ id: string; owner: TestUser }> {
-  const user = await signUp(ctx, ownerEmail)
-  const org = await createOrganization(ctx.db, { name, createdAt: new Date() })
-  await createMember(ctx.db, {
-    organizationId: org.id,
-    userId: user.id,
-    role: HOUSEHOLD_OWNER_ROLE,
-    createdAt: new Date(),
-  })
-  await createHousehold(ctx.db, {
-    householdId: org.id,
-    storageCapBytes: allowance.storageCapBytes,
-    enabledApps: ['photos'],
-    memberLimit: 4,
-  })
-  return { id: org.id, owner: user }
 }
 
 beforeAll(async () => {
@@ -101,7 +65,11 @@ beforeAll(async () => {
   })
   adminId = (await iamClient(app, adminHeaders).getViewer({})).user!.id
 
-  const made = await makeHousehold('Smiths', 'smith@example.com')
+  const made = await makeHousehold(ctx, {
+    name: 'Smiths',
+    ownerEmail: 'smith@example.com',
+    storageCapBytes: allowance.storageCapBytes,
+  })
   householdId = made.id
   owner = made.owner
 })
@@ -298,7 +266,11 @@ describe('households', () => {
 
   it('pages through households without repeats', async () => {
     for (let i = 0; i < 3; i++) {
-      await makeHousehold(`Paged ${i}`, `paged${i}@example.com`)
+      await makeHousehold(ctx, {
+        name: `Paged ${i}`,
+        ownerEmail: `paged${i}@example.com`,
+        storageCapBytes: allowance.storageCapBytes,
+      })
     }
     const client = iamClient(app, adminHeaders)
     const seen: string[] = []

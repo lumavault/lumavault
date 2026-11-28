@@ -1,17 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import {
-  Code,
-  ConnectError,
-  createClient,
-  type Client,
-} from '@connectrpc/connect'
+import { Code, createClient, type Client } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
-import { HOUSEHOLD_OWNER_ROLE, SUPER_ADMIN_ROLE } from '#/auth/constants.js'
+import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
 import { verifyTicket } from '#/auth/tickets.js'
-import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
 import { user } from '#/db/schemas/auth.js'
 import {
   cinemaEpisodes,
@@ -28,6 +20,7 @@ import { createApp } from '#/server/app.js'
 import { loadModules, type ModuleContext } from '#/server/modules.js'
 import {
   createTestContext,
+  makeHousehold,
   signUp,
   type TestUser,
 } from '#test/support/context.js'
@@ -36,6 +29,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { codeOf } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -70,15 +64,6 @@ function cinemaClient(
   )
 }
 
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
-
 function uniqueTmdbId(): number {
   nextTmdbId += 1
   return nextTmdbId
@@ -89,24 +74,14 @@ async function makeUserInHousehold(
   householdName: string,
   enabledApps: IamApp[],
 ): Promise<TestUser> {
-  const account = await signUp(ctx, email)
-  const org = await createOrganization(ctx.db, {
+  const { owner } = await makeHousehold(ctx, {
     name: householdName,
-    createdAt: new Date(),
-  })
-  await createMember(ctx.db, {
-    organizationId: org.id,
-    userId: account.id,
-    role: HOUSEHOLD_OWNER_ROLE,
-    createdAt: new Date(),
-  })
-  await createHousehold(ctx.db, {
-    householdId: org.id,
+    ownerEmail: email,
     storageCapBytes: 10n * 2n ** 30n,
     enabledApps,
     memberLimit: 5,
   })
-  return account
+  return owner
 }
 
 async function claimObject(

@@ -1,3 +1,4 @@
+import { startTestGateway, type TestGateway } from '@lumavault/test-gateway'
 import {
   Code,
   ConnectError,
@@ -5,8 +6,7 @@ import {
   Namespace,
   type UploadProgress,
 } from '#/index.js'
-import { startGateway, type TestGateway } from '#test/support/gateway.js'
-import { mintTicket, TICKET_ENV } from '#test/support/tickets.js'
+import { mintTicket, TICKET_GATEWAY_OPTIONS } from '#test/support/tickets.js'
 import { patternBytes } from '#test/support/vectors.js'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -17,7 +17,7 @@ describe('LumaVaultClient against a real gateway', () => {
   let client: LumaVaultClient
 
   beforeAll(async () => {
-    gateway = await startGateway()
+    gateway = await startTestGateway()
     client = new LumaVaultClient({ baseUrl: gateway.baseUrl })
   }, 120_000)
   afterAll(() => gateway?.stop())
@@ -166,7 +166,7 @@ describe('LumaVaultClient against a real gateway', () => {
   })
 
   it('triggers an attachment download with a signed download URL', async () => {
-    const signedGateway = await startGateway(TICKET_ENV)
+    const signedGateway = await startTestGateway(TICKET_GATEWAY_OPTIONS)
     try {
       const signedClient = new LumaVaultClient({
         baseUrl: signedGateway.baseUrl,

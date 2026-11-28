@@ -1,4 +1,4 @@
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
 import { member, user } from '#/db/schemas/auth.js'
 import { iamHouseholds } from '#/db/schemas/iam.js'
@@ -25,6 +25,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { codeOf } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -38,15 +39,6 @@ let superAdmin: TestUser
 let householdId: string
 
 const as = (u?: TestUser): GuardInput => ({ values: rpcValues(u?.headers) })
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
 
 async function setEnabledApps(
   id: string,

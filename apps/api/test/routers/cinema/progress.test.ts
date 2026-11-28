@@ -1,10 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import {
-  Code,
-  ConnectError,
-  createClient,
-  type Client,
-} from '@connectrpc/connect'
+import { Code, createClient, type Client } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { CinemaService } from '@lumavault/sdk/gen/lumavault/cinema/v1/cinema_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
@@ -30,6 +25,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { codeOf } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -59,15 +55,6 @@ function cinemaClient(headers?: Headers): Client<typeof CinemaService> {
       ],
     }),
   )
-}
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
 }
 
 function uniqueTmdbId(): number {

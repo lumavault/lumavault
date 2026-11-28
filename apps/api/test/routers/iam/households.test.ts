@@ -1,4 +1,4 @@
-import { Code, ConnectError } from '@connectrpc/connect'
+import { Code } from '@connectrpc/connect'
 import { Role } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import {
   HOUSEHOLD_ADMIN_ROLE,
@@ -7,8 +7,6 @@ import {
   type HouseholdRole,
 } from '#/auth/constants.js'
 import { createMember } from '#/data/auth/member/create-member.js'
-import { createOrganization } from '#/data/auth/organization/create-organization.js'
-import { createHousehold } from '#/data/iam/household/create-household.js'
 import { createObjectClaim } from '#/data/iam/object-claim/create-object-claim.js'
 import { member } from '#/db/schemas/auth.js'
 import { iamObjectClaims } from '#/db/schemas/iam.js'
@@ -19,9 +17,11 @@ import { createApp } from '#/server/app.js'
 import { loadModules, type ModuleContext } from '#/server/modules.js'
 import {
   createTestContext,
+  makeHousehold,
   recordingEmail,
   signUp,
   TEST_WEB_ORIGIN,
+  type TestHousehold,
   type TestUser,
 } from '#test/support/context.js'
 import {
@@ -29,7 +29,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
-import { iamClient } from '#test/support/rpc.js'
+import { codeOf, iamClient } from '#test/support/rpc.js'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -39,43 +39,6 @@ let ctx: ModuleContext
 let app: Hono
 let email: ReturnType<typeof recordingEmail>
 let counter = 0
-
-async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {
-  try {
-    await promise
-    return 'ok'
-  } catch (err) {
-    return ConnectError.from(err).code
-  }
-}
-
-interface TestHousehold {
-  id: string
-  owner: TestUser
-}
-
-/** A household with a fresh Owner and the default member limit, created straight in the database. */
-async function makeHousehold(): Promise<TestHousehold> {
-  const n = ++counter
-  const owner = await signUp(ctx, `owner${n}@example.com`)
-  const org = await createOrganization(ctx.db, {
-    name: `House ${n}`,
-    createdAt: new Date(),
-  })
-  await createMember(ctx.db, {
-    organizationId: org.id,
-    userId: owner.id,
-    role: HOUSEHOLD_OWNER_ROLE,
-    createdAt: new Date(),
-  })
-  await createHousehold(ctx.db, {
-    householdId: org.id,
-    storageCapBytes: 10n ** 12n,
-    enabledApps: ['photos'],
-    memberLimit: DEFAULT_MEMBER_LIMIT,
-  })
-  return { id: org.id, owner }
-}
 
 /** A new user added to the household with this role. */
 async function addMember(
@@ -119,7 +82,7 @@ afterAll(async () => {
 
 describe('ListMembers', () => {
   it('lists the Owner first, pending invites, and free seats', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const admin = await addMember(h, HOUSEHOLD_ADMIN_ROLE)
     await iamClient(app, h.owner.headers).inviteMember({
       email: 'Pending@Example.com',
@@ -138,7 +101,7 @@ describe('ListMembers', () => {
   })
 
   it('works for Members and refuses people outside a household', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const plain = await addMember(h, HOUSEHOLD_MEMBER_ROLE)
     expect(await codeOf(iamClient(app, plain.headers).listMembers({}))).toBe(
       'ok',
@@ -152,7 +115,7 @@ describe('ListMembers', () => {
 
 describe('InviteMember', () => {
   it('emails a Portal link and returns it', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const res = await iamClient(app, h.owner.headers).inviteMember({
       email: 'new@example.com',
       role: Role.ADMIN,
@@ -169,7 +132,7 @@ describe('InviteMember', () => {
   })
 
   it('rejects a fifth invite with the default limit of 4, counting pending invites', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const client = iamClient(app, h.owner.headers)
     for (const n of [1, 2, 3]) {
       await client.inviteMember({
@@ -186,7 +149,7 @@ describe('InviteMember', () => {
   })
 
   it('replaces an open invite to the same email instead of taking another seat', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const client = iamClient(app, h.owner.headers)
     const first = await client.inviteMember({
       email: 'again@example.com',
@@ -202,7 +165,7 @@ describe('InviteMember', () => {
   })
 
   it('rejects existing members, the Owner role, and Members as inviters', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const plain = await addMember(h, HOUSEHOLD_MEMBER_ROLE)
     const client = iamClient(app, h.owner.headers)
     expect(
@@ -228,8 +191,8 @@ describe('InviteMember', () => {
 
 describe('CancelMemberInvite', () => {
   it('frees the seat and refuses invites from other households', async () => {
-    const h = await makeHousehold()
-    const other = await makeHousehold()
+    const h = await makeHousehold(ctx)
+    const other = await makeHousehold(ctx)
     const client = iamClient(app, h.owner.headers)
     const { invite } = await client.inviteMember({
       email: 'cancel@example.com',
@@ -252,7 +215,7 @@ describe('CancelMemberInvite', () => {
 
 describe('UpdateMemberRole', () => {
   it('changes a member between Admin and Member', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const plain = await addMember(h, HOUSEHOLD_MEMBER_ROLE)
     const res = await iamClient(app, h.owner.headers).updateMemberRole({
       userId: plain.id,
@@ -263,7 +226,7 @@ describe('UpdateMemberRole', () => {
   })
 
   it("rejects changing the Owner's role or making someone Owner", async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const admin = await addMember(h, HOUSEHOLD_ADMIN_ROLE)
     const client = iamClient(app, admin.headers)
     expect(
@@ -282,7 +245,7 @@ describe('UpdateMemberRole', () => {
 
 describe('TransferOwnership', () => {
   it('makes the new member Owner and the old Owner an Admin', async () => {
-    const h = await makeHousehold()
+    const h = await makeHousehold(ctx)
     const plain = await addMember(h, HOUSEHOLD_MEMBER_ROLE)
     await iamClient(app, h.owner.headers).transferOwnership({
       userId: plain.id,
@@ -292,8 +255,8 @@ describe('TransferOwnership', () => {
   })
 
   it('is Owner only and needs a member of the same household', async () => {
-    const h = await makeHousehold()
-    const other = await makeHousehold()
+    const h = await makeHousehold(ctx)
+    const other = await makeHousehold(ctx)
     const admin = await addMember(h, HOUSEHOLD_ADMIN_ROLE)
     expect(
       await codeOf(

@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@connectrpc/connect-web": "^2.3.0",
+    "@lumavault/test-gateway": "workspace:*",
     "@react-email/ui": "^6.11.13",
     "@types/node": "^22.20.5",
     "@types/nodemailer": "^8.0.2",
