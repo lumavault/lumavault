@@ -111,6 +111,23 @@ func TestOneByteChangesFail(t *testing.T) {
 	}
 }
 
+func TestVerifyRejectsInvalidObjectID(t *testing.T) {
+	vf, v := loadVectors(t)
+	for _, id := range []string{".", "..", "../secret", "a/b", `a\b`} {
+		tok, err := Sign([]byte(vf.Secret), Claims{
+			Kind:     KindRead,
+			Exp:      vf.Now + 60,
+			ObjectID: id,
+		})
+		if err != nil {
+			t.Fatalf("Sign(%q): %v", id, err)
+		}
+		if _, err := v.Verify(tok); !errors.Is(err, ErrClaims) {
+			t.Errorf("Verify(obj=%q) = %v, want ErrClaims", id, err)
+		}
+	}
+}
+
 func TestNewVerifierRejectsShortSecret(t *testing.T) {
 	if _, err := NewVerifier(make([]byte, MinSecretBytes-1)); err == nil {
 		t.Fatal("short secret accepted")

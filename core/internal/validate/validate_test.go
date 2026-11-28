@@ -104,3 +104,77 @@ func TestCommitRequest(t *testing.T) {
 		t.Errorf("nil request: got %v, want ErrInvalid", err)
 	}
 }
+
+func TestChunkSizes(t *testing.T) {
+	goodHash3 := strings.Repeat("c", 64)
+
+	validCases := []struct {
+		name  string
+		req   *lumavaultv1.CommitObjectRequest
+		sizes map[string]int64
+	}{
+		{
+			name: "single exact chunk",
+			req: &lumavaultv1.CommitObjectRequest{
+				SizeBytes:      1000,
+				ChunkSizeBytes: 1000,
+				ChunkHashes:    []string{goodHash},
+			},
+			sizes: map[string]int64{goodHash: 1000},
+		},
+		{
+			name: "single partial chunk",
+			req: &lumavaultv1.CommitObjectRequest{
+				SizeBytes:      500,
+				ChunkSizeBytes: 1000,
+				ChunkHashes:    []string{goodHash},
+			},
+			sizes: map[string]int64{goodHash: 500},
+		},
+		{
+			name: "multi chunk with partial tail",
+			req: &lumavaultv1.CommitObjectRequest{
+				SizeBytes:      2500,
+				ChunkSizeBytes: 1000,
+				ChunkHashes:    []string{goodHash, goodHash2, goodHash3},
+			},
+			sizes: map[string]int64{goodHash: 1000, goodHash2: 1000, goodHash3: 500},
+		},
+		{
+			name: "multi chunk with full tail and repeated hash",
+			req: &lumavaultv1.CommitObjectRequest{
+				SizeBytes:      2000,
+				ChunkSizeBytes: 1000,
+				ChunkHashes:    []string{goodHash, goodHash},
+			},
+			sizes: map[string]int64{goodHash: 1000},
+		},
+	}
+	for _, tc := range validCases {
+		t.Run("valid/"+tc.name, func(t *testing.T) {
+			if err := ChunkSizes(tc.req, tc.sizes); err != nil {
+				t.Fatalf("ChunkSizes: %v", err)
+			}
+		})
+	}
+
+	req := &lumavaultv1.CommitObjectRequest{
+		SizeBytes:      2500,
+		ChunkSizeBytes: 1000,
+		ChunkHashes:    []string{goodHash, goodHash2, goodHash3},
+	}
+	invalidCases := map[string]map[string]int64{
+		"interior chunk short": {goodHash: 1000, goodHash2: 999, goodHash3: 500},
+		"interior chunk long":  {goodHash: 1001, goodHash2: 1000, goodHash3: 500},
+		"tail chunk short":     {goodHash: 1000, goodHash2: 1000, goodHash3: 499},
+		"tail chunk long":      {goodHash: 1000, goodHash2: 1000, goodHash3: 501},
+		"missing chunk size":   {goodHash: 1000, goodHash2: 1000},
+	}
+	for name, sizes := range invalidCases {
+		t.Run("invalid/"+name, func(t *testing.T) {
+			if err := ChunkSizes(req, sizes); !errors.Is(err, ErrInvalid) {
+				t.Errorf("ChunkSizes = %v, want ErrInvalid", err)
+			}
+		})
+	}
+}

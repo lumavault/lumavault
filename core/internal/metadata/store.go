@@ -21,10 +21,6 @@ const (
 var (
 	// ErrObjectNotFound is returned when a requested object_id does not exist.
 	ErrObjectNotFound = errors.New("metadata: object not found")
-
-	// ErrInvalidArgument is returned when a request fails validation, contains invalid SHA-256 digests,
-	// violates chunk size/count invariants, or specifies an empty or disallowed FieldMask.
-	ErrInvalidArgument = errors.New("metadata: invalid argument")
 )
 
 // MetadataStore is the pluggable Control Plane storage contract for content-addressed

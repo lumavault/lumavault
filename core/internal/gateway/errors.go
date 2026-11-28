@@ -24,9 +24,7 @@ func toConnectError(ctx context.Context, err error) error {
 	}
 	code := connect.CodeInternal
 	switch {
-	case errors.Is(err, metadata.ErrInvalidArgument),
-		errors.Is(err, chunkstore.ErrInvalidHash),
-		errors.Is(err, validate.ErrInvalid):
+	case errors.Is(err, validate.ErrInvalid):
 		code = connect.CodeInvalidArgument
 	case errors.Is(err, metadata.ErrObjectNotFound):
 		code = connect.CodeNotFound

@@ -39,6 +39,15 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	log := slog.New(slog.NewTextHandler(stdout, nil))
 
+	var opts []gateway.Option
+	if cfg.ticketSecret != "" {
+		verifier, err := ticket.NewVerifier([]byte(cfg.ticketSecret))
+		if err != nil {
+			return fmt.Errorf("%s: %w", envTicketSecret, err)
+		}
+		opts = append(opts, gateway.WithTicketAuth(verifier, cfg.serviceKey))
+	}
+
 	chunks, err := chunkstore.NewLocalChunkStore(filepath.Join(cfg.dataDir, chunkStoreSubdir))
 	if err != nil {
 		return err
@@ -47,15 +56,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-
-	var opts []gateway.Option
-	if cfg.ticketSecret != "" {
-		verifier, err := ticket.NewVerifier([]byte(cfg.ticketSecret))
-		if err != nil {
-			return err
-		}
-		opts = append(opts, gateway.WithTicketAuth(verifier, cfg.serviceKey))
-	} else {
+	if len(opts) == 0 {
 		log.Warn("storage ticket checks are off; set " + envTicketSecret + " and " + envServiceKey + " to turn them on")
 	}
 

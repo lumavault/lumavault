@@ -80,7 +80,7 @@ func (s *LocalMetadataStore) CommitObject(ctx context.Context, req *lumavaultv1.
 		return nil, false, err
 	}
 	if req == nil {
-		return nil, false, fmt.Errorf("%w: request is nil", ErrInvalidArgument)
+		return nil, false, fmt.Errorf("%w: request is nil", validate.ErrInvalid)
 	}
 
 	id, err := newUUIDv4()
@@ -139,8 +139,11 @@ func (s *LocalMetadataStore) UpdateObjectMetadata(ctx context.Context, req *luma
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if req == nil || req.Object == nil || validate.ObjectID(req.Object.Id) != nil {
-		return nil, fmt.Errorf("%w: object and valid object.id are required", ErrInvalidArgument)
+	if req == nil || req.Object == nil {
+		return nil, fmt.Errorf("%w: object is required", validate.ErrInvalid)
+	}
+	if err := validate.ObjectID(req.Object.Id); err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -172,8 +175,8 @@ func (s *LocalMetadataStore) DeleteObject(ctx context.Context, objectID string) 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if validate.ObjectID(objectID) != nil {
-		return fmt.Errorf("%w: invalid object_id %q", ErrInvalidArgument, objectID)
+	if err := validate.ObjectID(objectID); err != nil {
+		return err
 	}
 
 	s.mu.Lock()
@@ -242,8 +245,8 @@ func (s *LocalMetadataStore) objectFilePath(objectID string) string {
 
 // writeObjectFile marshals obj to binary Protobuf and writes it atomically to <objectsDir>/<id>.pb.
 func (s *LocalMetadataStore) writeObjectFile(obj *lumavaultv1.ObjectMetadata) error {
-	if validate.ObjectID(obj.Id) != nil {
-		return fmt.Errorf("%w: unsafe object_id %q", ErrInvalidArgument, obj.Id)
+	if err := validate.ObjectID(obj.Id); err != nil {
+		return err
 	}
 	raw, err := proto.Marshal(obj)
 	if err != nil {

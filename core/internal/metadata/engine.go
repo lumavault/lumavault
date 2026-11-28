@@ -55,11 +55,14 @@ func (e *Engine) Restore(objects []*lumavaultv1.ObjectMetadata) error {
 	sorted := make([]*lumavaultv1.ObjectMetadata, len(objects))
 	seenIDs := make(map[string]struct{}, len(objects))
 	for i, obj := range objects {
-		if obj == nil || validate.ObjectID(obj.Id) != nil {
-			return fmt.Errorf("%w: cannot restore nil or invalid-ID object", ErrInvalidArgument)
+		if obj == nil {
+			return fmt.Errorf("%w: cannot restore nil object", validate.ErrInvalid)
+		}
+		if err := validate.ObjectID(obj.Id); err != nil {
+			return fmt.Errorf("cannot restore object: %w", err)
 		}
 		if _, dup := seenIDs[obj.Id]; dup {
-			return fmt.Errorf("%w: duplicate object ID %q in Restore", ErrInvalidArgument, obj.Id)
+			return fmt.Errorf("%w: duplicate object ID %q in Restore", validate.ErrInvalid, obj.Id)
 		}
 		seenIDs[obj.Id] = struct{}{}
 		sorted[i] = cloneObject(obj)
@@ -90,13 +93,10 @@ func (e *Engine) Restore(objects []*lumavaultv1.ObjectMetadata) error {
 // CommitObject validates req and either returns an existing deduplicated object (when !req.SkipDedup)
 // or commits a new ObjectMetadata record with the supplied objectID and timestamp.
 func (e *Engine) CommitObject(req *lumavaultv1.CommitObjectRequest, objectID string, now time.Time) (*lumavaultv1.ObjectMetadata, bool, error) {
-	if req == nil {
-		return nil, false, fmt.Errorf("%w: request is nil", ErrInvalidArgument)
+	if err := validate.CommitRequest(req); err != nil {
+		return nil, false, err
 	}
-	if validate.ObjectID(objectID) != nil {
-		return nil, false, fmt.Errorf("%w: invalid objectID %q", ErrInvalidArgument, objectID)
-	}
-	if err := invalidArg(validate.CommitRequest(req)); err != nil {
+	if err := validate.ObjectID(objectID); err != nil {
 		return nil, false, err
 	}
 
@@ -108,7 +108,7 @@ func (e *Engine) CommitObject(req *lumavaultv1.CommitObjectRequest, objectID str
 	}
 
 	if _, exists := e.objects[objectID]; exists {
-		return nil, false, fmt.Errorf("%w: object ID %q already exists", ErrInvalidArgument, objectID)
+		return nil, false, fmt.Errorf("%w: object ID %q already exists", validate.ErrInvalid, objectID)
 	}
 
 	ts := timestamppb.New(now.UTC())
@@ -135,8 +135,8 @@ func (e *Engine) CommitObject(req *lumavaultv1.CommitObjectRequest, objectID str
 
 // GetObject retrieves a deep-cloned ObjectMetadata by ID, or returns ErrObjectNotFound.
 func (e *Engine) GetObject(objectID string) (*lumavaultv1.ObjectMetadata, error) {
-	if validate.ObjectID(objectID) != nil {
-		return nil, fmt.Errorf("%w: invalid object_id %q", ErrInvalidArgument, objectID)
+	if err := validate.ObjectID(objectID); err != nil {
+		return nil, err
 	}
 	obj, ok := e.objects[objectID]
 	if !ok {
@@ -148,13 +148,13 @@ func (e *Engine) GetObject(objectID string) (*lumavaultv1.ObjectMetadata, error)
 // ListObjects filters, sorts (created_at DESC, id ASC), and paginates objects within a required namespace.
 func (e *Engine) ListObjects(req *lumavaultv1.ListObjectsRequest) (*lumavaultv1.ListObjectsResponse, error) {
 	if req == nil {
-		return nil, fmt.Errorf("%w: request is nil", ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: request is nil", validate.ErrInvalid)
 	}
-	if validate.Namespace(req.Namespace) != nil {
-		return nil, fmt.Errorf("%w: valid namespace is required", ErrInvalidArgument)
+	if err := validate.Namespace(req.Namespace); err != nil {
+		return nil, err
 	}
 	if req.PageSize < 0 {
-		return nil, fmt.Errorf("%w: page_size (%d) must not be negative", ErrInvalidArgument, req.PageSize)
+		return nil, fmt.Errorf("%w: page_size (%d) must not be negative", validate.ErrInvalid, req.PageSize)
 	}
 
 	pageSize := int(req.PageSize)
@@ -219,11 +219,14 @@ func (e *Engine) ListObjects(req *lumavaultv1.ListObjectsRequest) (*lumavaultv1.
 // UpdateObjectMetadata applies a partial update to mutable storage-level metadata fields
 // (filename, mime_type, thumbnail_chunk_hash) using req.UpdateMask.
 func (e *Engine) UpdateObjectMetadata(req *lumavaultv1.UpdateObjectMetadataRequest, now time.Time) (*lumavaultv1.ObjectMetadata, error) {
-	if req == nil || req.Object == nil || validate.ObjectID(req.Object.Id) != nil {
-		return nil, fmt.Errorf("%w: object and valid object.id are required", ErrInvalidArgument)
+	if req == nil || req.Object == nil {
+		return nil, fmt.Errorf("%w: object is required", validate.ErrInvalid)
+	}
+	if err := validate.ObjectID(req.Object.Id); err != nil {
+		return nil, err
 	}
 	if req.UpdateMask == nil || len(req.UpdateMask.Paths) == 0 {
-		return nil, fmt.Errorf("%w: non-empty update_mask is required", ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: non-empty update_mask is required", validate.ErrInvalid)
 	}
 
 	existing, ok := e.objects[req.Object.Id]
@@ -254,8 +257,8 @@ func (e *Engine) UpdateObjectMetadata(req *lumavaultv1.UpdateObjectMetadataReque
 
 // DeleteObject removes objectID from the Engine and updates deduplication and chunk reference indexes.
 func (e *Engine) DeleteObject(objectID string) error {
-	if validate.ObjectID(objectID) != nil {
-		return fmt.Errorf("%w: invalid object_id %q", ErrInvalidArgument, objectID)
+	if err := validate.ObjectID(objectID); err != nil {
+		return err
 	}
 	existing, ok := e.objects[objectID]
 	if !ok {
@@ -278,7 +281,7 @@ func (e *Engine) DeleteObject(objectID string) error {
 
 // IsChunkReferenced reports whether hash is a valid SHA-256 digest currently referenced by at least one object.
 func (e *Engine) IsChunkReferenced(hash string) (bool, error) {
-	if err := invalidArg(validate.Hash(hash)); err != nil {
+	if err := validate.Hash(hash); err != nil {
 		return false, err
 	}
 	return e.chunkRefs[hash] > 0, nil
@@ -345,13 +348,13 @@ func applyFieldMaskPath(updated, src *lumavaultv1.ObjectMetadata, path string) e
 		updated.MimeType = src.MimeType
 	case "thumbnail_chunk_hash":
 		if src.ThumbnailChunkHash != "" {
-			if err := invalidArg(validate.Hash(src.ThumbnailChunkHash)); err != nil {
+			if err := validate.Hash(src.ThumbnailChunkHash); err != nil {
 				return fmt.Errorf("thumbnail_chunk_hash: %w", err)
 			}
 		}
 		updated.ThumbnailChunkHash = src.ThumbnailChunkHash
 	default:
-		return fmt.Errorf("%w: unsupported or immutable update_mask path %q", ErrInvalidArgument, path)
+		return fmt.Errorf("%w: unsupported or immutable update_mask path %q", validate.ErrInvalid, path)
 	}
 	return nil
 }
@@ -417,11 +420,11 @@ func encodePageToken(obj *lumavaultv1.ObjectMetadata) string {
 func decodePageToken(token string) (*pageCursor, error) {
 	b, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid page_token encoding: %v", ErrInvalidArgument, err)
+		return nil, fmt.Errorf("%w: invalid page_token encoding: %v", validate.ErrInvalid, err)
 	}
 	var c pageCursor
 	if err := json.Unmarshal(b, &c); err != nil || c.ID == "" {
-		return nil, fmt.Errorf("%w: malformed page_token payload", ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: malformed page_token payload", validate.ErrInvalid)
 	}
 	return &c, nil
 }

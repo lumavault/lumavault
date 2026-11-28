@@ -47,14 +47,12 @@ func (g *gateway) CommitObject(ctx context.Context, req *lumavaultv1.CommitObjec
 	if thumb := req.GetThumbnailChunkHash(); thumb != "" {
 		hashes = append(slices.Clip(hashes), thumb)
 	}
-	if len(hashes) > 0 {
-		sizes, err := g.chunks.StatChunks(ctx, hashes)
-		if err != nil {
-			return nil, toConnectError(ctx, err)
-		}
-		if err := checkChunkSizes(req, sizes); err != nil {
-			return nil, err
-		}
+	sizes, err := g.chunks.StatChunks(ctx, hashes)
+	if err != nil {
+		return nil, toConnectError(ctx, err)
+	}
+	if err := validate.ChunkSizes(req, sizes); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err.Error()).WithCause(err)
 	}
 
 	obj, deduplicated, err := g.meta.CommitObject(ctx, req)
@@ -62,28 +60,6 @@ func (g *gateway) CommitObject(ctx context.Context, req *lumavaultv1.CommitObjec
 		return nil, toConnectError(ctx, err)
 	}
 	return &lumavaultv1.CommitObjectResponse{Object: obj, Deduplicated: deduplicated}, nil
-}
-
-// checkChunkSizes requires chunks 0..N-2 to be exactly chunk_size_bytes and the tail chunk
-// to hold the remaining bytes.
-func checkChunkSizes(req *lumavaultv1.CommitObjectRequest, sizes map[string]int64) error {
-	n := len(req.GetChunkHashes())
-	if req.GetSizeBytes() == 0 || n == 0 {
-		return nil
-	}
-	chunkSize := int64(req.GetChunkSizeBytes())
-	tail := int64(req.GetSizeBytes()) - int64(n-1)*chunkSize
-	for i, h := range req.GetChunkHashes() {
-		want := chunkSize
-		if i == n-1 {
-			want = tail
-		}
-		if got := sizes[h]; got != want {
-			return connect.Errorf(connect.CodeFailedPrecondition,
-				"chunk_hashes[%d] %s is %d bytes on disk, manifest expects %d", i, h, got, want)
-		}
-	}
-	return nil
 }
 
 // GetObject returns one object's manifest.

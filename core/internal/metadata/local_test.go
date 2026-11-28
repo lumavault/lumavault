@@ -14,6 +14,7 @@ import (
 
 	lumavaultv1 "github.com/lumavault/lumavault/core/gen/go/lumavault/v1"
 	"github.com/lumavault/lumavault/core/internal/constants"
+	"github.com/lumavault/lumavault/core/internal/validate"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -44,7 +45,7 @@ func TestCommitObject_Validation(t *testing.T) {
 		{
 			name:    "nil request",
 			req:     nil,
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "unspecified namespace",
@@ -55,7 +56,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				Sha256Digest:   validDigest,
 				ChunkHashes:    []string{chunk0},
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "invalid sha256_digest",
@@ -66,7 +67,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				Sha256Digest:   "INVALID_HASH",
 				ChunkHashes:    []string{chunk0},
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "invalid chunk_hash element",
@@ -77,7 +78,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				Sha256Digest:   validDigest,
 				ChunkHashes:    []string{"not-a-sha256"},
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "invalid thumbnail_chunk_hash",
@@ -89,7 +90,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				ChunkHashes:        []string{chunk0},
 				ThumbnailChunkHash: "UPPERCASE_OR_SHORT",
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "chunk_size_bytes == 0 when size_bytes > 0",
@@ -100,7 +101,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				Sha256Digest:   validDigest,
 				ChunkHashes:    []string{chunk0},
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "chunk_size_bytes exceeds 64 MiB",
@@ -111,7 +112,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				Sha256Digest:   validDigest,
 				ChunkHashes:    []string{chunk0},
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "chunk count mismatch (expects 2 chunks, got 1)",
@@ -122,7 +123,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				Sha256Digest:   validDigest,
 				ChunkHashes:    []string{chunk0},
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "zero size_bytes",
@@ -131,7 +132,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				SizeBytes:    0,
 				Sha256Digest: validDigest,
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 		{
 			name: "zero size_bytes with non-empty chunk_hashes",
@@ -142,7 +143,7 @@ func TestCommitObject_Validation(t *testing.T) {
 				Sha256Digest:   validDigest,
 				ChunkHashes:    []string{chunk0},
 			},
-			wantErr: ErrInvalidArgument,
+			wantErr: validate.ErrInvalid,
 		},
 	}
 
@@ -402,25 +403,25 @@ func TestListObjects_NamespaceFilteringAndPagination(t *testing.T) {
 	}
 
 	// Verify invalid ListObjects arguments.
-	if _, err := store.ListObjects(ctx, nil); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for nil request, got %v", err)
+	if _, err := store.ListObjects(ctx, nil); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid for nil request, got %v", err)
 	}
 	if _, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
 		Namespace: lumavaultv1.Namespace_NAMESPACE_UNSPECIFIED,
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for unspecified namespace, got %v", err)
+	}); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid for unspecified namespace, got %v", err)
 	}
 	if _, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
 		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
 		PageSize:  -1,
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for negative page_size, got %v", err)
+	}); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid for negative page_size, got %v", err)
 	}
 	if _, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
 		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
 		PageToken: "!!!not-base64!!!",
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument for invalid page_token, got %v", err)
+	}); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid for invalid page_token, got %v", err)
 	}
 }
 
@@ -454,14 +455,14 @@ func TestUpdateObjectMetadata_FieldMask(t *testing.T) {
 	if _, err := store.UpdateObjectMetadata(ctx, &lumavaultv1.UpdateObjectMetadataRequest{
 		Object:     &lumavaultv1.ObjectMetadata{Id: photo.Id, Filename: "ignored.jpg"},
 		UpdateMask: &fieldmaskpb.FieldMask{},
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on empty update_mask, got %v", err)
+	}); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid on empty update_mask, got %v", err)
 	}
 	if _, err := store.UpdateObjectMetadata(ctx, &lumavaultv1.UpdateObjectMetadataRequest{
 		Object:     &lumavaultv1.ObjectMetadata{Id: photo.Id, SizeBytes: 9999},
 		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"size_bytes"}},
-	}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on immutable field size_bytes, got %v", err)
+	}); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid on immutable field size_bytes, got %v", err)
 	}
 
 	updatedPhoto, err := store.UpdateObjectMetadata(ctx, &lumavaultv1.UpdateObjectMetadataRequest{
@@ -564,11 +565,11 @@ func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
 	}
 
 	// Failed Restore (duplicate ID) must not wipe existing state in eng.
-	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{objA, objA}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on duplicate ID in Restore, got %v", err)
+	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{objA, objA}); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid on duplicate ID in Restore, got %v", err)
 	}
-	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{nil}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on nil object in Restore, got %v", err)
+	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{nil}); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid on nil object in Restore, got %v", err)
 	}
 
 	// Deleting "obj-a" must deterministically promote "obj-b" (not "obj-c").
@@ -669,17 +670,17 @@ func TestLocalMetadataStore_DiskErrorsContextAndCleanup(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if _, err := store.GetObject(ctx, "../unsafe"); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on unsafe GetObject ID, got %v", err)
+	if _, err := store.GetObject(ctx, "../unsafe"); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid on unsafe GetObject ID, got %v", err)
 	}
-	if err := store.DeleteObject(ctx, "../unsafe"); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on unsafe DeleteObject ID, got %v", err)
+	if err := store.DeleteObject(ctx, "../unsafe"); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid on unsafe DeleteObject ID, got %v", err)
 	}
 	if err := store.DeleteObject(ctx, "non-existent"); !errors.Is(err, ErrObjectNotFound) {
 		t.Fatalf("expected ErrObjectNotFound on DeleteObject, got %v", err)
 	}
-	if _, err := store.IsChunkReferenced(ctx, "bad-hash"); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on IsChunkReferenced bad hash, got %v", err)
+	if _, err := store.IsChunkReferenced(ctx, "bad-hash"); !errors.Is(err, validate.ErrInvalid) {
+		t.Fatalf("expected validate.ErrInvalid on IsChunkReferenced bad hash, got %v", err)
 	}
 
 	badObjBytes, err := proto.Marshal(&lumavaultv1.ObjectMetadata{Id: "embedded-id"})

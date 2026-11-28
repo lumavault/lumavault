@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/lumavault/lumavault/core/internal/constants"
+	"github.com/lumavault/lumavault/core/internal/validate"
 )
 
 func sha256Hex(data []byte) string {
@@ -182,23 +183,23 @@ func TestInvalidHashRejectedAcrossAllMethods(t *testing.T) {
 	}
 
 	for _, bad := range invalidHashes {
-		if _, err := store.PutChunk(ctx, bad, bytes.NewReader(nil)); !errors.Is(err, ErrInvalidHash) {
-			t.Errorf("PutChunk(%q): expected ErrInvalidHash, got %v", bad, err)
+		if _, err := store.PutChunk(ctx, bad, bytes.NewReader(nil)); !errors.Is(err, validate.ErrInvalid) {
+			t.Errorf("PutChunk(%q): expected validate.ErrInvalid, got %v", bad, err)
 		}
-		if _, _, err := store.GetChunk(ctx, bad); !errors.Is(err, ErrInvalidHash) {
-			t.Errorf("GetChunk(%q): expected ErrInvalidHash, got %v", bad, err)
+		if _, _, err := store.GetChunk(ctx, bad); !errors.Is(err, validate.ErrInvalid) {
+			t.Errorf("GetChunk(%q): expected validate.ErrInvalid, got %v", bad, err)
 		}
-		if _, err := store.ReadChunkRange(ctx, bad, 0, 1); !errors.Is(err, ErrInvalidHash) {
-			t.Errorf("ReadChunkRange(%q): expected ErrInvalidHash, got %v", bad, err)
+		if _, err := store.ReadChunkRange(ctx, bad, 0, 1); !errors.Is(err, validate.ErrInvalid) {
+			t.Errorf("ReadChunkRange(%q): expected validate.ErrInvalid, got %v", bad, err)
 		}
-		if _, err := store.HasChunks(ctx, []string{bad}); !errors.Is(err, ErrInvalidHash) {
-			t.Errorf("HasChunks(%q): expected ErrInvalidHash, got %v", bad, err)
+		if _, err := store.HasChunks(ctx, []string{bad}); !errors.Is(err, validate.ErrInvalid) {
+			t.Errorf("HasChunks(%q): expected validate.ErrInvalid, got %v", bad, err)
 		}
-		if _, err := store.StatChunks(ctx, []string{bad}); !errors.Is(err, ErrInvalidHash) {
-			t.Errorf("StatChunks(%q): expected ErrInvalidHash, got %v", bad, err)
+		if _, err := store.StatChunks(ctx, []string{bad}); !errors.Is(err, validate.ErrInvalid) {
+			t.Errorf("StatChunks(%q): expected validate.ErrInvalid, got %v", bad, err)
 		}
-		if err := store.DeleteChunk(ctx, bad); !errors.Is(err, ErrInvalidHash) {
-			t.Errorf("DeleteChunk(%q): expected ErrInvalidHash, got %v", bad, err)
+		if err := store.DeleteChunk(ctx, bad); !errors.Is(err, validate.ErrInvalid) {
+			t.Errorf("DeleteChunk(%q): expected validate.ErrInvalid, got %v", bad, err)
 		}
 	}
 }

@@ -15,8 +15,6 @@ const (
 var (
 	// ErrChunkNotFound is returned when a requested SHA-256 chunk does not exist in the store.
 	ErrChunkNotFound = errors.New("chunkstore: chunk not found")
-	// ErrInvalidHash is returned when a hash is not a valid 64-character lowercase hex SHA-256 digest.
-	ErrInvalidHash = errors.New("chunkstore: invalid sha256 hex digest")
 	// ErrHashMismatch is returned when a streamed payload's computed SHA-256 does not match the expected hash.
 	ErrHashMismatch = errors.New("chunkstore: payload sha256 digest mismatch")
 	// ErrChunkTooLarge is returned when a streamed chunk exceeds MaxChunkSizeBytes (64 MiB).

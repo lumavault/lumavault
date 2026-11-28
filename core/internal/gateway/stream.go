@@ -10,6 +10,7 @@ import (
 	lumavaultv1 "github.com/lumavault/lumavault/core/gen/go/lumavault/v1"
 	"github.com/lumavault/lumavault/core/internal/chunkstore"
 	"github.com/lumavault/lumavault/core/internal/metadata"
+	"github.com/lumavault/lumavault/core/internal/validate"
 )
 
 // stream serves GET and HEAD /v1/stream/{object_id} as one byte sequence across the
@@ -29,7 +30,7 @@ func (g *gateway) stream(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, metadata.ErrObjectNotFound):
 			writeError(w, http.StatusNotFound, err.Error())
-		case errors.Is(err, metadata.ErrInvalidArgument):
+		case errors.Is(err, validate.ErrInvalid):
 			writeError(w, http.StatusBadRequest, err.Error())
 		default:
 			writeInternalError(w, r, err)

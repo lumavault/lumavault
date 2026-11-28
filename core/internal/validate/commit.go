@@ -49,3 +49,23 @@ func CommitRequest(req *lumavaultv1.CommitObjectRequest) error {
 	}
 	return nil
 }
+
+// ChunkSizes requires chunks 0..N-2 to be exactly chunk_size_bytes and the tail chunk
+// to hold the remaining bytes. Callers must validate req with CommitRequest first.
+func ChunkSizes(req *lumavaultv1.CommitObjectRequest, sizes map[string]int64) error {
+	hashes := req.GetChunkHashes()
+	n := len(hashes)
+	chunkSize := int64(req.GetChunkSizeBytes())
+	tail := int64(req.GetSizeBytes()) - int64(n-1)*chunkSize
+	for i, h := range hashes {
+		want := chunkSize
+		if i == n-1 {
+			want = tail
+		}
+		if got := sizes[h]; got != want {
+			return fmt.Errorf("%w: chunk_hashes[%d] %s is %d bytes on disk, manifest expects %d",
+				ErrInvalid, i, h, got, want)
+		}
+	}
+	return nil
+}

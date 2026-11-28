@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 	"time"
-
-	"github.com/lumavault/lumavault/core/internal/ticket"
 )
 
 // config holds the server settings. Each flag falls back to its environment variable,
@@ -50,8 +48,6 @@ func parseConfig(args []string) (config, error) {
 	cfg.serviceKey = os.Getenv(envServiceKey)
 
 	switch {
-	case cfg.ticketSecret != "" && len(cfg.ticketSecret) < ticket.MinSecretBytes:
-		return cfg, fmt.Errorf("%s must be at least %d bytes", envTicketSecret, ticket.MinSecretBytes)
 	case cfg.ticketSecret != "" && cfg.serviceKey == "":
 		return cfg, fmt.Errorf("%s is required when %s is set", envServiceKey, envTicketSecret)
 	case cfg.ticketSecret == "" && cfg.serviceKey != "":
