@@ -1,20 +1,9 @@
 import type * as React from 'react'
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import { Button } from '@lumavault/ui/components/ui/button'
-import {
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@lumavault/ui/components/ui/card'
 import { EmptyState } from '@lumavault/ui/components/ui/custom/empty-state'
-import {
-  ExternalLinkIcon,
-  FilmIcon,
-  Gamepad2Icon,
-  ImageIcon,
-} from 'lucide-react'
+import { FilmIcon, Gamepad2Icon, ImageIcon } from 'lucide-react'
+
+import { AppCard } from './app-card'
 
 interface AppMeta {
   app: App.PHOTOS | App.CINEMA | App.ARCADE
@@ -63,34 +52,15 @@ export function AppLauncher({ enabledApps, appUrls }: AppLauncherProps) {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-3">
-          {enabledCards.map((item) => {
-            const Icon = item.icon
-            const url = appUrls[item.app]
-            return (
-              <Card key={item.app}>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Icon className="size-4 text-primary" />
-                    <CardTitle>{item.title}</CardTitle>
-                  </div>
-                  <CardDescription>{item.description}</CardDescription>
-                </CardHeader>
-                <CardFooter>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    nativeButton={false}
-                    render={
-                      <a href={url} rel="noreferrer">
-                        Open {item.title}
-                        <ExternalLinkIcon data-icon="inline-end" />
-                      </a>
-                    }
-                  />
-                </CardFooter>
-              </Card>
-            )
-          })}
+          {enabledCards.map((item) => (
+            <AppCard
+              key={item.app}
+              title={item.title}
+              description={item.description}
+              icon={item.icon}
+              href={appUrls[item.app]}
+            />
+          ))}
         </div>
       )}
     </div>

@@ -1,11 +1,12 @@
 import { Button } from '@lumavault/ui/components/ui/button'
+import { EmptyState } from '@lumavault/ui/components/ui/custom/empty-state'
 import { PageHeader } from '@lumavault/ui/components/ui/custom/page-header'
 import { roleLabel, useViewer } from '@lumavault/ui/household'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AppLauncher } from '#/components/home/app-launcher'
-import { NoHouseholdState } from '#/components/household/no-household-state'
 import { StorageSummaryCard } from '#/components/household/storage-summary-card'
 import { portalConfig } from '#/config'
+import { HomeIcon } from 'lucide-react'
 
 function HomePage() {
   const viewer = useViewer()
@@ -17,7 +18,11 @@ function HomePage() {
           title={`Welcome${viewer.user?.name ? `, ${viewer.user.name}` : ''}`}
           description="Your LumaVault account is active, but you are not in a household yet."
         />
-        <NoHouseholdState />
+        <EmptyState
+          icon={<HomeIcon />}
+          title="No household yet"
+          description="Ask a household Admin or the server owner for an invite link to join or create a household."
+        />
       </div>
     )
   }
