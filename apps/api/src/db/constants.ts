@@ -7,6 +7,10 @@ export type DbSchema = (typeof DB_SCHEMAS)[number]
 export const DEFAULT_TEST_DATABASE_URL =
   'postgres://lumavault:lumavault@localhost:5432/lumavault'
 
+// Dedicated database for Playwright E2E runs so local dev data is never wiped.
+export const DEFAULT_E2E_DATABASE_URL =
+  'postgres://lumavault:lumavault@localhost:5432/lumavault_e2e'
+
 // Serializes concurrent schema creation, since CREATE SCHEMA IF NOT EXISTS can still race.
 export const SCHEMA_SETUP_LOCK_KEY = 0x4c554d41
 
