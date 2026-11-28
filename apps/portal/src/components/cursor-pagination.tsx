@@ -14,11 +14,14 @@ export function useCursorPagination() {
     setStack((prev) => [...prev, nextToken])
   }, [])
 
+  const reset = React.useCallback(() => setStack(['']), [])
+
   return {
     pageToken: stack.at(-1) ?? '',
     hasPrevious: stack.length > 1,
     goPrevious,
     goNext,
+    reset,
   }
 }
 

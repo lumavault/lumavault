@@ -1,42 +1,14 @@
 import { create } from '@bufbuild/protobuf'
 import {
   App,
-  GetViewerResponseSchema,
   ListHouseholdsResponseSchema,
-  Role,
   UpdateHouseholdAllowanceResponseSchema,
 } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { MAX_STORAGE_CAP_BYTES } from '@lumavault/ui/lib/format-bytes'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderPortal } from '#test/support/render-portal'
+import { superAdminViewer } from '#test/support/viewers'
 import { describe, expect, it, vi } from 'vitest'
-
-function superAdminViewer(memberLimit = 4) {
-  return create(GetViewerResponseSchema, {
-    user: {
-      id: 'admin-1',
-      name: 'Server Owner',
-      email: 'admin@example.com',
-      isSuperAdmin: true,
-    },
-    household: {
-      id: 'house-admin',
-      name: 'Owner Home',
-      ownerUserId: 'admin-1',
-      allowance: {
-        storageCapBytes: MAX_STORAGE_CAP_BYTES,
-        enabledApps: [App.PHOTOS, App.CINEMA, App.ARCADE],
-        memberLimit,
-      },
-    },
-    role: Role.OWNER,
-    usage: {
-      usedBytes: 10n * 1024n ** 3n,
-      reservedBytes: 0n,
-      remainingBytes: MAX_STORAGE_CAP_BYTES - 10n * 1024n ** 3n,
-    },
-  })
-}
 
 describe('Super-Admin households route (/admin/households)', () => {
   it('blocks non-Super-Admins from opening /admin/households', async () => {

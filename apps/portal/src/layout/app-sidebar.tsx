@@ -48,25 +48,19 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface PrimaryNavItem {
+interface NavItem {
   title: string
   to: NonNullable<LinkProps['to']>
   icon: React.ComponentType
 }
 
-interface AdminNavItem {
-  title: string
-  to: string
-  icon: React.ComponentType
-}
-
-export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
+export const PRIMARY_NAV: readonly NavItem[] = [
   { title: 'Home', to: '/', icon: HomeIcon },
   { title: 'Household', to: '/household', icon: UsersIcon },
   { title: 'Pair TV', to: '/pair', icon: TvIcon },
 ]
 
-export const ADMIN_NAV: readonly AdminNavItem[] = [
+export const ADMIN_NAV: readonly NavItem[] = [
   { title: 'Households', to: '/admin/households', icon: Building2Icon },
   { title: 'Invites', to: '/admin/invites', icon: MailIcon },
   { title: 'Users', to: '/admin/users', icon: UsersIcon },
@@ -198,7 +192,7 @@ function NavGroup({
   items,
 }: {
   label: string
-  items: readonly (PrimaryNavItem | AdminNavItem)[]
+  items: readonly NavItem[]
 }) {
   const location = useLocation()
   return (
@@ -211,7 +205,7 @@ function NavGroup({
               <SidebarMenuButton
                 isActive={isRouteActive(location.pathname, item.to)}
                 tooltip={item.title}
-                render={<Link to={item.to as never} />}
+                render={<Link to={item.to} />}
               >
                 <item.icon />
                 <span>{item.title}</span>
