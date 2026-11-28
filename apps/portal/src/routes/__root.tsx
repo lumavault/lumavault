@@ -28,7 +28,7 @@ function RootComponent() {
 
   React.useEffect(() => {
     if (needsSetup && !onSetupRoute) {
-      void router.navigate({ to: '/setup' as never, replace: true })
+      void router.navigate({ to: '/setup', replace: true })
     }
   }, [needsSetup, onSetupRoute, router])
 
