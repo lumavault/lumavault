@@ -1,5 +1,4 @@
-// Package metadata defines the control-plane MetadataStore interface,
-// the deterministic in-memory metadata state machine (Engine), and the
+// Package metadata defines the control-plane MetadataStore interface and the
 // Day-1 per-object LocalMetadataStore implementation.
 package metadata
 

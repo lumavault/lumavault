@@ -491,7 +491,7 @@ func TestUpdateObjectMetadata_FieldMask(t *testing.T) {
 	}
 }
 
-func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
+func TestLocalMetadataStore_ReloadDeterminismAndDeepCloneIsolation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	store, err := NewLocalMetadataStore(t.TempDir())
@@ -527,82 +527,81 @@ func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
 		t.Fatalf("caller mutation leaked into store state: %+v", fetched)
 	}
 
-	// Test Engine.Restore validation and deterministic DeleteObject fallback when two restored objects share (namespace, sha256_digest).
-	eng := NewEngine()
+	// Seed on-disk objects sharing (namespace, sha256_digest) and verify deterministic
+	// oldest-first (CreatedAt ASC, Id ASC) deduplication and DeleteObject fallback on reload.
+	reloadRoot := t.TempDir()
+	objectsDir := filepath.Join(reloadRoot, "objects")
+	if err := os.MkdirAll(objectsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll objects: %v", err)
+	}
+	writeSeed := func(obj *lumavaultv1.ObjectMetadata) {
+		t.Helper()
+		raw, err := proto.Marshal(obj)
+		if err != nil {
+			t.Fatalf("proto.Marshal %s: %v", obj.Id, err)
+		}
+		if err := os.WriteFile(filepath.Join(objectsDir, obj.Id+".pb"), raw, 0o644); err != nil {
+			t.Fatalf("WriteFile %s: %v", obj.Id, err)
+		}
+	}
+
 	sharedDigest := testHash("dup-photo-digest")
 	t1 := timestamppb.New(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	objA := &lumavaultv1.ObjectMetadata{
-		Id:             "obj-a",
-		Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		SizeBytes:      100,
-		ChunkSizeBytes: 4 << 20,
-		Sha256Digest:   sharedDigest,
-		ChunkHashes:    []string{chunk},
-		CreatedAt:      t1,
-	}
-	objB := &lumavaultv1.ObjectMetadata{
-		Id:             "obj-b",
-		Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		SizeBytes:      100,
-		ChunkSizeBytes: 4 << 20,
-		Sha256Digest:   sharedDigest,
-		ChunkHashes:    []string{chunk},
-		CreatedAt:      t1,
-	}
-	objC := &lumavaultv1.ObjectMetadata{
-		Id:             "obj-c",
-		Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		SizeBytes:      100,
-		ChunkSizeBytes: 4 << 20,
-		Sha256Digest:   sharedDigest,
-		ChunkHashes:    []string{chunk},
-		CreatedAt:      t1,
+	for _, id := range []string{"obj-c", "obj-a", "obj-b"} {
+		writeSeed(&lumavaultv1.ObjectMetadata{
+			Id:             id,
+			Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
+			SizeBytes:      100,
+			ChunkSizeBytes: 4 << 20,
+			Sha256Digest:   sharedDigest,
+			ChunkHashes:    []string{chunk},
+			CreatedAt:      t1,
+		})
 	}
 
-	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{objC, objA, objB}); err != nil {
-		t.Fatalf("Engine.Restore: %v", err)
-	}
-
-	// Failed Restore (duplicate ID) must not wipe existing state in eng.
-	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{objA, objA}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on duplicate ID in Restore, got %v", err)
-	}
-	if err := eng.Restore([]*lumavaultv1.ObjectMetadata{nil}); !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("expected ErrInvalidArgument on nil object in Restore, got %v", err)
-	}
-
-	// Deleting "obj-a" must deterministically promote "obj-b" (not "obj-c").
-	if err := eng.DeleteObject("obj-a"); err != nil {
-		t.Fatalf("eng.DeleteObject(obj-a): %v", err)
-	}
-	dedupObj, dedup, err := eng.CommitObject(&lumavaultv1.CommitObjectRequest{
-		Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
-		SizeBytes:      100,
-		ChunkSizeBytes: 4 << 20,
-		Sha256Digest:   sharedDigest,
-		ChunkHashes:    []string{chunk},
-	}, "new-id", time.Now())
-	if err != nil || !dedup || dedupObj.Id != "obj-b" {
-		t.Fatalf("expected deterministic fallback to 'obj-b', got dedup=%v id=%q err=%v", dedup, dedupObj.Id, err)
-	}
-
-	// Verify SkipDedup commits inserted out-of-order maintain oldest-first dedupIndex slice order.
+	// Also seed two objects with distinct timestamps where the older one has a lexicographically larger ID.
 	skipDigest := testHash("skip-dedup-slice-order")
 	baseTime := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	skipReq := &lumavaultv1.CommitObjectRequest{
+	writeSeed(&lumavaultv1.ObjectMetadata{
+		Id:             "newer-id",
 		Namespace:      lumavaultv1.Namespace_NAMESPACE_GAMES,
 		SizeBytes:      100,
 		ChunkSizeBytes: 4 << 20,
 		Sha256Digest:   skipDigest,
 		ChunkHashes:    []string{chunk},
-		SkipDedup:      true,
+		CreatedAt:      timestamppb.New(baseTime.Add(10 * time.Second)),
+	})
+	writeSeed(&lumavaultv1.ObjectMetadata{
+		Id:             "oldest-id",
+		Namespace:      lumavaultv1.Namespace_NAMESPACE_GAMES,
+		SizeBytes:      100,
+		ChunkSizeBytes: 4 << 20,
+		Sha256Digest:   skipDigest,
+		ChunkHashes:    []string{chunk},
+		CreatedAt:      timestamppb.New(baseTime),
+	})
+
+	reloaded, err := NewLocalMetadataStore(reloadRoot)
+	if err != nil {
+		t.Fatalf("NewLocalMetadataStore reload: %v", err)
 	}
-	if _, _, err := eng.CommitObject(skipReq, "newer-id", baseTime.Add(10*time.Second)); err != nil {
-		t.Fatalf("CommitObject newer-id: %v", err)
+
+	// Deleting "obj-a" must deterministically promote "obj-b" (not "obj-c").
+	if err := reloaded.DeleteObject(ctx, "obj-a"); err != nil {
+		t.Fatalf("DeleteObject(obj-a): %v", err)
 	}
-	if _, _, err := eng.CommitObject(skipReq, "oldest-id", baseTime); err != nil {
-		t.Fatalf("CommitObject oldest-id: %v", err)
+	dedupObj, dedup, err := reloaded.CommitObject(ctx, &lumavaultv1.CommitObjectRequest{
+		Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
+		SizeBytes:      100,
+		ChunkSizeBytes: 4 << 20,
+		Sha256Digest:   sharedDigest,
+		ChunkHashes:    []string{chunk},
+	})
+	if err != nil || !dedup || dedupObj.Id != "obj-b" {
+		t.Fatalf("expected deterministic fallback to 'obj-b', got dedup=%v id=%q err=%v", dedup, dedupObj.Id, err)
 	}
+
+	// Verify oldest-first dedupIndex order by CreatedAt and fallback after DeleteObject.
 	checkReq := &lumavaultv1.CommitObjectRequest{
 		Namespace:      lumavaultv1.Namespace_NAMESPACE_GAMES,
 		SizeBytes:      100,
@@ -610,14 +609,95 @@ func TestEngine_RestoreDeterminismAndDeepCloneIsolation(t *testing.T) {
 		Sha256Digest:   skipDigest,
 		ChunkHashes:    []string{chunk},
 	}
-	if got, dedup, err := eng.CommitObject(checkReq, "unused-1", baseTime); err != nil || !dedup || got.Id != "oldest-id" {
+	if got, dedup, err := reloaded.CommitObject(ctx, checkReq); err != nil || !dedup || got.Id != "oldest-id" {
 		t.Fatalf("expected oldest-id from dedupIndex slice, got dedup=%v id=%q err=%v", dedup, got.Id, err)
 	}
-	if err := eng.DeleteObject("oldest-id"); err != nil {
+	if err := reloaded.DeleteObject(ctx, "oldest-id"); err != nil {
 		t.Fatalf("DeleteObject oldest-id: %v", err)
 	}
-	if got, dedup, err := eng.CommitObject(checkReq, "unused-2", baseTime); err != nil || !dedup || got.Id != "newer-id" {
+	if got, dedup, err := reloaded.CommitObject(ctx, checkReq); err != nil || !dedup || got.Id != "newer-id" {
 		t.Fatalf("expected newer-id after deleting oldest-id, got dedup=%v id=%q err=%v", dedup, got.Id, err)
+	}
+}
+
+func TestLocalMetadataStore_DiskWriteFailureLeavesMemoryConsistent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	rootDir := t.TempDir()
+	store, err := NewLocalMetadataStore(rootDir)
+	if err != nil {
+		t.Fatalf("NewLocalMetadataStore: %v", err)
+	}
+
+	chunk := testHash("disk-fail-chunk")
+	oldThumb := testHash("disk-fail-old-thumb")
+	newThumb := testHash("disk-fail-new-thumb")
+
+	orig, _, err := store.CommitObject(ctx, &lumavaultv1.CommitObjectRequest{
+		Namespace:          lumavaultv1.Namespace_NAMESPACE_PHOTOS,
+		Filename:           "original.jpg",
+		MimeType:           "image/jpeg",
+		SizeBytes:          1024,
+		ChunkSizeBytes:     4 << 20,
+		Sha256Digest:       testHash("disk-fail-photo"),
+		ChunkHashes:        []string{chunk},
+		ThumbnailChunkHash: oldThumb,
+	})
+	if err != nil {
+		t.Fatalf("CommitObject orig: %v", err)
+	}
+
+	// Remove tmp/ so atomic staging writes fail on disk.
+	if err := os.RemoveAll(filepath.Join(rootDir, "tmp")); err != nil {
+		t.Fatalf("RemoveAll tmp: %v", err)
+	}
+
+	// Failed UpdateObjectMetadata must leave object fields and chunkRefs unchanged.
+	if _, err := store.UpdateObjectMetadata(ctx, &lumavaultv1.UpdateObjectMetadataRequest{
+		Object: &lumavaultv1.ObjectMetadata{
+			Id:                 orig.Id,
+			Filename:           "mutated.jpg",
+			ThumbnailChunkHash: newThumb,
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"filename", "thumbnail_chunk_hash"}},
+	}); err == nil {
+		t.Fatalf("expected UpdateObjectMetadata to fail when tmp dir is missing")
+	}
+
+	got, err := store.GetObject(ctx, orig.Id)
+	if err != nil {
+		t.Fatalf("GetObject after failed update: %v", err)
+	}
+	if got.Filename != "original.jpg" || got.ThumbnailChunkHash != oldThumb {
+		t.Fatalf("in-memory object mutated after failed disk write: %+v", got)
+	}
+	if ref, err := store.IsChunkReferenced(ctx, oldThumb); err != nil || !ref {
+		t.Fatalf("expected oldThumb still referenced, got ref=%v err=%v", ref, err)
+	}
+	if ref, err := store.IsChunkReferenced(ctx, newThumb); err != nil || ref {
+		t.Fatalf("expected newThumb unreferenced after failed update, got ref=%v err=%v", ref, err)
+	}
+
+	// Failed CommitObject must not leave dangling objects or chunkRefs in memory.
+	newChunk := testHash("disk-fail-new-commit-chunk")
+	if _, _, err := store.CommitObject(ctx, &lumavaultv1.CommitObjectRequest{
+		Namespace:      lumavaultv1.Namespace_NAMESPACE_PHOTOS,
+		Filename:       "uncommitted.jpg",
+		SizeBytes:      1024,
+		ChunkSizeBytes: 4 << 20,
+		Sha256Digest:   testHash("disk-fail-uncommitted"),
+		ChunkHashes:    []string{newChunk},
+	}); err == nil {
+		t.Fatalf("expected CommitObject to fail when tmp dir is missing")
+	}
+	if ref, err := store.IsChunkReferenced(ctx, newChunk); err != nil || ref {
+		t.Fatalf("expected newChunk unreferenced after failed commit, got ref=%v err=%v", ref, err)
+	}
+	listResp, err := store.ListObjects(ctx, &lumavaultv1.ListObjectsRequest{
+		Namespace: lumavaultv1.Namespace_NAMESPACE_PHOTOS,
+	})
+	if err != nil || len(listResp.Objects) != 1 || listResp.Objects[0].Id != orig.Id {
+		t.Fatalf("expected only original object in memory, got %+v (err=%v)", listResp, err)
 	}
 }
 
