@@ -8,19 +8,15 @@ public final class LumaVaultClient: Sendable {
     private let rpc: Lumavault_V1_StorageServiceClient
     private let dataPlane: DataPlane
 
-    public convenience init(baseURL: URL) {
-        self.init(baseURL: baseURL, sessionConfiguration: .default)
-    }
-
-    init(baseURL: URL, sessionConfiguration: URLSessionConfiguration) {
+    public init(baseURL: URL) {
         self.baseURL = baseURL
         self.rpc = Lumavault_V1_StorageServiceClient(
             client: ProtocolClient(
-                httpClient: URLSessionHTTPClient(configuration: sessionConfiguration),
+                httpClient: URLSessionHTTPClient(configuration: .default),
                 config: ProtocolClientConfig(host: baseURL.absoluteString, networkProtocol: .connect, codec: ProtoCodec())
             )
         )
-        self.dataPlane = DataPlane(baseURL: baseURL, session: URLSession(configuration: sessionConfiguration))
+        self.dataPlane = DataPlane(baseURL: baseURL, session: URLSession(configuration: .default))
     }
 
     /// Chunks, hashes, sends only missing chunks, and commits. Empty files are rejected.
@@ -128,4 +124,30 @@ private final class PageWalker: @unchecked Sendable {
     var cursor: String?
     var buffered: [ObjectMetadata] = []
     var done = false
+}
+
+// Storage ticket credentials. Apple apps only ever hold tickets; the service key stays on the server.
+enum TicketAuth {
+    static let authorizationHeader = "Authorization"
+    static let tokenQueryItem = "token"
+
+    /// Connect headers that carry a ticket, or none when there is no ticket.
+    static func rpcHeaders(ticket: String?) -> Connect.Headers {
+        guard let ticket else { return [:] }
+        return [authorizationHeader: ["Bearer \(ticket)"]]
+    }
+
+    /// Adds the ticket to a data plane request.
+    static func apply(ticket: String?, to request: inout URLRequest) {
+        if let ticket {
+            request.setValue("Bearer \(ticket)", forHTTPHeaderField: authorizationHeader)
+        }
+    }
+}
+
+extension ResponseMessage {
+    /// The response message, or the RPC's ConnectError.
+    func unwrap() throws -> Output {
+        try result.get()
+    }
 }

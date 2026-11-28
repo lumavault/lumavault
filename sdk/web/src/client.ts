@@ -8,9 +8,9 @@ import {
 } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
 
-import { authHeaders } from './auth.js'
-import { getRange } from './dataplane.js'
-import { gatewayChunkFetcher, verifiedStream } from './download.js'
+import { AUTHORIZATION_HEADER, SERVICE_KEY_HEADER } from './constants.js'
+import { chunkUrl, getChunk, getRange, streamUrl } from './dataplane.js'
+import { verifiedStream } from './download.js'
 import {
   ObjectMetadataSchema,
   StorageService,
@@ -21,13 +21,33 @@ import type {
   ListOptions,
   ListPage,
   LumaVaultClientOptions,
+  StreamUrlOptions,
   UpdateFields,
   UploadInput,
   UploadOptions,
   UploadResult,
 } from './types.js'
 import { upload } from './upload.js'
-import { chunkUrl, streamUrl, type StreamUrlOptions } from './urls.js'
+
+/** What a call presents to the gateway: a per-call ticket, or the client-wide service key. */
+export interface Credentials {
+  ticket?: string
+  serviceKey?: string
+}
+
+/** Headers for one call. A ticket wins over the service key, since it is the narrower grant. */
+export function authHeaders({
+  ticket,
+  serviceKey,
+}: Credentials): Record<string, string> {
+  if (ticket) {
+    return { [AUTHORIZATION_HEADER]: `Bearer ${ticket}` }
+  }
+  if (serviceKey) {
+    return { [SERVICE_KEY_HEADER]: serviceKey }
+  }
+  return {}
+}
 
 // Maps update() keys to the proto field paths the gateway's FieldMask expects.
 const UPDATE_MASK_PATHS: Record<keyof UpdateFields, string> = {
@@ -74,11 +94,12 @@ export class LumaVaultClient {
     id: string,
     options: DownloadOptions = {},
   ): ReadableStream<Uint8Array> {
-    const fetcher = gatewayChunkFetcher(
-      this.#baseUrl,
-      this.#headers(options.ticket),
+    const headers = this.#headers(options.ticket)
+    return verifiedStream(
+      this.get(id, options),
+      (sha256, signal) => getChunk(this.#baseUrl, sha256, headers, signal),
+      options.signal,
     )
-    return verifiedStream(this.get(id, options), fetcher, options.signal)
   }
 
   /** A URL for video players, byte-range readers, and browser downloads. Not hash-checked. */

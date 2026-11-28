@@ -1,4 +1,4 @@
-import { forEachConcurrent } from '#/concurrency.js'
+import { forEachConcurrent } from '#/upload.js'
 import { describe, expect, it } from 'vitest'
 
 describe('forEachConcurrent', () => {

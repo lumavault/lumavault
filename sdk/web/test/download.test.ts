@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf'
 import { Code, ConnectError } from '@connectrpc/connect'
-import { planChunks } from '#/chunking/plan.js'
+import { planChunks } from '#/chunking.js'
 import { verifiedStream, type ChunkFetcher } from '#/download.js'
 import { ObjectMetadataSchema } from '#/gen/lumavault/v1/storage_pb.js'
 import { patternBytes } from '#test/support/vectors.js'

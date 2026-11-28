@@ -1,4 +1,4 @@
-import { authHeaders } from '#/auth.js'
+import { authHeaders } from '#/client.js'
 import { Code, ConnectError, LumaVaultClient, Namespace } from '#/index.js'
 import { startGateway, type TestGateway } from '#test/support/gateway.js'
 import {

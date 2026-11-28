@@ -1,7 +1,6 @@
 import { createSHA256 } from 'hash-wasm'
 
-import { getChunk } from './dataplane.js'
-import { toHex } from './encoding.js'
+import { sha256Hex } from './chunking.js'
 import { hashMismatch } from './errors.js'
 import type { ObjectMetadata } from './gen/lumavault/v1/storage_pb.js'
 
@@ -9,14 +8,6 @@ export type ChunkFetcher = (
   sha256: string,
   signal?: AbortSignal,
 ) => Promise<Uint8Array<ArrayBuffer>>
-
-/** Fetches chunks over the data plane with the given credential headers. */
-export function gatewayChunkFetcher(
-  baseUrl: string,
-  headers: Record<string, string>,
-): ChunkFetcher {
-  return (sha256, signal) => getChunk(baseUrl, sha256, headers, signal)
-}
 
 /**
  * Streams an object's bytes, fetching one chunk only when the reader asks for more.
@@ -48,11 +39,7 @@ export function verifiedStream(
         }
         const expected = meta.chunkHashes[index] as string
         const bytes = await fetchChunk(expected, signal)
-        if (
-          toHex(
-            new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
-          ) !== expected
-        ) {
+        if ((await sha256Hex(bytes)) !== expected) {
           throw hashMismatch(`chunk ${index} of object ${meta.id}`)
         }
         fileHasher.update(bytes)
