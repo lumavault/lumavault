@@ -1,9 +1,10 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { planChunks } from '#/chunking/plan.js'
 import { loadVectors, patternBytes } from '#test/support/vectors.js'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 describe('planChunks', () => {
+  afterEach(() => vi.unstubAllGlobals())
   for (const vector of loadVectors().files) {
     const expected = {
       sizeBytes: vector.sizeBytes,
@@ -54,5 +55,31 @@ describe('planChunks', () => {
     expect(plan.chunkHashes).toHaveLength(4)
     expect(reads).toBe(4)
     expect(largestRead).toBe(chunk)
+  })
+
+  it('hashes chunks when crypto.subtle is unavailable', async () => {
+    vi.stubGlobal('crypto', { subtle: undefined })
+    const vector =
+      loadVectors().files.find((v) => v.chunkHashes.length > 1) ??
+      loadVectors().files[0]!
+    expect(await planChunks(patternBytes(0, vector.sizeBytes))).toEqual({
+      sizeBytes: vector.sizeBytes,
+      chunkSizeBytes: vector.chunkSizeBytes,
+      sha256Digest: vector.sha256,
+      chunkHashes: vector.chunkHashes,
+    })
+  })
+
+  it('hashes a Uint8Array view backed by a SharedArrayBuffer', async () => {
+    const vector = loadVectors().files[0]!
+    const shared = new SharedArrayBuffer(vector.sizeBytes + 4)
+    const view = new Uint8Array(shared, 4, vector.sizeBytes)
+    view.set(patternBytes(0, vector.sizeBytes))
+    expect(await planChunks(view)).toEqual({
+      sizeBytes: vector.sizeBytes,
+      chunkSizeBytes: vector.chunkSizeBytes,
+      sha256Digest: vector.sha256,
+      chunkHashes: vector.chunkHashes,
+    })
   })
 })

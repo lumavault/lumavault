@@ -1,7 +1,6 @@
-import { createSHA256 } from 'hash-wasm'
+import { createSHA256, sha256 } from 'hash-wasm'
 
 import { getChunk } from './dataplane.js'
-import { toHex } from './encoding.js'
 import { hashMismatch } from './errors.js'
 import type { ObjectMetadata } from './gen/lumavault/v1/storage_pb.js'
 
@@ -48,11 +47,7 @@ export function verifiedStream(
         }
         const expected = meta.chunkHashes[index] as string
         const bytes = await fetchChunk(expected, signal)
-        if (
-          toHex(
-            new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
-          ) !== expected
-        ) {
+        if ((await sha256(bytes)) !== expected) {
           throw hashMismatch(`chunk ${index} of object ${meta.id}`)
         }
         fileHasher.update(bytes)

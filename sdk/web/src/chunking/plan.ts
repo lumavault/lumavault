@@ -1,7 +1,6 @@
 import { Code, ConnectError } from '@connectrpc/connect'
-import { createSHA256 } from 'hash-wasm'
+import { createSHA256, sha256 } from 'hash-wasm'
 
-import { toHex } from '../encoding.js'
 import { chunkSizeFor } from './chunk-size.js'
 import { toByteSource, type UploadInput } from './source.js'
 
@@ -42,9 +41,7 @@ export async function planChunks(
       Math.min(pos + chunkSizeBytes, source.size),
     )
     fileHasher.update(bytes)
-    chunkHashes.push(
-      toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))),
-    )
+    chunkHashes.push(await sha256(bytes))
     onHashed?.(pos + bytes.byteLength, source.size)
   }
 
