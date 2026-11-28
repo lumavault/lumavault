@@ -17,11 +17,3 @@ export async function signObjectReadTicket(
   }
   return signReadTicket(ctx.config.ticketSecret, { objectId })
 }
-
-/** Signs a read ticket for one thumbnail chunk. */
-export function signThumbnailReadTicket(
-  ctx: Pick<ModuleContext, 'config'>,
-  chunkSha256: string,
-): SignedTicket {
-  return signReadTicket(ctx.config.ticketSecret, { chunkSha256 })
-}

@@ -1,6 +1,5 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { PairingStatus } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
-import { createHouseholdFor } from '#/auth/server-helpers.js'
 import { iamHouseholds, iamPairingRequests } from '#/db/schemas/iam.js'
 import {
   PAIRING_APPROVALS_PER_WINDOW,
@@ -23,6 +22,7 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { createHouseholdFor } from '#test/support/households.js'
 import { iamClient } from '#test/support/rpc.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'

@@ -56,7 +56,7 @@ function testContext(): ModuleContext {
     baseUrl: config.gatewayUrl,
     serviceKey: config.serviceKey,
   })
-  return { config, db, auth, email, gateway, apps: [] }
+  return { config, db, auth, email, gateway }
 }
 
 // Registers two IamService methods the way a real router file would.

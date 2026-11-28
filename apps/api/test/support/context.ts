@@ -6,7 +6,6 @@ import { loadConfig } from '#/config.js'
 import * as authTables from '#/db/schemas/auth.js'
 import { createEmailService, type EmailService } from '#/email/emails.js'
 import { createMailer } from '#/email/mailer.js'
-import type { AppDataHooks } from '#/iam/app-data.js'
 import {
   createStorageGateway,
   type StorageGateway,
@@ -61,7 +60,6 @@ export function createTestContext(
     env?: Record<string, string>
     email?: EmailService
     gateway?: StorageGateway
-    apps?: AppDataHooks[]
   } = {},
 ): ModuleContext {
   const config = loadConfig({ ...TEST_ENV, ...options.env })
@@ -89,7 +87,6 @@ export function createTestContext(
     auth,
     email,
     gateway,
-    apps: options.apps ?? [],
   }
 }
 

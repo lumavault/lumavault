@@ -1,8 +1,6 @@
 import { Code, ConnectError } from '@connectrpc/connect'
 import { App } from '@lumavault/sdk/gen/lumavault/iam/v1/iam_pb'
 import { SUPER_ADMIN_ROLE } from '#/auth/constants.js'
-import { createHouseholdFor } from '#/auth/server-helpers.js'
-import { verifyTicket } from '#/auth/tickets.js'
 import { user } from '#/db/schemas/auth.js'
 import { iamHouseholds, iamUploadReservations } from '#/db/schemas/iam.js'
 import { createApp } from '#/server/app.js'
@@ -18,7 +16,9 @@ import {
   pushAllSchemas,
   type TestDatabase,
 } from '#test/support/db.js'
+import { createHouseholdFor } from '#test/support/households.js'
 import { iamClient } from '#test/support/rpc.js'
+import { verifyTicket } from '#test/support/tickets.js'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'

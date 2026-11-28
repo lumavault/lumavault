@@ -3,12 +3,8 @@ import {
   READ_TICKET_TTL_SECONDS,
   UPLOAD_TICKET_TTL_SECONDS,
 } from '#/auth/constants.js'
-import {
-  signReadTicket,
-  signUploadTicket,
-  TicketError,
-  verifyTicket,
-} from '#/auth/tickets.js'
+import { signReadTicket, signUploadTicket } from '#/auth/tickets.js'
+import { TicketError, verifyTicket } from '#test/support/tickets.js'
 import { describe, expect, it } from 'vitest'
 
 interface Vectors {

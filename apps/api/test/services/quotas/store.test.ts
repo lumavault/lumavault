@@ -71,8 +71,6 @@ class FakeGateway implements StorageGateway {
     this.deleted.push(objectId)
     this.objects.delete(objectId)
   }
-
-  async setThumbnail() {}
 }
 
 async function codeOf(promise: Promise<unknown>): Promise<Code | 'ok'> {

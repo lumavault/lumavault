@@ -29,4 +29,3 @@ export const PASSKEY_RP_NAME = 'LumaVault'
 export const TICKET_PREFIX = 'v1.'
 export const UPLOAD_TICKET_TTL_SECONDS = 24 * 60 * 60
 export const READ_TICKET_TTL_SECONDS = 6 * 60 * 60
-export const TICKET_CLOCK_SKEW_SECONDS = 30

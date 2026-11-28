@@ -8,7 +8,6 @@ import { createMailer } from '#/email/mailer.js'
 import { createStorageGateway } from '#/lib/storage-gateway.js'
 import { createApp } from '#/server/app.js'
 import {
-  appDataHooks,
   loadModules,
   startModules,
   stopModules,
@@ -47,7 +46,6 @@ const ctx: ModuleContext = {
   auth,
   email,
   gateway,
-  apps: appDataHooks(modules),
 }
 const app = createApp(ctx, modules)
 await startModules(modules, ctx)

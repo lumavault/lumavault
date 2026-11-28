@@ -28,17 +28,6 @@ async function uploadObject(bytes: Uint8Array, mimeType = 'image/jpeg') {
   })
 }
 
-async function putChunk(bytes: Uint8Array): Promise<string> {
-  const hash = sha(bytes)
-  const res = await fetch(`${gw.baseUrl}/v1/chunks/${hash}`, {
-    method: 'PUT',
-    body: bytes,
-    headers: { 'X-LumaVault-Service-Key': TEST_ENV.LUMAVAULT_SERVICE_KEY },
-  })
-  expect(res.status).toBe(201)
-  return hash
-}
-
 beforeAll(async () => {
   gw = await startTestGateway()
   storage = createStorageGateway({
@@ -95,17 +84,6 @@ describe('StorageGateway against a Gateway with ticket checks on', () => {
     } finally {
       spy.mockRestore()
     }
-  })
-
-  it('sets a thumbnail that is already uploaded', async () => {
-    const obj = await uploadObject(new Uint8Array(10).fill(1))
-    const thumb = await putChunk(new Uint8Array([9, 9, 9]))
-    await storage.setThumbnail(obj.id, thumb)
-    const admin = new LumaVaultClient({
-      baseUrl: gw.baseUrl,
-      serviceKey: TEST_ENV.LUMAVAULT_SERVICE_KEY,
-    })
-    expect((await admin.get(obj.id)).thumbnailChunkHash).toBe(thumb)
   })
 
   it('deletes an object, and deleting it again succeeds', async () => {
