@@ -9,7 +9,8 @@
     "./hooks/*": "./src/hooks/*.ts",
     "./lib/*": "./src/lib/*.ts",
     "./rpc": "./src/rpc/index.ts",
-    "./household": "./src/household/index.ts"
+    "./household": "./src/household/index.ts",
+    "./auth": "./src/auth/index.ts"
   },
   "imports": {
     "#components/*": "./src/components/*.tsx",
@@ -19,6 +20,8 @@
     "#rpc/*": "./src/rpc/*.ts",
     "#household": "./src/household/index.ts",
     "#household/*": "./src/household/*.ts",
+    "#auth": "./src/auth/index.ts",
+    "#auth/*": "./src/auth/*.ts",
     "#test/*": "./test/*"
   },
   "scripts": {
@@ -32,6 +35,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@better-auth/passkey": "^1.7.25",
     "@bufbuild/protobuf": "^2.17.0",
     "@connectrpc/connect": "^2.3.0",
     "@connectrpc/connect-query": "^2.3.1",
@@ -39,6 +43,7 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@lumavault/sdk": "workspace:*",
     "@tanstack/react-query": "^5.108.4",
+    "better-auth": "^1.7.25",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.66.0",
@@ -46,7 +51,8 @@
     "shadcn": "^4.23.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.7.0",
-    "tw-animate-css": "^1.4.0"
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
