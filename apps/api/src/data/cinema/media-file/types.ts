@@ -28,3 +28,19 @@ export interface MediaFileDetails {
   episode: typeof cinemaEpisodes.$inferSelect | null
   series: typeof cinemaSeries.$inferSelect | null
 }
+
+/** Identifies either a movie or an episode target for a media file lookup. */
+export type MediaFileTarget =
+  { kind: 'movie'; id: string } | { kind: 'episode'; id: string }
+
+/** An active original media file paired with its claimed byte size from iam.object_claims. */
+export interface PlayableOriginalFile {
+  file: MediaFileRow
+  sizeBytes: bigint
+}
+
+/** Result of looking up a movie or episode and its active original media file. */
+export type PlayableOriginalLookup =
+  | { status: 'missing_target' }
+  | { status: 'no_file' }
+  | { status: 'ok'; source: PlayableOriginalFile }

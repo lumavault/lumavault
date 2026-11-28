@@ -8,13 +8,17 @@ import {
   MediaContainer,
   MediaFileFilter,
   MediaFileKind,
+  NoPlayableSourceErrorSchema,
+  PlayableRefSchema,
   UnsupportedMediaFormatErrorSchema,
   type CatalogItemSchema,
   type ContinueWatchingItemSchema,
   type EpisodeSchema,
+  type GetDownloadResponseSchema,
   type MediaFileSchema,
   type MovieSchema,
   type PlayableRef,
+  type PlaybackSourceSchema,
   type SeasonSchema,
   type SeriesSchema,
   type SeriesSummarySchema,
@@ -30,6 +34,8 @@ import type {
   MediaFileDetails,
   MediaFileFilterMode,
   MediaFileKindValue,
+  MediaFileRow,
+  PlayableOriginalFile,
 } from '#/data/cinema/media-file/types.js'
 import type {
   ContinueWatchingMovie,
@@ -50,6 +56,16 @@ import { FINISH_THRESHOLD_PERCENT, PERCENT_SCALE } from './constants.js'
 
 export type ArtUrlSigner = (objectId: string | null) => string
 
+export interface SignedMediaUrl {
+  url: string
+  expiresAt: Date
+}
+
+export type MediaUrlSigner = (
+  objectId: string,
+  options?: { download?: boolean },
+) => SignedMediaUrl
+
 const MEDIA_FILE_KIND_TO_WIRE: Record<MediaFileKindValue, MediaFileKind> = {
   original: MediaFileKind.ORIGINAL,
 }
@@ -57,6 +73,11 @@ const MEDIA_FILE_KIND_TO_WIRE: Record<MediaFileKindValue, MediaFileKind> = {
 const MEDIA_CONTAINER_TO_WIRE: Record<MediaContainerValue, MediaContainer> = {
   mp4: MediaContainer.MP4,
   mov: MediaContainer.MOV,
+}
+
+const MEDIA_CONTAINER_TO_MIME: Record<MediaContainerValue, string> = {
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
 }
 
 const playableTargetSchema = z.discriminatedUnion(
@@ -74,18 +95,31 @@ const playableTargetSchema = z.discriminatedUnion(
   { error: 'target movie_id or episode_id is required' },
 )
 
+/** Signs an active object ID into a short-lived Gateway stream or download URL. */
+export function createMediaUrlSigner(
+  ctx: Pick<ModuleContext, 'config'>,
+): MediaUrlSigner {
+  const sdk = new LumaVaultClient({ baseUrl: ctx.config.gatewayUrl })
+  return (objectId, options) => {
+    const { ticket, expiresAt } = signReadTicket(ctx.config.ticketSecret, {
+      objectId,
+    })
+    return {
+      url: sdk.streamUrl(objectId, {
+        ticket,
+        download: options?.download,
+      }),
+      expiresAt,
+    }
+  }
+}
+
 /** Signs an active art object ID into a short-lived Gateway stream URL, or returns empty. */
 export function createArtUrlSigner(
   ctx: Pick<ModuleContext, 'config'>,
 ): ArtUrlSigner {
-  const sdk = new LumaVaultClient({ baseUrl: ctx.config.gatewayUrl })
-  return (objectId) => {
-    if (!objectId) {
-      return ''
-    }
-    const { ticket } = signReadTicket(ctx.config.ticketSecret, { objectId })
-    return sdk.streamUrl(objectId, ticket)
-  }
+  const sign = createMediaUrlSigner(ctx)
+  return (objectId) => (objectId ? sign(objectId).url : '')
 }
 
 /** Verifies the caller is signed in with Cinema access (or is a Super-Admin). */
@@ -113,6 +147,12 @@ export function mediaContainerToWire(
   container: MediaContainerValue,
 ): MediaContainer {
   return MEDIA_CONTAINER_TO_WIRE[container]
+}
+
+export function mediaContainerToMimeType(
+  container: MediaContainerValue,
+): string {
+  return MEDIA_CONTAINER_TO_MIME[container]
 }
 
 /** The list filter named by a request, defaulting UNSPECIFIED to all files. */
@@ -202,6 +242,16 @@ export function playableRefFromWire(
     : { kind: 'episode', id: target.value }
 }
 
+/** Converts a normalized movie or episode target back into a wire PlayableRef. */
+export function playableRefToWire(target: WatchProgressTarget): PlayableRef {
+  return create(PlayableRefSchema, {
+    target:
+      target.kind === 'movie'
+        ? { case: 'movieId', value: target.id }
+        : { case: 'episodeId', value: target.id },
+  })
+}
+
 /** True when playback has reached the completion threshold for a known duration. */
 export function hasReachedFinish(
   positionMs: bigint,
@@ -213,12 +263,77 @@ export function hasReachedFinish(
   )
 }
 
+/** Saved resume position in milliseconds, or zero when starting fresh or already finished. */
+export function resumePositionFromProgress(
+  progress: WatchProgressRow | null,
+): bigint {
+  return progress && !progress.finished ? progress.positionMs : 0n
+}
+
 /** NotFound error naming the missing movie or episode. */
 export function targetNotFoundError(target: WatchProgressTarget): ConnectError {
   return new ConnectError(
     target.kind === 'movie' ? 'movie not found' : 'episode not found',
     Code.NotFound,
   )
+}
+
+/** FailedPrecondition error carrying NoPlayableSourceError details when a title has no file. */
+export function noPlayableSourceError(
+  target: WatchProgressTarget,
+): ConnectError {
+  return new ConnectError(
+    target.kind === 'movie'
+      ? 'movie has no playable source'
+      : 'episode has no playable source',
+    Code.FailedPrecondition,
+    undefined,
+    [
+      {
+        desc: NoPlayableSourceErrorSchema,
+        value: create(NoPlayableSourceErrorSchema, {
+          target: playableRefToWire(target),
+        }),
+      },
+    ],
+  )
+}
+
+/** NotFound error when an existing movie or episode has no downloadable original file. */
+export function noDownloadableFileError(
+  target: WatchProgressTarget,
+): ConnectError {
+  return new ConnectError(
+    target.kind === 'movie'
+      ? 'movie has no downloadable file'
+      : 'episode has no downloadable file',
+    Code.NotFound,
+  )
+}
+
+/** An original media file and its signed stream URL as a CinemaService PlaybackSource. */
+export function playbackSourceToWire(
+  file: MediaFileRow,
+  signed: SignedMediaUrl,
+): MessageInitShape<typeof PlaybackSourceSchema> {
+  return {
+    url: signed.url,
+    mimeType: mediaContainerToMimeType(file.container),
+    expiresAt: timestampFromDate(signed.expiresAt),
+  }
+}
+
+/** An original media file and its signed download URL as a CinemaService GetDownloadResponse. */
+export function downloadToWire(
+  source: PlayableOriginalFile,
+  signed: SignedMediaUrl,
+): MessageInitShape<typeof GetDownloadResponseSchema> {
+  return {
+    url: signed.url,
+    filename: source.file.filename,
+    sizeBytes: source.sizeBytes,
+    expiresAt: timestampFromDate(signed.expiresAt),
+  }
 }
 
 /** A watch progress row as a CinemaService WatchProgress message. */
